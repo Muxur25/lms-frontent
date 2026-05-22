@@ -1,0 +1,384 @@
+import { useTranslation } from 'react-i18next';
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+} from 'recharts';
+import {
+  TrendingUp, TrendingDown, BookOpen, BarChart3, Award,
+  Clock, Sparkles, Play, FileText,
+  Trophy, Flame, Target, Zap, Calendar,
+  ChevronRight, Star, CheckCircle, Bell, Video,
+} from 'lucide-react';
+
+/* ── Data ─────────────────────────────────────── */
+const areaData = [
+  { m: 'Yan', h: 12 }, { m: 'Fev', h: 18 }, { m: 'Mar', h: 14 },
+  { m: 'Apr', h: 22 }, { m: 'May', h: 28 }, { m: 'Iyn', h: 24 },
+  { m: 'Iyl', h: 34 },
+];
+const pieData = [
+  { name: 'Yakunlagan', value: 45, color: '#22c55e' },
+  { name: 'Jarayonda', value: 30, color: '#3b82f6' },
+  { name: 'Boshlamagan', value: 25, color: '#334155' },
+];
+const barData = [
+  { d: 'IT', v: 87 }, { d: 'HR', v: 74 }, { d: 'Mol', v: 91 },
+  { d: 'Muh', v: 68 }, { d: 'Xav', v: 82 },
+];
+const courses = [
+  { title: 'React va TypeScript', cat: 'IT', prog: 68, lessons: 32, color: '#3b82f6', instructor: 'A.Toshev', left: '4 soat' },
+  { title: 'Sanoat Xavfsizligi', cat: 'Xavfsizlik', prog: 34, lessons: 18, color: '#ef4444', instructor: 'B.Rahimov', left: '8 soat' },
+  { title: 'Menejment Asoslari', cat: 'Boshqaruv', prog: 85, lessons: 24, color: '#8b5cf6', instructor: 'N.Karimova', left: '1 soat' },
+];
+const events = [
+  { type: 'webinar', title: 'React 2026 Yangiliklari', date: '24 May', time: '14:00', color: '#3b82f6', icon: Video },
+  { type: 'exam', title: 'Xavfsizlik sertifikati', date: '26 May', time: '10:00', color: '#f59e0b', icon: FileText },
+  { type: 'deadline', title: 'ISO 9001 kursini tugating', date: '28 May', time: '23:59', color: '#ef4444', icon: Clock },
+];
+const leaders = [
+  { name: 'Kamola Y.', dept: 'HR', pts: 2840, change: 'up', rank: 1 },
+  { name: 'Jahongir T.', dept: 'Muhandis', pts: 2710, change: 'up', rank: 2 },
+  { name: 'Alisher H.', dept: 'IT', pts: 2580, change: 'same', rank: 3 },
+  { name: 'Nargiza S.', dept: 'Boshqaruv', pts: 2450, change: 'down', rank: 4 },
+  { name: 'Dilnoza K.', dept: 'Moliya', pts: 2310, change: 'up', rank: 5 },
+];
+const aiRecs = [
+  { title: 'Docker va Kubernetes', reason: 'IT ko\'nikmalaringizga mos', color: '#3b82f6', match: 94 },
+  { title: 'Loyiha Boshqaruvi', reason: 'Karyerangizni rivojlantirish uchun', color: '#8b5cf6', match: 88 },
+  { title: 'Ma\'lumotlar Tahlili', reason: 'Eng ko\'p o\'qilayotgan kurs', color: '#06b6d4', match: 82 },
+];
+const activity = [
+  { color: '#22c55e', text: 'React Hooks darsini yakunladingiz', time: '10 daqiqa oldin', icon: CheckCircle },
+  { color: '#3b82f6', text: 'Sanoat Xavfsizligi kursiga yozildingiz', time: '2 soat oldin', icon: BookOpen },
+  { color: '#f59e0b', text: 'ISO 9001 sertifikati yangilandi', time: 'Kecha', icon: Award },
+  { color: '#8b5cf6', text: 'AI test natijasi: 94/100', time: '2 kun oldin', icon: Star },
+];
+const quickActions = [
+  { label: 'Davom etish', icon: Play, color: '#3b82f6', sub: 'React kursi' },
+  { label: 'Test boshlash', icon: FileText, color: '#f59e0b', sub: 'Xavfsizlik' },
+  { label: 'Vebinar', icon: Video, color: '#22c55e', sub: 'Bugun 14:00' },
+  { label: 'AI Assistant', icon: Sparkles, color: '#8b5cf6', sub: 'Yordam so\'rash' },
+  { label: 'Kurslar', icon: BookOpen, color: '#06b6d4', sub: '68 mavjud' },
+  { label: 'Sertifikatlar', icon: Award, color: '#f59e0b', sub: '3 ta sizniki' },
+];
+
+const Tip = ({ active, payload, label }: any) => active && payload?.length ? (
+  <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border-2)', borderRadius: 10, padding: '10px 14px', fontSize: 12 }}>
+    <p style={{ color: 'var(--text-tertiary)', marginBottom: 4 }}>{label}</p>
+    {payload.map((p: any) => <p key={p.name} style={{ color: p.color, fontWeight: 700 }}>{p.value}</p>)}
+  </div>
+) : null;
+
+const rankColors = ['#f59e0b', '#94a3b8', '#b45309', '#64748b', '#64748b'];
+
+/* ── Component ─────────────────────────────────── */
+export default function Dashboard() {
+  const { t } = useTranslation();
+
+  return (
+    <div>
+
+      {/* ── HERO ── */}
+      <div className="dash-hero fade-in" style={{ marginBottom: 24 }}>
+        <div className="dash-hero-left">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+            <div className="avatar avatar-lg" style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', flexShrink: 0 }}>AH</div>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>
+                {t('dash.hello')}, Alisher! 👋
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
+                IT Bo'limi • Senior Developer • AGMK
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 20, marginBottom: 18, flexWrap: 'wrap' }}>
+            {[
+              { icon: Flame, label: '12 kunlik streak', color: '#f59e0b' },
+              { icon: Trophy, label: 'Top 3 da turibsiz', color: '#f59e0b' },
+              { icon: Target, label: '73% maqsad', color: '#3b82f6' },
+            ].map((b, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <b.icon size={15} color={b.color} />
+                <span>{b.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Oylik maqsad</span>
+              <span style={{ fontWeight: 700, color: '#3b82f6' }}>73%</span>
+            </div>
+            <div className="progress-bar" style={{ height: 8 }}>
+              <div className="progress-fill" style={{ width: '73%' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn btn-primary btn-sm"><Play size={13} /> Davom etish</button>
+            <button className="btn btn-secondary btn-sm"><Sparkles size={13} /> AI Maslahat</button>
+          </div>
+        </div>
+
+        <div className="dash-hero-right">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BarChart3 size={14} color="var(--blue-400)" /> O'quv soatlari
+          </div>
+          <div style={{ height: 120 }}>
+            <ResponsiveContainer>
+              <AreaChart data={areaData}>
+                <defs>
+                  <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Tooltip content={<Tip />} />
+                <Area type="monotone" dataKey="h" stroke="#3b82f6" strokeWidth={2} fill="url(#hg)" dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+            {[{ l: 'Jami soat', v: '34h', c: '#3b82f6' }, { l: 'Bu oy', v: '+12h', c: '#22c55e' }, { l: 'O\'rtacha', v: '4.8/kun', c: '#f59e0b' }].map((s, i) => (
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: s.c }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── STATS ── */}
+      <div className="grid grid-4 fade-in fade-in-1" style={{ marginBottom: 24 }}>
+        {[
+          { label: 'Yakunlangan', value: '24', change: '+3', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+          { label: 'Jarayondagi', value: '3', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+          { label: "O'rtacha ball", value: '87.4', change: '+2.1', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+          { label: 'Sertifikatlar', value: '5', change: '+1', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+        ].map((s, i) => (
+          <div key={i} className="stat-card">
+            <div className="stat-header">
+              <div>
+                <div className="stat-label">{s.label}</div>
+                <div className="stat-value" style={{ marginTop: 6 }}>{s.value}</div>
+              </div>
+              <div className="stat-icon" style={{ background: s.bg }}>
+                <s.icon size={22} color={s.c} />
+              </div>
+            </div>
+            <div className={`stat-change ${s.up ? 'up' : 'down'}`}>
+              {s.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {s.change} o'tgan oyga nisbatan
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── QUICK ACTIONS ── */}
+      <div className="card fade-in fade-in-2" style={{ marginBottom: 24 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Zap size={14} color="var(--amber-400)" /> Tezkor harakatlar
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+          {quickActions.map((a, i) => (
+            <button key={i} className="btn btn-secondary" style={{ flexDirection: 'column', height: 80, gap: 6, borderRadius: 14, padding: '10px 6px' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: `${a.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <a.icon size={16} color={a.color} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{a.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── CURRENT COURSES ── */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BookOpen size={16} color="var(--blue-400)" /> Joriy kurslarim
+          </div>
+          <button className="btn btn-ghost btn-sm">Barchasi <ChevronRight size={13} /></button>
+        </div>
+        <div className="grid grid-3 fade-in fade-in-2">
+          {courses.map((c, i) => (
+            <div key={i} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ height: 6, background: `linear-gradient(90deg, ${c.color}, ${c.color}88)` }} />
+              <div style={{ padding: '18px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span className="badge badge-blue" style={{ background: `${c.color}15`, color: c.color, borderColor: `${c.color}30`, fontSize: 10 }}>{c.cat}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={10} /> {c.left} qoldi</span>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{c.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>{c.instructor} • {c.lessons} dars</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div className="progress-bar" style={{ flex: 1, height: 6 }}>
+                    <div className="progress-fill" style={{ width: `${c.prog}%`, background: c.color }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: c.color }}>{c.prog}%</span>
+                </div>
+                <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                  <Play size={12} /> Davom etish
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── AI + EVENTS ── */}
+      <div className="grid grid-12 fade-in fade-in-3" style={{ marginBottom: 24 }}>
+        {/* AI Assistant */}
+        <div className="card" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.05))', border: '1px solid rgba(139,92,246,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Sparkles size={18} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>AI Tavsiyalar</div>
+              <div style={{ fontSize: 11, color: 'var(--violet-400)' }}>Sizga maxsus tanlangan</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {aiRecs.map((r, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface-1)', borderRadius: 12, border: '1px solid var(--border-1)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: `${r.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 38 }}>
+                  <BookOpen size={16} color={r.color} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.reason}</div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: r.color }}>{r.match}%</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>mos</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: 14, justifyContent: 'center' }}>
+            <Sparkles size={13} /> Barcha tavsiyalar
+          </button>
+        </div>
+
+        {/* Events */}
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Calendar size={14} color="var(--cyan-400)" /> Yaqinlashayotgan voqealar
+          </div>
+          {events.map((e, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: i < events.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: `${e.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 40 }}>
+                <e.icon size={16} color={e.color} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{e.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'flex', gap: 8 }}>
+                  <span>{e.date}</span><span>•</span><span>{e.time}</span>
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm btn-icon"><ChevronRight size={14} /></button>
+            </div>
+          ))}
+          <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: 14, justifyContent: 'center' }}>
+            Butun jadval
+          </button>
+        </div>
+      </div>
+
+      {/* ── CHARTS ── */}
+      <div className="grid grid-3 fade-in fade-in-3" style={{ marginBottom: 24 }}>
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Kurs holati</div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14 }}>Umumiy taqsimot</div>
+          <div style={{ height: 160 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" strokeWidth={0}>
+                  {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: 'var(--bg-3)', border: '1px solid var(--border-2)', borderRadius: 10, fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          {pieData.map((p, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />{p.name}
+              </span>
+              <span style={{ fontWeight: 700 }}>{p.value}%</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Bo'limlar reytingi</div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14 }}>Test ballari</div>
+          <div style={{ height: 200 }}>
+            <ResponsiveContainer>
+              <BarChart data={barData} barSize={20}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="d" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[50, 100]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<Tip />} />
+                <Bar dataKey="v" name="Ball" radius={[6, 6, 0, 0]}>
+                  {barData.map((_, i) => <Cell key={i} fill={`hsl(${200 + i * 18}, 75%, 58%)`} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Leaderboard */}
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Trophy size={14} color="#f59e0b" /> Reyting jadvali
+          </div>
+          {leaders.map((l, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < leaders.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
+              <div style={{ width: 24, height: 24, borderRadius: 8, background: `${rankColors[i]}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: rankColors[i], minWidth: 24 }}>
+                {l.rank}
+              </div>
+              <div className="avatar" style={{ width: 30, height: 30, fontSize: 10, background: `hsl(${200 + i * 25}, 70%, 45%)`, minWidth: 30 }}>
+                {l.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {l.name}
+                  {l.name === 'Alisher H.' && <span style={{ fontSize: 9, background: '#3b82f620', color: '#3b82f6', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>SEN</span>}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{l.dept}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: rankColors[i] }}>{l.pts.toLocaleString()}</div>
+                <div style={{ fontSize: 10, color: l.change === 'up' ? 'var(--green-400)' : l.change === 'down' ? 'var(--red-400)' : 'var(--text-muted)' }}>
+                  {l.change === 'up' ? '↑' : l.change === 'down' ? '↓' : '–'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ACTIVITY ── */}
+      <div className="card fade-in fade-in-4">
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Bell size={14} color="var(--blue-400)" /> So'nggi faollik
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0 24px' }}>
+          {activity.map((a, i) => (
+            <div key={i} className="activity-item">
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: `${a.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 32 }}>
+                <a.icon size={14} color={a.color} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13 }}>{a.text}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{a.time}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}

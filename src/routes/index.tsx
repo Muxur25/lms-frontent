@@ -1,0 +1,115 @@
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import AppLayout from '@/layouts/AppLayout';
+import AuthLayout from '@/layouts/AuthLayout';
+import { ErrorBoundary } from '@/shared/ui/ErrorBoundary';
+import { Placeholder } from '@/components/Placeholder';
+
+// Lazy loaded pages for performance optimization
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Courses = lazy(() => import('@/pages/Courses'));
+const CoursePage = lazy(() => import('@/pages/CoursePage'));
+const ExamPage = lazy(() => import('@/pages/ExamPage'));
+const AdminPage = lazy(() => import('@/pages/AdminPage'));
+const Analytics = lazy(() => import('@/pages/Analytics'));
+const Employees = lazy(() => import('@/pages/Employees'));
+const Certifications = lazy(() => import('@/pages/Certifications'));
+const AiAssistant = lazy(() => import('@/pages/AiAssistant'));
+const Webinars = lazy(() => import('@/pages/Webinars'));
+const Library = lazy(() => import('@/pages/Library'));
+const Schedule = lazy(() => import('@/pages/Schedule'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const Login = lazy(() => import('@/pages/Login'));
+
+// Suspense Loader component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[400px]">
+    <div className="skeleton w-16 h-16 rounded-full"></div>
+  </div>
+);
+
+export const router = createBrowserRouter([
+  {
+    path: '/',
+    // Global Error Boundary protects the main app
+    errorElement: <ErrorBoundary />, 
+    element: (
+      // For development, we bypass the actual auth check by not requiring token yet
+      // In production, uncomment the ProtectedRoute logic.
+      // <ProtectedRoute>
+        <AppLayout />
+      // </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { 
+        path: 'dashboard', 
+        element: <Suspense fallback={<PageLoader />}><Dashboard /></Suspense> 
+      },
+      { 
+        path: 'courses', 
+        element: <Suspense fallback={<PageLoader />}><Courses /></Suspense> 
+      },
+      { 
+        path: 'courses/:courseId', 
+        element: <Suspense fallback={<PageLoader />}><CoursePage /></Suspense> 
+      },
+      { 
+        path: 'mylearning', 
+        element: <Suspense fallback={<PageLoader />}><CoursePage /></Suspense> 
+      },
+      { 
+        path: 'assessments', 
+        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense> 
+      },
+      { 
+        path: 'exams/:examId', 
+        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense> 
+      },
+      { 
+        path: 'certifications', 
+        element: <Suspense fallback={<PageLoader />}><Certifications /></Suspense> 
+      },
+      { 
+        path: 'analytics', 
+        element: <Suspense fallback={<PageLoader />}><Analytics /></Suspense> 
+      },
+      { 
+        path: 'admin', 
+        element: (
+          // Example of Role-Based Route Protection
+          // <ProtectedRoute allowedRoles={['super_admin', 'hr_manager']}>
+            <Suspense fallback={<PageLoader />}><AdminPage /></Suspense>
+          // </ProtectedRoute>
+        ) 
+      },
+      { 
+        path: 'employees', 
+        element: <Suspense fallback={<PageLoader />}><Employees /></Suspense> 
+      },
+      { path: 'ai', element: <Suspense fallback={<PageLoader />}><AiAssistant /></Suspense> },
+      { path: 'webinars', element: <Suspense fallback={<PageLoader />}><Webinars /></Suspense> },
+      { path: 'library', element: <Suspense fallback={<PageLoader />}><Library /></Suspense> },
+      { path: 'schedule', element: <Suspense fallback={<PageLoader />}><Schedule /></Suspense> },
+      { path: 'notifications', element: <Suspense fallback={<PageLoader />}><Notifications /></Suspense> },
+      { path: 'settings', element: <Suspense fallback={<PageLoader />}><Settings /></Suspense> },
+      // Catch all 404 inside layout
+      { path: '*', element: <div className="p-8 text-center text-[var(--text-tertiary)] flex flex-col items-center justify-center min-h-[400px]">
+        <div className="text-4xl mb-4">🧭</div>
+        <h2 className="text-xl font-bold mb-2">Sahifa topilmadi</h2>
+        <p>Siz qidirayotgan manzil mavjud emas.</p>
+      </div> }
+    ]
+  },
+  // Auth routes isolated from the main layout
+  { 
+    path: '/auth', 
+    element: <AuthLayout />,
+    children: [
+      { path: 'login', element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },
+      { path: 'forgot-password', element: <Placeholder title="Parolni tiklash" emoji="🔑" /> },
+    ]
+  },
+  { path: '/unauthorized', element: <Placeholder title="Ruxsat etilmagan" emoji="⛔" /> }
+]);
