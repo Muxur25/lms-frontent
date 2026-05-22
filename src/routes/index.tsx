@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import AppLayout from '@/layouts/AppLayout';
 import AuthLayout from '@/layouts/AuthLayout';
@@ -21,6 +21,7 @@ const Schedule = lazy(() => import('@/pages/Schedule'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
+const LandingPage = lazy(() => import('@/pages/LandingPage'));
 
 // Suspense Loader component
 const PageLoader = () => (
@@ -30,19 +31,17 @@ const PageLoader = () => (
 );
 
 export const router = createBrowserRouter([
+  // Landing Page at exact root
   {
     path: '/',
-    // Global Error Boundary protects the main app
-    errorElement: <ErrorBoundary />, 
-    element: (
-      // For development, we bypass the actual auth check by not requiring token yet
-      // In production, uncomment the ProtectedRoute logic.
-      // <ProtectedRoute>
-        <AppLayout />
-      // </ProtectedRoute>
-    ),
+    errorElement: <ErrorBoundary />,
+    element: <Suspense fallback={<PageLoader />}><LandingPage /></Suspense>,
+  },
+  // Main App wrapped in AppLayout
+  {
+    element: <AppLayout />,
+    errorElement: <ErrorBoundary />,
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
       { 
         path: 'dashboard', 
         element: <Suspense fallback={<PageLoader />}><Dashboard /></Suspense> 
