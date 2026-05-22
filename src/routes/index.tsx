@@ -21,6 +21,7 @@ const Schedule = lazy(() => import('@/pages/Schedule'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
+const Register = lazy(() => import('@/pages/Register'));
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
 
 // Suspense Loader component
@@ -107,6 +108,7 @@ export const router = createBrowserRouter([
     element: <AuthLayout />,
     children: [
       { path: 'login', element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },
+      { path: 'register', element: <Suspense fallback={<PageLoader />}><Register /></Suspense> },
       { path: 'forgot-password', element: <Placeholder title="Parolni tiklash" emoji="🔑" /> },
     ]
   },

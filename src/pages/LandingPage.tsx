@@ -1,1380 +1,1040 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Cpu, 
-  ChevronRight, 
-  Layers, 
-  LineChart, 
-  Shield, 
-  Smartphone, 
-  Award, 
-  Play, 
-  CheckCircle, 
-  Send, 
-  MessageSquare, 
-  Video, 
-  Sparkles,
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  Award,
+  BarChart3,
+  Bot,
+  BrainCircuit,
+  CheckCircle2,
+  ChevronRight,
+  FileCheck2,
+  Globe2,
+  GraduationCap,
+  LockKeyhole,
   Menu,
-  X
+  MonitorSmartphone,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  TabletSmartphone,
+  Video,
+  X,
 } from 'lucide-react';
 
-// Multilingual translations defined locally for the landing page to keep it self-contained
-const translations = {
+type Lang = 'uz' | 'ru';
+
+const i18n = {
   uz: {
-    nav: {
-      features: "Imkoniyatlar",
-      aiShowcase: "AI Texnologiyalari",
-      dashboard: "Tizim Paneli",
-      benefits: "Afzalliklar",
-      login: "Tizimga kirish",
-      requestDemo: "Demo so'rash"
-    },
-    hero: {
-      badge: "Sun'iy intellekt asosidagi yangi avlod LMS platformasi",
-      titlePre: "Korxonangiz uchun",
-      titleHighlight: "AI-Powered",
-      titlePost: "O'quv Tizimi",
-      subtitle: "Ishlab chiqarish va yirik korxonalar uchun moslashtirilgan, sun'iy intellekt yordamida o'qitish jarayonini avtomatlashtiruvchi va chuqur tahliliy hisobotlar taqdim etuvchi premium LMS platformasi.",
-      ctaPrimary: "Demoni sinab ko'rish",
-      ctaSecondary: "Tizimga kirish",
-      usersOnline: "5,000+ faol xodimlar ayni damda ta'lim olmoqda",
-    },
-    stats: {
-      completionRate: "O'quv dasturlarini muvaffaqiyatli yakunlash darajasi",
-      timeSaved: "HR departamentlari vaqtini tejash ko'rsatkichi",
-      certifiedUsers: "Sertifikatlangan mutaxassislar soni",
-      studyHours: "Jami o'quv soatlari ko'rsatkichi"
-    },
-    features: {
-      title: "Intellektual Imkoniyatlar",
-      subtitle: "Katta korporatsiyalar uchun zarur bo'lgan barcha zamonaviy asbob-uskunalar bir joyda",
-      aiAssistant: "AI O'quv Yordamchisi",
-      aiAssistantDesc: "Har bir xodim uchun individual o'quv rejalari va savollariga 24/7 rejimda javob beruvchi sun'iy intellekt.",
-      analytics: "Real-vaqt Tahlili",
-      analyticsDesc: "Bo'limlar va alohida xodimlar o'zlashtirish ko'rsatkichlarining dinamik grafik ko'rinishidagi tahlillari.",
-      exams: "Onlayn Imtihonlar",
-      examsDesc: "Nazorat va nohalikning oldini oluvchi aqlli imtihon tizimi va avtomatlashtirilgan baholash.",
-      webinars: "Vebinarlar va Jonli Darslar",
-      webinarsDesc: "O'quv xonalari bilan integratsiyalashgan video konferensiya va interaktiv prezentatsiya tizimi.",
-      certificates: "Aqlli Sertifikatlar",
-      certificatesDesc: "Kursni tugatganda avtomatik ravishda tasdiqlanadigan va yuklab olinadigan QR-kodli sertifikatlar.",
-      security: "Korporativ Xavfsizlik",
-      securityDesc: "Enterprise darajasidagi ma'lumotlar himoyasi, rollarni boshqarish va xavfsiz cloud infratuzilma."
-    },
-    aiShowcase: {
-      title: "Sun'iy Intellekt Amalda",
-      subtitle: "AI siz uchun testlar va qisqacha ma'lumotnomalar yaratib beradi. Vaqtingizni eng muhim ishlarga tejang.",
-      inputLabel: "AI ga topshiriq bering:",
-      placeholder: "Xavfsizlik texnikasi bo'yicha 5 ta savoldan iborat test yarating...",
-      generateBtn: "Generatsiya qilish",
-      generating: "AI o'ylamoqda...",
-      responseHeader: "Yaratilgan test savollari:",
-      testTitle: "Sanoat Xavfsizligi bo'yicha Ekspress Test",
-      q1: "1. Balandlikda ishlayotganda qaysi himoya vositasi majburiy hisoblanadi?",
-      q1_a: "A) Maxsus kiyim",
-      q1_b: "B) Himoya kamari (straxovka)",
-      q1_c: "C) Himoya ko'zoynagi",
-      feedback: "Test muvaffaqiyatli yaratildi va tizim bazasiga qo'shildi!"
-    },
-    dashboardShowcase: {
-      title: "Mukammal Interfeys Dizayni",
-      subtitle: "Chiroyli, tezkor va funksional dashboard orqali butun tizimni nazorat qiling.",
-      tabAdmin: "Admin paneli",
-      tabStudent: "Xodim profili",
-      tabAnalytics: "Tahlil markazi",
-      totalStudents: "Jami xodimlar",
-      activeCourses: "Faol kurslar",
-      passingRate: "O'rtacha o'zlashtirish",
-      recentCourses: "So'nggi kurslar",
-      course1: "Sanoat texnologiyasi asoslari",
-      course2: "Mehnatni muhofaza qilish normalari",
-      course3: "Ishlab chiqarish gigiyenasi"
-    },
-    responsive: {
-      title: "Istalgan Qurilmada Qulay",
-      subtitle: "Kompyuter, planshet va mobil telefonlar uchun to'liq moslashtirilgan interfeys.",
-      desktop: "Kompyuter versiyasi",
-      tablet: "Planshetlar",
-      mobile: "Mobil telefonda o'qish"
-    },
-    benefits: {
-      title: "Nima uchun bizning platforma?",
-      subtitle: "Eski uslubdagi LMS tizimlarini zamonaviy, tez va samarali platformaga almashtiring.",
-      featuresList: [
-        { title: "Maksimal tezlik", desc: "Vite + React texnologiyalari tufayli platforma soniyalarda yuklanadi." },
-        { title: "Xarajatlarni kamaytirish", desc: "Oflayn o'qitish va murabbiylar uchun ketadigan xarajatlarni 60% gacha tejash." },
-        { title: "Oson integratsiya", desc: "Active Directory, SAP va HR tizimlari bilan API orqali bog'lanish imkoniyati." },
-        { title: "Barcha tillarda", desc: "O'zbek, Rus va Ingliz tillarida to'liq qo'llab-quvvatlash va mahalliylashtirish." }
-      ]
-    },
-    testimonials: {
-      title: "Rahbarlar va HR Mutaxassislar Fikri",
-      subtitle: "O'zbekistonning yirik sanoat korxonalari bizga ishonishadi.",
-      quote1: "AGMK LMS tizimi orqali biz 10,000 dan ortiq muhandis xodimlarimizning malakasini masofaviy va tezkor ravishda oshirishga muvaffaq bo'ldik. AI imtihon tizimi biz kutgandan ham a'lo darajada ishladi.",
-      author1: "Azizbek Karimov",
-      role1: "HR direktori, Metallurgiya kombinati",
-      quote2: "Tahlillar va real vaqtdagi hisobotlar bizga har bir sex va bo'limning o'zlashtirish holatini chuqur ko'rish imkonini berdi. Platforma dizayni esa xodimlarimizga juda yoqdi.",
-      author2: "Yelena Smirnova",
-      role2: "Ta'lim departamenti boshlig'i"
-    },
-    cta: {
-      title: "Kelajak ta'limini bugundan boshlang",
-      subtitle: "Tizimni korxonangizga joriy etish yoki bepul demo versiyadan foydalanish uchun so'rov qoldiring.",
-      inputPlaceholder: "Telefon raqamingiz yoki elektron pochtangiz",
-      btn: "Demo versiyani yuborish",
-      success: "Rahmat! Mutaxassislarimiz tez orada siz bilan bog'lanishadi."
-    },
-    footer: {
-      rights: "Barcha huquqlar himoyalangan.",
-      company: "AGMK LMS Enterprise Ecosystem"
-    }
+    nav: ['Platforma', 'AI', 'Analytics', 'Natijalar'],
+    login: 'Tizimga kirish',
+    demo: 'Demo so‘rash',
+    eyebrow: 'Enterprise AI LMS 2026',
+    heroTitle: 'Korporativ ta’limni AI bilan boshqaradigan premium LMS',
+    heroText:
+      'Yirik sanoat korxonalari uchun o‘qitish, imtihon, sertifikat, vebinar va HR analytics jarayonlarini bitta xavfsiz ekotizimga birlashtiring.',
+    watch: 'Interfeysni ko‘rish',
+    live: 'Real-vaqt monitoring',
+    aiPanelTitle: 'AI o‘quv yordamchisi',
+    aiPanelText: 'Har bir xodim uchun individual reja, test va tavsiyalar.',
+    trustTitle: 'Rahbarlar ko‘radigan aniq ko‘rsatkichlar',
+    featuresTitle: 'Enterprise LMS uchun kerakli hamma narsa',
+    aiTitle: 'AI kurs materiallarini ishga tayyor bilimga aylantiradi',
+    dashboardTitle: 'Executive dashboard. Tez qaror. Toza signal.',
+    responsiveTitle: 'Har bir qurilmada premium tajriba',
+    benefitsTitle: 'Korporativ transformatsiya uchun real foyda',
+    quote:
+      'Platforma ta’lim jarayonini tarqoq Excel va qo‘lda nazoratdan yagona, ko‘rinadigan va o‘lchanadigan tizimga olib chiqdi.',
+    ctaTitle: 'Korxonangiz LMS tizimini yangi darajaga olib chiqing',
+    ctaText: 'Demo so‘rang va AGMK LMS qanday ishlashini real enterprise ssenariyda ko‘ring.',
+    footer: 'Uzbek va Russian interfeys, enterprise xavfsizlik va AI analytics.',
   },
   ru: {
-    nav: {
-      features: "Возможности",
-      aiShowcase: "Технологии ИИ",
-      dashboard: "Панель управления",
-      benefits: "Преимущества",
-      login: "Войти в систему",
-      requestDemo: "Запросить демо"
-    },
-    hero: {
-      badge: "Новое поколение LMS на базе искусственного интеллекта",
-      titlePre: "Для вашего предприятия",
-      titleHighlight: "AI-Powered",
-      titlePost: "Система Обучения",
-      subtitle: "Премиальная LMS-платформа, адаптированная под требования крупных промышленных предприятий. Автоматизация обучения с помощью ИИ и глубокая аналитика.",
-      ctaPrimary: "Попробовать демо-версию",
-      ctaSecondary: "Войти в систему",
-      usersOnline: "Более 5,000+ сотрудников обучаются прямо сейчас",
-    },
-    stats: {
-      completionRate: "Успешное завершение учебных программ",
-      timeSaved: "Сэкономленное время HR-департаментов",
-      certifiedUsers: "Сертифицированных специалистов",
-      studyHours: "Всего часов корпоративного обучения"
-    },
-    features: {
-      title: "Интеллектуальные Возможности",
-      subtitle: "Все современные инструменты для корпоративного обучения в одной платформе",
-      aiAssistant: "ИИ-Ассистент Обучения",
-      aiAssistantDesc: "Индивидуальные траектории обучения для каждого сотрудника и поддержка ИИ в режиме 24/7.",
-      analytics: "Аналитика в реальном времени",
-      analyticsDesc: "Динамические графики и отчеты по успеваемости отделов и конкретных специалистов.",
-      exams: "Онлайн Экзамены",
-      examsDesc: "Умная система тестирования с защитой от списывания и автоматической оценкой результатов.",
-      webinars: "Вебинары и Лекции",
-      webinarsDesc: "Встроенные инструменты для видеоконференций, опросов и интерактивных презентаций.",
-      certificates: "Умные Сертификаты",
-      certificatesDesc: "Автоматическая генерация именных сертификатов с защищенным QR-кодом для проверки.",
-      security: "Корпоративная Безопасность",
-      securityDesc: "Защита данных уровня Enterprise, управление правами доступа и защищенная инфраструктура."
-    },
-    aiShowcase: {
-      title: "Искусственный Интеллект в действии",
-      subtitle: "ИИ мгновенно генерирует тесты и конспекты, экономя время ваших инструкторов.",
-      inputLabel: "Задание для ИИ:",
-      placeholder: "Создай тест из 5 вопросов по технике безопасности при работе на высоте...",
-      generateBtn: "Сгенерировать",
-      generating: "ИИ генерирует вопросы...",
-      responseHeader: "Созданные тестовые вопросы:",
-      testTitle: "Экспресс-тест по промышленной безопасности",
-      q1: "1. Какое средство защиты является обязательным при работе на высоте?",
-      q1_a: "А) Спецодежда",
-      q1_b: "B) Предохранительный пояс (страховка)",
-      q1_c: "C) Защитные очки",
-      feedback: "Тест успешно создан и добавлен в базу данных системы!"
-    },
-    dashboardShowcase: {
-      title: "Превосходный дизайн интерфейса",
-      subtitle: "Управляйте всей системой обучения через красивый, быстрый и удобный дашборд.",
-      tabAdmin: "Панель администратора",
-      tabStudent: "Профиль сотрудника",
-      tabAnalytics: "Центр аналитики",
-      totalStudents: "Всего сотрудников",
-      activeCourses: "Активные курсы",
-      passingRate: "Средняя успеваемость",
-      recentCourses: "Последние курсы",
-      course1: "Основы промышленной технологии",
-      course2: "Нормы охраны труда и техники безопасности",
-      course3: "Производственная санитария и гигиена"
-    },
-    responsive: {
-      title: "Удобно на любом устройстве",
-      subtitle: "Полностью адаптированный интерфейс под компьютеры, планшеты и смартфоны.",
-      desktop: "Версия для ПК",
-      tablet: "Планшеты",
-      mobile: "Обучение на смартфоне"
-    },
-    benefits: {
-      title: "Почему выбирают нас?",
-      subtitle: "Замените устаревшие системы обучения на современную, быструю и эффективную платформу.",
-      featuresList: [
-        { title: "Максимальная скорость", desc: "Платформа работает мгновенно благодаря технологиям React + Vite." },
-        { title: "Снижение затрат", desc: "Экономия до 60% бюджета на очное обучение и выездных инструкторов." },
-        { title: "Простая интеграция", desc: "Интеграция с Active Directory, SAP и HR-системами по защищенным API." },
-        { title: "Мультиязычность", desc: "Полная локализация и поддержка интерфейса на узбекском, русском и английском." }
-      ]
-    },
-    testimonials: {
-      title: "Отзывы руководителей и HR-экспертов",
-      subtitle: "Нам доверяют крупнейшие промышленные предприятия Узбекистана.",
-      quote1: "Благодаря системе AGMK LMS мы смогли быстро и дистанционно повысить квалификацию более 10 000 наших инженеров. Экзаменационная система ИИ сработала превосходно.",
-      author1: "Азизбек Каримов",
-      role1: "Директор по персоналу, Металлургический комбинат",
-      quote2: "Аналитика в реальном времени позволила нам увидеть реальную картину успеваемости по каждому цеху. Дизайн платформы очень понравился сотрудникам.",
-      author2: "Елена Смирнова",
-      role2: "Руководитель департамента обучения"
-    },
-    cta: {
-      title: "Начните обучение будущего уже сегодня",
-      subtitle: "Оставьте заявку на бесплатную демонстрацию системы для вашего предприятия.",
-      inputPlaceholder: "Ваш номер телефона или e-mail",
-      btn: "Получить демо-доступ",
-      success: "Спасибо! Наши специалисты свяжутся с вами в ближайшее время."
-    },
-    footer: {
-      rights: "Все права защищены.",
-      company: "AGMK LMS Enterprise Ecosystem"
-    }
-  }
+    nav: ['Платформа', 'ИИ', 'Аналитика', 'Результаты'],
+    login: 'Войти',
+    demo: 'Запросить демо',
+    eyebrow: 'Enterprise AI LMS 2026',
+    heroTitle: 'Премиальная LMS для управления корпоративным обучением с ИИ',
+    heroText:
+      'Объедините обучение, экзамены, сертификаты, вебинары и HR-аналитику крупного промышленного предприятия в одной защищенной экосистеме.',
+    watch: 'Посмотреть интерфейс',
+    live: 'Мониторинг в реальном времени',
+    aiPanelTitle: 'ИИ-ассистент обучения',
+    aiPanelText: 'Персональные планы, тесты и рекомендации для каждого сотрудника.',
+    trustTitle: 'Метрики, которые важны руководителям',
+    featuresTitle: 'Все, что нужно для enterprise LMS',
+    aiTitle: 'ИИ превращает материалы курса в готовые знания',
+    dashboardTitle: 'Executive dashboard. Быстрые решения. Чистый сигнал.',
+    responsiveTitle: 'Премиальный опыт на любом устройстве',
+    benefitsTitle: 'Реальная польза для корпоративной трансформации',
+    quote:
+      'Платформа перевела обучение из разрозненных Excel-файлов и ручного контроля в единую, прозрачную и измеримую систему.',
+    ctaTitle: 'Выведите LMS предприятия на новый уровень',
+    ctaText: 'Запросите демо и посмотрите AGMK LMS в реальном enterprise-сценарии.',
+    footer: 'Интерфейс на узбекском и русском, enterprise-безопасность и AI-аналитика.',
+  },
 };
 
+const stats = [
+  ['98%', 'Course completion'],
+  ['42%', 'HR time saved'],
+  ['24k+', 'Certificates issued'],
+  ['1.8M', 'Learning hours'],
+];
+
+const features = [
+  [Bot, 'AI Assistant', 'Personal learning paths, course Q&A and exam preparation.'],
+  [BarChart3, 'Realtime Analytics', 'KPI, progress and certification health by department.'],
+  [FileCheck2, 'Online Exams', 'Secure assessments, question banks and automatic scoring.'],
+  [Video, 'Webinars', 'Live sessions, recordings and attendance intelligence.'],
+  [Award, 'Certificates', 'QR-verifiable certificates with automated workflows.'],
+  [ShieldCheck, 'Enterprise Security', 'Role access, protected data and governance controls.'],
+];
+
+const benefits = ['Scalability', 'AI automation', 'Productivity', 'HR optimization'];
+
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export default function LandingPage() {
-  const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const [lang, setLang] = useState<Lang>('uz');
   const [menuOpen, setMenuOpen] = useState(false);
-  
-  const currentLang = (i18n.language === 'ru' ? 'ru' : 'uz') as 'uz' | 'ru';
-  const t = translations[currentLang];
-
-  const handleLanguageChange = (lang: 'uz' | 'ru') => {
-    i18n.changeLanguage(lang);
-  };
-
-  // States for interactive components
-  const [activeTab, setActiveTab] = useState<'admin' | 'student' | 'analytics'>('admin');
-  
-  // AI Generator simulation state
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationStep, setGenerationStep] = useState(0); // 0: empty, 1: generating, 2: completed
-
-  // Contact form submission
-  const [contactInput, setContactInput] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
-
-  const startAiGeneration = () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-    setGenerationStep(1);
-    
-    setTimeout(() => {
-      setIsGenerating(false);
-      setGenerationStep(2);
-    }, 2500);
-  };
-
-  const handleContactSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contactInput) return;
-    setIsSubmitted(true);
-    setContactInput('');
-    setTimeout(() => setIsSubmitted(false), 5000);
-  };
+  const t = i18n[lang];
 
   return (
-    <div className="min-h-screen bg-[#080b12] text-slate-100 font-sans overflow-x-hidden relative selection:bg-blue-600 selection:text-white">
-      
-      {/* ── CINEMATIC GLOWING BACKGROUNDS ── */}
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-blue-500/10 blur-[150px] -z-10 pointer-events-none" />
-      <div className="absolute top-[1200px] right-10 w-[700px] h-[700px] rounded-full bg-violet-600/5 blur-[180px] -z-10 pointer-events-none" />
-      <div className="absolute top-[2800px] left-10 w-[500px] h-[500px] rounded-full bg-cyan-500/5 blur-[140px] -z-10 pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[800px] h-[800px] rounded-full bg-blue-600/5 blur-[200px] -z-10 pointer-events-none" />
+    <main className="premium-landing">
+      <style>{`
+        .premium-landing {
+          --pl-bg: #050711;
+          --pl-panel: rgba(255,255,255,.055);
+          --pl-panel-2: rgba(255,255,255,.085);
+          --pl-border: rgba(255,255,255,.12);
+          --pl-text: #f8fbff;
+          --pl-muted: #a8b3c7;
+          --pl-soft: #6f7c95;
+          --pl-cyan: #79f2ff;
+          --pl-blue: #5b8cff;
+          --pl-violet: #a985ff;
+          --pl-green: #7df7bd;
+          min-height: 100vh;
+          color: var(--pl-text);
+          background:
+            radial-gradient(circle at 18% 18%, rgba(16,185,219,.20), transparent 30rem),
+            radial-gradient(circle at 78% 10%, rgba(142,92,255,.22), transparent 32rem),
+            radial-gradient(circle at 50% 88%, rgba(65,255,177,.10), transparent 34rem),
+            linear-gradient(180deg, #060917 0%, #04060d 48%, #070a14 100%);
+          overflow: hidden;
+          font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .premium-landing * { box-sizing: border-box; }
+        .pl-shell {
+          width: min(1180px, calc(100% - 48px));
+          margin: 0 auto;
+        }
+        .pl-bg-grid {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          background-image:
+            linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+          background-size: 72px 72px;
+          mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 78%);
+        }
+        .pl-nav {
+          position: fixed;
+          z-index: 50;
+          top: 0;
+          left: 0;
+          right: 0;
+          border-bottom: 1px solid rgba(255,255,255,.1);
+          background: rgba(5,7,17,.78);
+          backdrop-filter: blur(24px);
+        }
+        .pl-nav-inner {
+          width: min(1280px, calc(100% - 48px));
+          height: 72px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+        }
+        .pl-brand {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: inherit;
+          text-decoration: none;
+        }
+        .pl-brand-mark {
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          background: #fff;
+          color: #060917;
+          font-weight: 950;
+          box-shadow: 0 0 38px rgba(121,242,255,.18);
+        }
+        .pl-brand-name { font-size: 15px; font-weight: 900; letter-spacing: -.02em; }
+        .pl-brand-sub { font-size: 10px; font-weight: 800; letter-spacing: .34em; color: var(--pl-cyan); opacity: .82; }
+        .pl-nav-links {
+          display: flex;
+          gap: 6px;
+          align-items: center;
+        }
+        .pl-nav-link {
+          border: 0;
+          background: transparent;
+          color: #c9d2e3;
+          font-size: 13px;
+          font-weight: 800;
+          padding: 10px 13px;
+          border-radius: 10px;
+          cursor: pointer;
+        }
+        .pl-nav-link:hover { background: rgba(255,255,255,.07); color: white; }
+        .pl-nav-actions { display: flex; align-items: center; gap: 10px; }
+        .pl-lang {
+          display: flex;
+          padding: 3px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.06);
+          border: 1px solid rgba(255,255,255,.11);
+        }
+        .pl-lang button {
+          min-width: 38px;
+          border: 0;
+          border-radius: 999px;
+          padding: 7px 10px;
+          background: transparent;
+          color: #9aa6ba;
+          font-size: 11px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        .pl-lang button.active { background: white; color: #050711; }
+        .pl-login {
+          color: white;
+          text-decoration: none;
+          font-weight: 900;
+          font-size: 13px;
+          padding: 10px 12px;
+          border-radius: 10px;
+        }
+        .pl-login:hover { background: rgba(255,255,255,.07); }
+        .pl-btn {
+          border: 0;
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          border-radius: 14px;
+          padding: 0 18px;
+          font-size: 13px;
+          font-weight: 950;
+          cursor: pointer;
+          text-decoration: none;
+          transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+          white-space: nowrap;
+        }
+        .pl-btn:hover { transform: translateY(-1px); }
+        .pl-btn-primary {
+          background: linear-gradient(135deg, #ffffff, #bff7ff);
+          color: #06101d;
+          box-shadow: 0 18px 46px rgba(121,242,255,.20);
+        }
+        .pl-btn-dark {
+          color: white;
+          border: 1px solid rgba(255,255,255,.14);
+          background: rgba(255,255,255,.065);
+          backdrop-filter: blur(14px);
+        }
+        .pl-menu-btn { display: none; }
+        .pl-hero {
+          position: relative;
+          z-index: 2;
+          padding-top: 72px;
+        }
+        .pl-hero-grid {
+          min-height: 860px;
+          display: grid;
+          grid-template-columns: minmax(0, .92fr) minmax(520px, 1.08fr);
+          gap: 72px;
+          align-items: center;
+          padding: 80px 0 96px;
+        }
+        .pl-copy { max-width: 610px; }
+        .pl-eyebrow {
+          width: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 11px;
+          border-radius: 999px;
+          border: 1px solid rgba(121,242,255,.25);
+          background: rgba(121,242,255,.09);
+          color: #c7fbff;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+        }
+        .pl-title {
+          margin: 22px 0 0;
+          font-size: clamp(3.3rem, 5vw, 5.55rem);
+          line-height: .93;
+          letter-spacing: -.065em;
+          font-weight: 950;
+          text-wrap: balance;
+        }
+        .pl-title span {
+          background: linear-gradient(120deg, #fff 10%, #aaf7ff 45%, #cdb9ff 80%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+        }
+        .pl-lead {
+          margin: 26px 0 0;
+          max-width: 560px;
+          color: #c4cee0;
+          font-size: 19px;
+          line-height: 1.72;
+          font-weight: 500;
+        }
+        .pl-hero-actions {
+          margin-top: 34px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .pl-proof {
+          margin-top: 30px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 18px;
+          color: #9aa7bd;
+          font-size: 13px;
+          font-weight: 750;
+        }
+        .pl-proof span {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .pl-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: var(--pl-green);
+          box-shadow: 0 0 22px rgba(125,247,189,.75);
+        }
+        .pl-visual {
+          position: relative;
+          min-width: 0;
+        }
+        .pl-orbit {
+          position: absolute;
+          inset: -38px -24px;
+          border: 1px solid rgba(121,242,255,.11);
+          border-radius: 34px;
+          transform: rotate(-2deg);
+          background: linear-gradient(120deg, rgba(121,242,255,.055), rgba(169,133,255,.045));
+          filter: blur(.2px);
+        }
+        .pl-dashboard {
+          position: relative;
+          overflow: hidden;
+          border-radius: 28px;
+          border: 1px solid rgba(255,255,255,.14);
+          background:
+            linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03)),
+            rgba(8,14,28,.82);
+          box-shadow: 0 40px 120px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.13);
+          backdrop-filter: blur(24px);
+        }
+        .pl-dash-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 18px 20px;
+          border-bottom: 1px solid rgba(255,255,255,.1);
+        }
+        .pl-window-dots { display: flex; gap: 7px; }
+        .pl-window-dots i {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: rgba(255,255,255,.22);
+        }
+        .pl-live {
+          padding: 7px 10px;
+          border-radius: 999px;
+          color: #a8ffd6;
+          background: rgba(125,247,189,.11);
+          font-size: 11px;
+          font-weight: 950;
+          border: 1px solid rgba(125,247,189,.18);
+        }
+        .pl-dash-body { padding: 22px; }
+        .pl-dash-heading {
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+          align-items: flex-start;
+          margin-bottom: 20px;
+        }
+        .pl-dash-kicker {
+          color: var(--pl-cyan);
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: .24em;
+          text-transform: uppercase;
+        }
+        .pl-dash-title {
+          margin-top: 6px;
+          font-size: 28px;
+          font-weight: 950;
+          letter-spacing: -.045em;
+        }
+        .pl-ai-chip {
+          width: 210px;
+          padding: 12px;
+          border-radius: 16px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.12);
+          color: #c9d2e3;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        .pl-ai-chip b { display: flex; gap: 7px; align-items: center; color: #fff; margin-bottom: 3px; }
+        .pl-metric-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+        .pl-metric {
+          border-radius: 18px;
+          padding: 16px;
+          background: rgba(255,255,255,.06);
+          border: 1px solid rgba(255,255,255,.11);
+        }
+        .pl-metric strong {
+          display: block;
+          font-size: 28px;
+          line-height: 1;
+          letter-spacing: -.04em;
+        }
+        .pl-metric span {
+          display: block;
+          margin-top: 8px;
+          color: #8f9bb1;
+          font-size: 10px;
+          font-weight: 950;
+          letter-spacing: .17em;
+          text-transform: uppercase;
+        }
+        .pl-chart {
+          margin-top: 16px;
+          padding: 18px;
+          border-radius: 20px;
+          background: rgba(1,7,18,.46);
+          border: 1px solid rgba(255,255,255,.1);
+        }
+        .pl-chart-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 14px;
+          font-weight: 950;
+          margin-bottom: 18px;
+        }
+        .pl-bars {
+          height: 150px;
+          display: flex;
+          align-items: end;
+          gap: 10px;
+        }
+        .pl-bar {
+          flex: 1;
+          min-width: 16px;
+          border-radius: 10px 10px 3px 3px;
+          background: linear-gradient(180deg, #d778ff 0%, #5d8eff 52%, #00c2d7 100%);
+          box-shadow: 0 0 24px rgba(93,142,255,.18);
+        }
+        .pl-widget-row {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .pl-widget {
+          min-height: 118px;
+          padding: 16px;
+          border-radius: 18px;
+          background: rgba(255,255,255,.055);
+          border: 1px solid rgba(255,255,255,.11);
+        }
+        .pl-widget svg { color: var(--pl-cyan); margin-bottom: 12px; }
+        .pl-widget b { display: block; font-size: 15px; }
+        .pl-widget p { margin: 7px 0 0; color: #a8b3c7; font-size: 13px; line-height: 1.55; }
+        .pl-float-card {
+          position: absolute;
+          left: -34px;
+          bottom: -34px;
+          width: 220px;
+          padding: 18px;
+          border-radius: 20px;
+          border: 1px solid rgba(125,247,189,.22);
+          background: rgba(19,65,53,.72);
+          backdrop-filter: blur(18px);
+          box-shadow: 0 24px 70px rgba(0,0,0,.38);
+        }
+        .pl-float-card strong { display: block; color: #b7ffdd; font-size: 34px; line-height: 1; }
+        .pl-float-card span { color: #d6ffe9; opacity: .75; font-size: 11px; letter-spacing: .18em; font-weight: 950; text-transform: uppercase; }
+        .pl-section {
+          position: relative;
+          z-index: 2;
+          padding: 96px 0;
+          border-top: 1px solid rgba(255,255,255,.08);
+        }
+        .pl-section-head {
+          max-width: 760px;
+          margin-bottom: 40px;
+        }
+        .pl-label {
+          color: var(--pl-cyan);
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+        }
+        .pl-h2 {
+          margin: 12px 0 0;
+          font-size: clamp(2.2rem, 3.5vw, 4rem);
+          line-height: 1;
+          letter-spacing: -.05em;
+          font-weight: 950;
+          text-wrap: balance;
+        }
+        .pl-muted {
+          color: var(--pl-muted);
+          font-size: 17px;
+          line-height: 1.75;
+        }
+        .pl-stat-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 14px;
+        }
+        .pl-stat, .pl-feature, .pl-benefit, .pl-device, .pl-quote {
+          border: 1px solid rgba(255,255,255,.11);
+          background: rgba(255,255,255,.045);
+          border-radius: 22px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+        }
+        .pl-stat {
+          padding: 24px;
+        }
+        .pl-stat strong {
+          display: block;
+          font-size: 42px;
+          letter-spacing: -.05em;
+          line-height: 1;
+        }
+        .pl-stat span {
+          display: block;
+          margin-top: 12px;
+          color: var(--pl-muted);
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .pl-feature-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+        }
+        .pl-feature {
+          padding: 24px;
+          transition: transform .2s ease, border-color .2s ease, background .2s ease;
+        }
+        .pl-feature:hover {
+          transform: translateY(-4px);
+          border-color: rgba(121,242,255,.28);
+          background: rgba(255,255,255,.065);
+        }
+        .pl-feature-icon {
+          width: 46px;
+          height: 46px;
+          display: grid;
+          place-items: center;
+          border-radius: 15px;
+          color: var(--pl-cyan);
+          border: 1px solid rgba(121,242,255,.2);
+          background: rgba(121,242,255,.09);
+          margin-bottom: 24px;
+        }
+        .pl-feature h3 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+        .pl-feature p { margin: 10px 0 0; color: var(--pl-muted); line-height: 1.65; font-size: 14px; }
+        .pl-split {
+          display: grid;
+          grid-template-columns: .9fr 1.1fr;
+          gap: 40px;
+          align-items: center;
+        }
+        .pl-ai-list {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 16px;
+        }
+        .pl-ai-item {
+          min-height: 170px;
+          padding: 24px;
+          border-radius: 24px;
+          border: 1px solid rgba(255,255,255,.11);
+          background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.035));
+        }
+        .pl-ai-item svg { color: var(--pl-violet); margin-bottom: 26px; }
+        .pl-ai-item strong { display: block; font-size: 18px; }
+        .pl-ai-item span { display: block; margin-top: 10px; color: var(--pl-muted); line-height: 1.6; font-size: 14px; }
+        .pl-device-grid, .pl-benefit-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+        }
+        .pl-device, .pl-benefit {
+          padding: 24px;
+          min-height: 170px;
+        }
+        .pl-device svg, .pl-benefit svg { color: var(--pl-cyan); margin-bottom: 28px; }
+        .pl-device strong, .pl-benefit strong { display: block; font-size: 18px; }
+        .pl-device span, .pl-benefit span { display: block; margin-top: 10px; color: var(--pl-muted); line-height: 1.6; font-size: 14px; }
+        .pl-quote {
+          padding: 34px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 24px;
+          align-items: end;
+        }
+        .pl-quote blockquote {
+          margin: 0;
+          color: #edf4ff;
+          font-size: clamp(1.35rem, 2.2vw, 2.35rem);
+          line-height: 1.32;
+          letter-spacing: -.035em;
+          font-weight: 850;
+        }
+        .pl-avatar {
+          width: 64px;
+          height: 64px;
+          display: grid;
+          place-items: center;
+          border-radius: 18px;
+          background: white;
+          color: #050711;
+          font-weight: 950;
+        }
+        .pl-cta {
+          padding: 44px;
+          border-radius: 32px;
+          border: 1px solid rgba(121,242,255,.22);
+          background:
+            radial-gradient(circle at 20% 0%, rgba(121,242,255,.18), transparent 24rem),
+            radial-gradient(circle at 85% 20%, rgba(169,133,255,.18), transparent 24rem),
+            rgba(255,255,255,.055);
+          box-shadow: 0 35px 120px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.11);
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 30px;
+          align-items: center;
+        }
+        .pl-cta h2 {
+          margin: 0;
+          font-size: clamp(2rem, 3.2vw, 3.8rem);
+          line-height: 1;
+          letter-spacing: -.055em;
+          font-weight: 950;
+        }
+        .pl-cta p {
+          margin: 16px 0 0;
+          color: var(--pl-muted);
+          font-size: 17px;
+          line-height: 1.7;
+          max-width: 650px;
+        }
+        .pl-footer {
+          position: relative;
+          z-index: 2;
+          border-top: 1px solid rgba(255,255,255,.09);
+          padding: 34px 0;
+          color: var(--pl-soft);
+        }
+        .pl-footer-inner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+        }
+        @media (max-width: 1080px) {
+          .pl-nav-links, .pl-nav-actions { display: none; }
+          .pl-menu-btn {
+            display: grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.06);
+            color: white;
+          }
+          .pl-mobile-menu {
+            display: grid;
+            gap: 8px;
+            padding: 14px 24px 18px;
+            border-top: 1px solid rgba(255,255,255,.1);
+            background: rgba(5,7,17,.96);
+          }
+          .pl-hero-grid, .pl-split {
+            grid-template-columns: 1fr;
+          }
+          .pl-hero-grid {
+            min-height: auto;
+            padding: 64px 0 86px;
+          }
+          .pl-copy { max-width: 840px; }
+          .pl-visual { max-width: 760px; margin: 0 auto; }
+          .pl-stat-grid, .pl-device-grid, .pl-benefit-grid { grid-template-columns: repeat(2, 1fr); }
+          .pl-feature-grid { grid-template-columns: repeat(2, 1fr); }
+          .pl-cta { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 680px) {
+          .pl-shell, .pl-nav-inner { width: min(100% - 24px, 100%); }
+          .pl-title { font-size: clamp(2.65rem, 15vw, 4rem); }
+          .pl-lead { font-size: 16px; }
+          .pl-hero-grid { gap: 34px; padding-top: 42px; }
+          .pl-dash-heading, .pl-quote, .pl-footer-inner { grid-template-columns: 1fr; flex-direction: column; align-items: flex-start; }
+          .pl-ai-chip { width: 100%; }
+          .pl-metric-grid, .pl-widget-row, .pl-stat-grid, .pl-feature-grid, .pl-ai-list, .pl-device-grid, .pl-benefit-grid { grid-template-columns: 1fr; }
+          .pl-dashboard { border-radius: 22px; }
+          .pl-dash-body { padding: 16px; }
+          .pl-bars { height: 116px; gap: 7px; }
+          .pl-float-card { position: relative; left: 0; bottom: 0; margin-top: 14px; width: 100%; }
+          .pl-section { padding: 72px 0; }
+          .pl-cta { padding: 28px; border-radius: 24px; }
+        }
+      `}</style>
 
-      {/* Futuristic Background grid overlay */}
-      <div 
-        className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none -z-20 opacity-70"
-        style={{ maskImage: 'radial-gradient(ellipse at 50% 30%, black, transparent 80%)', WebkitMaskImage: 'radial-gradient(ellipse at 50% 30%, black, transparent 80%)' }}
-      />
+      <div className="pl-bg-grid" />
 
-      {/* ── HEADER ── */}
-      <header className="sticky top-0 z-50 bg-[#080b12]/80 backdrop-blur-md border-b border-white/5 transition-all">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          
-          {/* Logo */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-violet-600 rounded-xl flex items-center justify-center font-extrabold text-white shadow-lg shadow-blue-500/20">
-              A
-            </div>
-            <div>
-              <div className="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-                AGMK LMS
-                <span className="text-[10px] font-semibold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">ENTERPRISE</span>
-              </div>
-              <div className="text-[10px] text-slate-400 font-mono tracking-wider">AI ECOSYSTEM 2026</div>
-            </div>
-          </div>
+      <header className="pl-nav">
+        <div className="pl-nav-inner">
+          <button className="pl-brand" onClick={() => scrollToSection('top')}>
+            <span className="pl-brand-mark">A</span>
+            <span>
+              <span className="pl-brand-name">AGMK LMS</span>
+              <span className="pl-brand-sub">ENTERPRISE AI</span>
+            </span>
+          </button>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-            <a href="#features" className="hover:text-white transition-colors">{t.nav.features}</a>
-            <a href="#ai-showcase" className="hover:text-white transition-colors">{t.nav.aiShowcase}</a>
-            <a href="#dashboard-showcase" className="hover:text-white transition-colors">{t.nav.dashboard}</a>
-            <a href="#benefits" className="hover:text-white transition-colors">{t.nav.benefits}</a>
+          <nav className="pl-nav-links">
+            {['platform', 'ai', 'analytics', 'results'].map((id, index) => (
+              <button key={id} className="pl-nav-link" onClick={() => scrollToSection(id)}>
+                {t.nav[index]}
+              </button>
+            ))}
           </nav>
 
-          {/* Actions & Language Swapper */}
-          <div className="hidden lg:flex items-center gap-4">
-            
-            {/* Lang switcher */}
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1">
-              <button 
-                onClick={() => handleLanguageChange('uz')} 
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${currentLang === 'uz' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-              >
-                UZB
-              </button>
-              <button 
-                onClick={() => handleLanguageChange('ru')} 
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${currentLang === 'ru' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-              >
-                РУС
-              </button>
+          <div className="pl-nav-actions">
+            <div className="pl-lang">
+              {(['uz', 'ru'] as const).map((item) => (
+                <button key={item} className={lang === item ? 'active' : ''} onClick={() => setLang(item)}>
+                  {item.toUpperCase()}
+                </button>
+              ))}
             </div>
-
-            <button 
-              onClick={() => navigate('/auth/login')}
-              className="text-sm font-semibold hover:text-white transition-colors text-slate-300 px-4 py-2"
-            >
-              {t.nav.login}
-            </button>
-            
-            <a 
-              href="#contact"
-              className="bg-white text-slate-950 hover:bg-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-white/5 hover:translate-y-[-1px]"
-            >
-              {t.nav.requestDemo}
-            </a>
-          </div>
-
-          {/* Mobile Menu Icon */}
-          <div className="flex items-center gap-3 lg:hidden">
-            
-            {/* Quick Lang Switcher for mobile */}
-            <div className="flex bg-white/5 border border-white/10 rounded-lg p-0.5 mr-2">
-              <button onClick={() => handleLanguageChange('uz')} className={`px-2 py-0.5 rounded text-[10px] font-bold ${currentLang === 'uz' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>UZ</button>
-              <button onClick={() => handleLanguageChange('ru')} className={`px-2 py-0.5 rounded text-[10px] font-bold ${currentLang === 'ru' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>RU</button>
-            </div>
-
-            <button 
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10"
-            >
-              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            <Link className="pl-login" to="/auth/login">
+              {t.login}
+            </Link>
+            <button className="pl-btn pl-btn-primary" onClick={() => scrollToSection('contact')}>
+              {t.demo}
+              <ArrowRight size={16} />
             </button>
           </div>
 
+          <button className="pl-menu-btn" onClick={() => setMenuOpen((value) => !value)} aria-label="Menu">
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
+        {menuOpen && (
+          <div className="pl-mobile-menu">
+            {['platform', 'ai', 'analytics', 'results'].map((id, index) => (
+              <button
+                key={id}
+                className="pl-nav-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  scrollToSection(id);
+                }}
+              >
+                {t.nav[index]}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
-      {/* Mobile Drawer Menu */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden absolute top-20 left-0 right-0 bg-[#0b0e17] border-b border-white/10 z-40 overflow-hidden"
-          >
-            <div className="px-6 py-8 flex flex-col gap-6 font-medium text-slate-300">
-              <a href="#features" onClick={() => setMenuOpen(false)} className="hover:text-white transition-colors py-2 border-b border-white/5">{t.nav.features}</a>
-              <a href="#ai-showcase" onClick={() => setMenuOpen(false)} className="hover:text-white transition-colors py-2 border-b border-white/5">{t.nav.aiShowcase}</a>
-              <a href="#dashboard-showcase" onClick={() => setMenuOpen(false)} className="hover:text-white transition-colors py-2 border-b border-white/5">{t.nav.dashboard}</a>
-              <a href="#benefits" onClick={() => setMenuOpen(false)} className="hover:text-white transition-colors py-2 border-b border-white/5">{t.nav.benefits}</a>
-              
-              <div className="flex flex-col gap-3 mt-4">
-                <button 
-                  onClick={() => { navigate('/auth/login'); setMenuOpen(false); }}
-                  className="bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-all text-center"
-                >
-                  {t.nav.login}
-                </button>
-                <a 
-                  href="#contact"
-                  onClick={() => setMenuOpen(false)}
-                  className="bg-blue-600 text-white hover:bg-blue-500 py-3 rounded-xl font-bold transition-all text-center"
-                >
-                  {t.nav.requestDemo}
-                </a>
-              </div>
+      <section id="top" className="pl-hero">
+        <div className="pl-shell pl-hero-grid">
+          <div className="pl-copy">
+            <div className="pl-eyebrow">
+              <Sparkles size={15} />
+              {t.eyebrow}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <h1 className="pl-title">
+              {t.heroTitle.split('AI')[0]}
+              <span>AI</span>
+              {t.heroTitle.split('AI').slice(1).join('AI')}
+            </h1>
+            <p className="pl-lead">{t.heroText}</p>
+            <div className="pl-hero-actions">
+              <button className="pl-btn pl-btn-primary" onClick={() => scrollToSection('contact')}>
+                {t.demo}
+                <ChevronRight size={17} />
+              </button>
+              <button className="pl-btn pl-btn-dark" onClick={() => scrollToSection('analytics')}>
+                <Play size={16} />
+                {t.watch}
+              </button>
+            </div>
+            <div className="pl-proof">
+              <span>
+                <i className="pl-dot" />
+                5 240 active learners
+              </span>
+              <span>
+                <LockKeyhole size={16} color="var(--pl-cyan)" />
+                Enterprise security layer
+              </span>
+            </div>
+          </div>
 
-      {/* ── 1. HERO SECTION ── */}
-      <section className="relative pt-16 pb-24 md:pt-24 md:pb-32 px-6 overflow-hidden">
-        <div className="max-w-7xl mx-auto text-center relative z-10">
-          
-          {/* Animated Badge */}
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500/10 to-violet-500/10 border border-blue-500/25 px-4 py-1.5 rounded-full text-xs font-semibold text-blue-400 mb-8"
-          >
-            <Sparkles size={14} className="animate-pulse" />
-            <span>{t.hero.badge}</span>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]"
-          >
-            {t.hero.titlePre} <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-400 via-cyan-300 to-violet-500 bg-clip-text text-transparent">
-              {t.hero.titleHighlight}
-            </span> {t.hero.titlePost}
-          </motion.h1>
-
-          {/* Subtitle */}
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="max-w-3xl mx-auto text-slate-400 text-lg sm:text-xl mb-10 leading-relaxed font-light"
-          >
-            {t.hero.subtitle}
-          </motion.p>
-
-          {/* Actions */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
-          >
-            <a 
-              href="#contact"
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl text-base font-bold transition-all hover:translate-y-[-2px] shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
-            >
-              {t.hero.ctaPrimary}
-              <ChevronRight size={18} />
-            </a>
-            
-            <button 
-              onClick={() => navigate('/auth/login')}
-              className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white border border-white/10 px-8 py-4 rounded-xl text-base font-bold transition-all hover:translate-y-[-2px]"
-            >
-              {t.hero.ctaSecondary}
-            </button>
-          </motion.div>
-
-          {/* Platform Mockup Preview (3D & Glassmorphic) */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 40 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="relative max-w-5xl mx-auto mt-10"
-          >
-            {/* Ambient Backglow */}
-            <div className="absolute inset-x-10 -top-12 h-64 bg-gradient-to-r from-blue-600/20 via-violet-600/20 to-cyan-600/20 rounded-full blur-[100px] pointer-events-none -z-10" />
-
-            {/* Glass Container */}
-            <div className="relative bg-[#0d1322]/80 border border-white/10 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)] p-3 md:p-4 overflow-hidden backdrop-blur-xl">
-              {/* Shine effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] to-transparent pointer-events-none" />
-              
-              {/* Window controls */}
-              <div className="flex items-center gap-1.5 pb-3 border-b border-white/5 mb-3 px-2">
-                <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <div className="text-[11px] font-mono text-slate-500 ml-4">AGMK-LMS-ENTERPRISE-v3.0.0</div>
+          <div className="pl-visual">
+            <div className="pl-orbit" />
+            <div className="pl-dashboard">
+              <div className="pl-dash-top">
+                <div className="pl-window-dots">
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                <div className="pl-live">{t.live}</div>
               </div>
-
-              {/* Inside Layout Mockup */}
-              <div className="grid grid-cols-12 gap-3 text-left">
-                
-                {/* Mockup Sidebar */}
-                <div className="hidden md:block col-span-3 bg-white/[0.02] border border-white/5 rounded-xl p-3 h-[420px] flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div className="h-6 w-24 bg-white/10 rounded-md animate-pulse" />
-                    <div className="space-y-2 mt-6">
-                      <div className="h-8 bg-blue-500/20 border border-blue-500/20 rounded-lg flex items-center px-2.5 gap-2">
-                        <div className="w-3 h-3 rounded bg-blue-400" />
-                        <div className="h-3 w-16 bg-blue-300/30 rounded" />
-                      </div>
-                      <div className="h-8 hover:bg-white/5 rounded-lg flex items-center px-2.5 gap-2 transition-colors">
-                        <div className="w-3 h-3 rounded bg-slate-600" />
-                        <div className="h-3 w-20 bg-slate-500/30 rounded" />
-                      </div>
-                      <div className="h-8 hover:bg-white/5 rounded-lg flex items-center px-2.5 gap-2 transition-colors">
-                        <div className="w-3 h-3 rounded bg-slate-600" />
-                        <div className="h-3 w-14 bg-slate-500/30 rounded" />
-                      </div>
-                      <div className="h-8 hover:bg-white/5 rounded-lg flex items-center px-2.5 gap-2 transition-colors">
-                        <div className="w-3 h-3 rounded bg-slate-600" />
-                        <div className="h-3 w-16 bg-slate-500/30 rounded" />
-                      </div>
-                    </div>
+              <div className="pl-dash-body">
+                <div className="pl-dash-heading">
+                  <div>
+                    <div className="pl-dash-kicker">Command Center</div>
+                    <div className="pl-dash-title">Learning Intelligence</div>
                   </div>
-                  <div className="bg-white/5 border border-white/5 rounded-lg p-2.5 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-500 to-violet-500 flex items-center justify-center text-[10px] font-bold text-white">UK</div>
-                    <div className="space-y-1">
-                      <div className="h-2 w-16 bg-white/20 rounded" />
-                      <div className="h-1.5 w-10 bg-slate-500/50 rounded" />
-                    </div>
+                  <div className="pl-ai-chip">
+                    <b>
+                      <Bot size={15} /> {t.aiPanelTitle}
+                    </b>
+                    {t.aiPanelText}
                   </div>
                 </div>
 
-                {/* Mockup Content area */}
-                <div className="col-span-12 md:col-span-9 space-y-4">
-                  
-                  {/* Top Bar Mock */}
-                  <div className="flex items-center justify-between bg-white/[0.01] border border-white/5 rounded-xl p-3">
-                    <div className="h-4 w-28 bg-white/10 rounded animate-pulse" />
-                    <div className="flex items-center gap-3">
-                      <div className="h-7 w-20 bg-blue-500/15 border border-blue-500/20 text-[10px] text-blue-400 flex items-center justify-center font-bold rounded-lg">
-                        AI Active
-                      </div>
-                      <div className="h-6 w-6 rounded-lg bg-white/5" />
+                <div className="pl-metric-grid">
+                  {[
+                    ['92%', 'progress'],
+                    ['18k', 'learners'],
+                    ['4.8', 'rating'],
+                  ].map(([value, label]) => (
+                    <div className="pl-metric" key={label}>
+                      <strong>{value}</strong>
+                      <span>{label}</span>
                     </div>
-                  </div>
-
-                  {/* Grid widgets */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3.5 space-y-2">
-                      <div className="text-[10px] text-slate-400 font-medium">Jami xodimlar</div>
-                      <div className="text-xl font-bold text-white">12,450</div>
-                      <div className="text-[9px] text-green-400 flex items-center gap-1">
-                        <span>↑ 12%</span> <span className="text-slate-500">o'tgan oyga nisbatan</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3.5 space-y-2">
-                      <div className="text-[10px] text-slate-400 font-medium">Faoliyat darajasi</div>
-                      <div className="text-xl font-bold text-white">94.8%</div>
-                      <div className="text-[9px] text-green-400 flex items-center gap-1">
-                        <span>↑ 4.2%</span> <span className="text-slate-500">o'tgan haftaga nisbatan</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3.5 space-y-2">
-                      <div className="text-[10px] text-slate-400 font-medium">AI tahlili</div>
-                      <div className="text-xl font-bold text-blue-400">Optimal</div>
-                      <div className="text-[9px] text-blue-300 flex items-center gap-1">
-                        <Sparkles size={8} /> <span>15 dars yangilandi</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Big Chart Mock */}
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 h-[200px] relative overflow-hidden flex flex-col justify-between">
-                    <div className="flex justify-between items-center">
-                      <div className="h-3 w-32 bg-white/10 rounded" />
-                      <div className="flex gap-2">
-                        <div className="h-2 w-8 bg-blue-500 rounded" />
-                        <div className="h-2 w-8 bg-violet-500 rounded" />
-                      </div>
-                    </div>
-                    
-                    {/* Simulated vector chart */}
-                    <div className="w-full h-24 flex items-end gap-1.5 mt-2">
-                      {[30, 45, 35, 60, 50, 75, 90, 85, 100, 95, 110, 120].map((h, i) => (
-                        <div key={i} className="flex-1 bg-gradient-to-t from-blue-600/50 to-blue-400 rounded-t" style={{ height: `${h * 0.7}%` }} />
-                      ))}
-                    </div>
-                    
-                    <div className="flex justify-between text-[9px] text-slate-500 pt-2 border-t border-white/5">
-                      <span>Yan</span><span>Fev</span><span>Mar</span><span>Apr</span><span>May</span><span>Iyun</span><span>Iyul</span><span>Avg</span>
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
 
-              </div>
+                <div className="pl-chart">
+                  <div className="pl-chart-head">
+                    <span>Department performance</span>
+                    <BarChart3 size={18} color="var(--pl-cyan)" />
+                  </div>
+                  <div className="pl-bars">
+                    {[45, 76, 58, 92, 66, 86, 78, 104, 82, 118, 96, 132].map((height, index) => (
+                      <i className="pl-bar" key={index} style={{ height }} />
+                    ))}
+                  </div>
+                </div>
 
+                <div className="pl-widget-row">
+                  <div className="pl-widget">
+                    <GraduationCap size={22} />
+                    <b>Certification flow</b>
+                    <p>Auto exam, approval and QR certificate delivery.</p>
+                  </div>
+                  <div className="pl-widget">
+                    <Video size={22} />
+                    <b>Webinar intelligence</b>
+                    <p>Attendance, replay and course impact in one view.</p>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            {/* Decorative floaters */}
-            <div className="absolute -top-6 -right-6 bg-white/[0.02] border border-white/10 backdrop-blur p-4 rounded-2xl shadow-xl hidden md:flex items-center gap-3 animate-bounce" style={{ animationDuration: '6s' }}>
-              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400">
-                <Award size={20} />
-              </div>
-              <div className="text-left">
-                <div className="text-xs font-bold text-white">QR Sertifikatlash</div>
-                <div className="text-[10px] text-slate-400">Avtomatik rasmiylashtirildi</div>
-              </div>
+            <div className="pl-float-card">
+              <strong>+31%</strong>
+              <span>Engagement lift</span>
             </div>
-
-            <div className="absolute -bottom-6 -left-6 bg-white/[0.02] border border-white/10 backdrop-blur p-4 rounded-2xl shadow-xl hidden md:flex items-center gap-3 animate-bounce" style={{ animationDuration: '8s' }}>
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <MessageSquare size={20} />
-              </div>
-              <div className="text-left">
-                <div className="text-xs font-bold text-white">AI Kognitiv Baholash</div>
-                <div className="text-[10px] text-slate-400">Tahlil hisoboti tayyor</div>
-              </div>
-            </div>
-
-          </motion.div>
-
-          <p className="mt-8 text-xs text-slate-500 tracking-wider flex items-center justify-center gap-2 font-mono uppercase">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
-            {t.hero.usersOnline}
-          </p>
-
+          </div>
         </div>
       </section>
 
-      {/* ── 2. TRUST / STATISTICS SECTION ── */}
-      <motion.section 
-        initial={{ opacity: 0, y: 30 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.6 }} 
-        className="py-16 border-y border-white/5 bg-white/[0.01] relative z-10"
-      >
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
-            
-            <div className="text-center md:text-left space-y-2">
-              <div className="text-3xl md:text-5xl font-extrabold text-white bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                98%
-              </div>
-              <div className="text-xs md:text-sm text-slate-400 font-medium">
-                {t.stats.completionRate}
-              </div>
-            </div>
-
-            <div className="text-center md:text-left space-y-2">
-              <div className="text-3xl md:text-5xl font-extrabold text-white bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-                45%
-              </div>
-              <div className="text-xs md:text-sm text-slate-400 font-medium">
-                {t.stats.timeSaved}
-              </div>
-            </div>
-
-            <div className="text-center md:text-left space-y-2">
-              <div className="text-3xl md:text-5xl font-extrabold text-white bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                150K+
-              </div>
-              <div className="text-xs md:text-sm text-slate-400 font-medium">
-                {t.stats.certifiedUsers}
-              </div>
-            </div>
-
-            <div className="text-center md:text-left space-y-2">
-              <div className="text-3xl md:text-5xl font-extrabold text-white bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
-                10M+
-              </div>
-              <div className="text-xs md:text-sm text-slate-400 font-medium">
-                {t.stats.studyHours}
-              </div>
-            </div>
-
+      <section id="results" className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-section-head">
+            <div className="pl-label">Enterprise trust</div>
+            <h2 className="pl-h2">{t.trustTitle}</h2>
           </div>
-        </div>
-      </motion.section>
-
-      {/* ── 3. FEATURES SECTION ── */}
-      <motion.section 
-        id="features" 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 relative z-10"
-      >
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-              {t.features.title}
-            </h2>
-            <p className="max-w-2xl mx-auto text-slate-400 text-sm md:text-base font-light">
-              {t.features.subtitle}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Feature 1 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-blue-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                  <Cpu size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.aiAssistant}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.aiAssistantDesc}</p>
-              </div>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-violet-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-violet-500/10 rounded-xl flex items-center justify-center text-violet-400 group-hover:scale-110 transition-transform">
-                  <LineChart size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.analytics}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.analyticsDesc}</p>
-              </div>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-cyan-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                  <CheckCircle size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.exams}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.examsDesc}</p>
-              </div>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-rose-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-400 group-hover:scale-110 transition-transform">
-                  <Video size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.webinars}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.webinarsDesc}</p>
-              </div>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-amber-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                  <Award size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.certificates}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.certificatesDesc}</p>
-              </div>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between h-[240px]">
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                  <Shield size={22} />
-                </div>
-                <h3 className="text-lg font-bold text-white">{t.features.security}</h3>
-                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{t.features.securityDesc}</p>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      </motion.section>
-
-      {/* ── 4. AI COPLAY / SHOWCASE SECTION ── */}
-      <motion.section 
-        id="ai-showcase" 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 bg-gradient-to-b from-[#080b12] to-[#0d1220] relative z-10"
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
-            {/* Description Text */}
-            <div className="lg:col-span-5 space-y-6 text-left">
-              <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/25 px-4 py-1.5 rounded-full text-xs font-semibold text-violet-400">
-                <Cpu size={14} />
-                <span>AI CO-PILOT ENGINE</span>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight">
-                {t.aiShowcase.title}
-              </h2>
-              <p className="text-slate-400 text-sm md:text-base leading-relaxed font-light">
-                {t.aiShowcase.subtitle}
-              </p>
-              <ul className="space-y-3.5 text-slate-300 text-sm font-medium">
-                <li className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">✓</div>
-                  <span>AI generator yordamida daqiqalarda testlar yaratish</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">✓</div>
-                  <span>Hujjatlar va videolardan qisqartirilgan konspekt yaratish</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">✓</div>
-                  <span>Avtomatik savol-javob darslari (AI Tutor)</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Interactive Widget Simulator */}
-            <div className="lg:col-span-7">
-              <div className="bg-[#0b0f19] border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl relative">
-                
-                {/* Simulated Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-blue-600 flex items-center justify-center text-white">
-                      <Sparkles size={16} />
-                    </div>
-                    <div className="text-left">
-                      <div className="text-xs font-bold text-white">AI Content Generator</div>
-                      <div className="text-[10px] text-slate-500 font-mono">v1.2 // stable</div>
-                    </div>
-                  </div>
-                  <div className="text-[10px] bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20 font-bold uppercase tracking-wider">
-                    Ready
-                  </div>
-                </div>
-
-                {/* Simulated Chat & Generator Form */}
-                <div className="space-y-4 text-left">
-                  
-                  <div>
-                    <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-2">
-                      {t.aiShowcase.inputLabel}
-                    </label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={aiPrompt}
-                        onChange={(e) => setAiPrompt(e.target.value)}
-                        placeholder={t.aiShowcase.placeholder}
-                        disabled={isGenerating || generationStep === 2}
-                        className="flex-1 bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 outline-none focus:border-violet-500 transition-colors"
-                      />
-                      <button 
-                        onClick={startAiGeneration}
-                        disabled={isGenerating || !aiPrompt.trim()}
-                        className="bg-violet-600 hover:bg-violet-500 disabled:bg-violet-900/40 disabled:text-slate-500 text-white px-5 rounded-xl text-xs md:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap"
-                      >
-                        {isGenerating ? t.aiShowcase.generating : t.aiShowcase.generateBtn}
-                        <Send size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Simulator Output Box */}
-                  <div className="min-h-[160px] bg-white/[0.01] border border-white/5 rounded-xl p-4 flex flex-col justify-center relative overflow-hidden">
-                    
-                    {generationStep === 0 && (
-                      <div className="text-center text-slate-500 space-y-2">
-                        <Cpu size={32} className="mx-auto text-slate-600 animate-pulse" />
-                        <p className="text-xs md:text-sm font-light">Kuting, sun'iy intellekt topshiriqni qabul qilishga tayyor.</p>
-                      </div>
-                    )}
-
-                    {generationStep === 1 && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-violet-400 font-bold text-xs">
-                          <span className="w-2 h-2 bg-violet-400 rounded-full animate-ping" />
-                          {t.aiShowcase.generating}
-                        </div>
-                        <div className="space-y-2">
-                          <div className="h-3 w-3/4 bg-white/5 rounded animate-pulse" />
-                          <div className="h-3 w-1/2 bg-white/5 rounded animate-pulse" />
-                          <div className="h-3 w-5/6 bg-white/5 rounded animate-pulse" />
-                        </div>
-                      </div>
-                    )}
-
-                    {generationStep === 2 && (
-                      <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        className="space-y-3 text-left"
-                      >
-                        <div className="text-xs font-bold text-green-400 flex items-center gap-1.5 mb-1">
-                          <CheckCircle size={14} />
-                          {t.aiShowcase.feedback}
-                        </div>
-                        <div className="bg-white/5 rounded-lg p-3 space-y-2.5">
-                          <div className="text-xs font-bold text-white border-b border-white/5 pb-1.5">{t.aiShowcase.testTitle}</div>
-                          <div className="text-[11px] text-slate-300 font-medium">{t.aiShowcase.q1}</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[10px] text-slate-400 pl-3">
-                            <div>{t.aiShowcase.q1_a}</div>
-                            <div className="text-blue-400 font-semibold">{t.aiShowcase.q1_b} (To'g'ri javob)</div>
-                            <div>{t.aiShowcase.q1_c}</div>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => { setAiPrompt(''); setGenerationStep(0); }}
-                          className="text-[10px] text-slate-500 hover:text-white font-mono underline"
-                        >
-                          Qayta yozib ko'rish
-                        </button>
-                      </motion.div>
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </motion.section>
-
-      {/* ── 5. INTERACTIVE DASHBOARD SHOWCASE ── */}
-      <motion.section 
-        id="dashboard-showcase" 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 bg-[#080b12] relative z-10"
-      >
-        <div className="max-w-7xl mx-auto text-center space-y-12">
-          
-          <div className="space-y-4">
-            <h2 className="text-3xl md:text-4xl font-bold text-white">
-              {t.dashboardShowcase.title}
-            </h2>
-            <p className="max-w-2xl mx-auto text-slate-400 text-sm md:text-base font-light">
-              {t.dashboardShowcase.subtitle}
-            </p>
-          </div>
-
-          {/* Interactive Navigation Tabs */}
-          <div className="inline-flex bg-white/5 border border-white/10 rounded-2xl p-1.5 max-w-lg mx-auto w-full">
-            <button 
-              onClick={() => setActiveTab('admin')} 
-              className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-xl transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10' : 'text-slate-400 hover:text-white'}`}
-            >
-              {t.dashboardShowcase.tabAdmin}
-            </button>
-            <button 
-              onClick={() => setActiveTab('student')} 
-              className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-xl transition-all ${activeTab === 'student' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10' : 'text-slate-400 hover:text-white'}`}
-            >
-              {t.dashboardShowcase.tabStudent}
-            </button>
-            <button 
-              onClick={() => setActiveTab('analytics')} 
-              className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-xl transition-all ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10' : 'text-slate-400 hover:text-white'}`}
-            >
-              {t.dashboardShowcase.tabAnalytics}
-            </button>
-          </div>
-
-          {/* Tab Render View */}
-          <div className="bg-[#0b0f19] border border-white/5 rounded-2xl p-6 md:p-8 min-h-[380px] shadow-2xl relative text-left">
-            
-            <AnimatePresence mode="wait">
-              {activeTab === 'admin' && (
-                <motion.div 
-                  key="admin"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-6"
-                >
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-2">
-                    <div className="text-xs text-slate-400">{t.dashboardShowcase.totalStudents}</div>
-                    <div className="text-3xl font-extrabold text-white">12,450 ta</div>
-                    <div className="text-[10px] text-green-400 font-semibold">1,230 ta yangi xodim qo'shildi</div>
-                  </div>
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-2">
-                    <div className="text-xs text-slate-400">{t.dashboardShowcase.activeCourses}</div>
-                    <div className="text-3xl font-extrabold text-blue-400">142 ta</div>
-                    <div className="text-[10px] text-slate-500">12 ta ishlab chiqish jarayonida</div>
-                  </div>
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-2">
-                    <div className="text-xs text-slate-400">{t.dashboardShowcase.passingRate}</div>
-                    <div className="text-3xl font-extrabold text-white">88.5%</div>
-                    <div className="text-[10px] text-green-400 font-semibold">↑ 2.1% o'tgan oydan</div>
-                  </div>
-
-                  <div className="md:col-span-3 bg-white/[0.01] border border-white/5 rounded-xl p-5 space-y-4">
-                    <div className="text-sm font-bold text-white">{t.dashboardShowcase.recentCourses}</div>
-                    <div className="space-y-2">
-                      {[t.dashboardShowcase.course1, t.dashboardShowcase.course2, t.dashboardShowcase.course3].map((title, i) => (
-                        <div key={i} className="flex justify-between items-center bg-white/[0.02] border border-white/5 rounded-lg p-3 text-xs md:text-sm">
-                          <div className="font-semibold text-slate-200">{title}</div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-slate-500 font-mono">ID: LMS-0{i+1}</span>
-                            <span className="text-[11px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 font-medium">Faol</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'student' && (
-                <motion.div 
-                  key="student"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-gradient-to-r from-blue-900/20 to-violet-900/10 border border-blue-500/20 rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <div className="text-lg font-bold text-white">Salom, Husan Rustamov!</div>
-                      <div className="text-xs text-slate-400">Hozirda sizda 2 ta yakunlanmagan dars mavjud.</div>
-                    </div>
-                    <button className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5">
-                      <Play size={12} fill="currentColor" />
-                      Darslarni davom ettirish
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-3">
-                      <div className="text-xs font-bold text-slate-400">MENING PROGRESSIM</div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-slate-300">
-                          <span>Sanoat xavfsizligi</span>
-                          <span>78%</span>
-                        </div>
-                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: '78%' }} />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-slate-300">
-                          <span>Mehnat normalari</span>
-                          <span>40%</span>
-                        </div>
-                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                          <div className="h-full bg-violet-500 rounded-full" style={{ width: '40%' }} />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-3 flex flex-col justify-between">
-                      <div className="text-xs font-bold text-slate-400">YUKLAB OLINGAN SERTIFIKATLAR</div>
-                      <div className="flex items-center gap-3 bg-white/5 rounded-lg p-2.5 border border-white/5">
-                        <div className="w-9 h-9 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                          <Award size={18} />
-                        </div>
-                        <div className="flex-1 text-xs">
-                          <div className="font-bold text-white">LMS Professional Expert</div>
-                          <div className="text-[10px] text-slate-400">Avtomatik QR tekshiruvli</div>
-                        </div>
-                        <button className="text-xs text-blue-400 font-semibold hover:underline">Yuklash</button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'analytics' && (
-                <motion.div 
-                  key="analytics"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="grid grid-cols-1 lg:grid-cols-12 gap-6"
-                >
-                  <div className="lg:col-span-5 bg-white/[0.02] border border-white/5 rounded-xl p-5 space-y-4">
-                    <div className="text-xs font-bold text-slate-400 uppercase font-mono tracking-wider">Bo'limlar tahlili</div>
-                    <div className="space-y-3.5">
-                      {[
-                        { name: "Texnologiya bo'limi", progress: 92, status: "Yuqori" },
-                        { name: "Avtomatlashtirish", progress: 85, status: "Yuqori" },
-                        { name: "Konchilik ishlari", progress: 68, status: "O'rtacha" },
-                        { name: "Transport bo'limi", progress: 54, status: "Minimal" }
-                      ].map((dept, i) => (
-                        <div key={i} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="font-medium text-slate-300">{dept.name}</span>
-                            <span className="text-slate-400 font-bold">{dept.progress}%</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${dept.progress >= 85 ? 'bg-green-500' : dept.progress >= 60 ? 'bg-amber-500' : 'bg-rose-500'}`} 
-                              style={{ width: `${dept.progress}%` }} 
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-7 bg-white/[0.02] border border-white/5 rounded-xl p-5 flex flex-col justify-between min-h-[220px]">
-                    <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                      <div className="text-xs font-bold text-slate-400 font-mono">TIZIM SAMARADORLIGI (KPI)</div>
-                      <div className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
-                        98.2 KPI
-                      </div>
-                    </div>
-                    <div className="h-28 flex items-end justify-between gap-2.5 pt-4">
-                      {[30, 50, 40, 65, 80, 55, 90, 85, 100, 110].map((val, idx) => (
-                        <div key={idx} className="flex-1 space-y-1 flex flex-col items-center">
-                          <div className="w-full bg-gradient-to-t from-blue-600/50 to-violet-500 rounded-t-sm" style={{ height: `${val * 0.7}px` }} />
-                          <span className="text-[8px] text-slate-600 font-mono">{idx + 1}o</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-500 text-center font-light pt-2">
-                      Xodimlar malaka oshirish jarayoni bo'yicha tizimning real vaqtdagi integrallashgan dinamika grafigi.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-          </div>
-
-        </div>
-      </motion.section>
-
-      {/* ── 6. RESPONSIVE EXPERIENCE SECTION ── */}
-      <motion.section 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 border-t border-white/5 bg-[#0d1220]/50 relative overflow-hidden z-10"
-      >
-        
-        {/* Animated Glow Grid in background */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none -z-10" />
-
-        <div className="max-w-7xl mx-auto text-center space-y-16">
-          <div className="space-y-4">
-            <h2 className="text-3xl md:text-4xl font-bold text-white">
-              {t.responsive.title}
-            </h2>
-            <p className="max-w-2xl mx-auto text-slate-400 text-sm md:text-base font-light">
-              {t.responsive.subtitle}
-            </p>
-          </div>
-
-          {/* Showcase of mockups */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            
-            {/* Desktop Mockup Card */}
-            <div className="md:col-span-7 bg-[#0b0e17] border border-white/10 rounded-2xl shadow-xl overflow-hidden p-2">
-              <div className="bg-white/5 border border-white/5 rounded-xl h-[280px] p-3 flex flex-col justify-between text-left">
-                <div className="flex items-center gap-1.5 pb-2 border-b border-white/5 mb-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <div className="text-[10px] text-slate-500 font-mono ml-3">{t.responsive.desktop}</div>
-                </div>
-                <div className="flex-1 flex flex-col justify-center items-center text-center space-y-3">
-                  <Smartphone className="text-blue-500/20" size={48} />
-                  <p className="text-xs text-slate-400 max-w-sm">Maksimal ekran kengligi, tahliliy hisobotlarni tahrirlash va yangi o'quv kurslarini joylashtirish uchun optimal interfeys.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile / Tablet Mockup Card */}
-            <div className="md:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-[#0b0e17] border border-white/10 rounded-2xl p-4 text-left space-y-4">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
-                  <Layers size={16} />
-                </div>
-                <h3 className="text-sm font-bold text-white">{t.responsive.tablet}</h3>
-                <p className="text-slate-400 text-xs leading-relaxed">Darslarni o'qish, video ma'ruzalarni tomosha qilish va planshet formatidagi interaktiv testlar.</p>
-              </div>
-
-              <div className="bg-[#0b0e17] border border-white/10 rounded-2xl p-4 text-left space-y-4">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                  <Smartphone size={16} />
-                </div>
-                <h3 className="text-sm font-bold text-white">{t.responsive.mobile}</h3>
-                <p className="text-slate-400 text-xs leading-relaxed">{t.responsive.mobile}. Tezkor push bildirishnomalar va istalgan joyda mobil imtihon topshirish.</p>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </motion.section>
-
-      {/* ── 7. ENTERPRISE BENEFITS ── */}
-      <motion.section 
-        id="benefits" 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 relative z-10"
-      >
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white">
-              {t.benefits.title}
-            </h2>
-            <p className="max-w-2xl mx-auto text-slate-400 text-sm md:text-base font-light">
-              {t.benefits.subtitle}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
-            {t.benefits.featuresList.map((benefit, i) => (
-              <div key={i} className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 space-y-4 flex flex-col justify-between hover:border-blue-500/25 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 font-bold">
-                  0{i+1}
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-base font-bold text-white">{benefit.title}</h3>
-                  <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{benefit.desc}</p>
-                </div>
+          <div className="pl-stat-grid">
+            {stats.map(([value, label]) => (
+              <div className="pl-stat" key={label}>
+                <strong>{value}</strong>
+                <span>{label}</span>
               </div>
             ))}
           </div>
-
         </div>
-      </motion.section>
+      </section>
 
-      {/* ── 8. TESTIMONIALS SECTION ── */}
-      <motion.section 
-        initial={{ opacity: 0, y: 40 }} 
-        whileInView={{ opacity: 1, y: 0 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 border-t border-white/5 bg-white/[0.01] relative z-10"
-      >
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white">
-              {t.testimonials.title}
-            </h2>
-            <p className="max-w-2xl mx-auto text-slate-400 text-sm md:text-base font-light">
-              {t.testimonials.subtitle}
-            </p>
+      <section id="platform" className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-section-head">
+            <div className="pl-label">Platform</div>
+            <h2 className="pl-h2">{t.featuresTitle}</h2>
+            <p className="pl-muted">Designed for HR, training centers, administrators, employees and executive teams.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-            
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 md:p-8 space-y-6 flex flex-col justify-between">
-              <p className="text-slate-300 text-xs md:text-sm md:text-base italic leading-relaxed">
-                "{t.testimonials.quote1}"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-white text-xs">
-                  AK
+          <div className="pl-feature-grid">
+            {features.map(([Icon, title, text]) => (
+              <div className="pl-feature" key={title as string}>
+                <div className="pl-feature-icon">
+                  <Icon size={22} />
                 </div>
-                <div>
-                  <div className="text-xs md:text-sm font-bold text-white">{t.testimonials.author1}</div>
-                  <div className="text-[10px] md:text-xs text-slate-500">{t.testimonials.role1}</div>
-                </div>
+                <h3>{title as string}</h3>
+                <p>{text as string}</p>
               </div>
-            </div>
-
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 md:p-8 space-y-6 flex flex-col justify-between">
-              <p className="text-slate-300 text-xs md:text-sm md:text-base italic leading-relaxed">
-                "{t.testimonials.quote2}"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-violet-500 to-pink-500 flex items-center justify-center font-bold text-white text-xs">
-                  YS
-                </div>
-                <div>
-                  <div className="text-xs md:text-sm font-bold text-white">{t.testimonials.author2}</div>
-                  <div className="text-[10px] md:text-xs text-slate-500">{t.testimonials.role2}</div>
-                </div>
-              </div>
-            </div>
-
+            ))}
           </div>
-
         </div>
-      </motion.section>
+      </section>
 
-      {/* ── 9. FINAL CTA SECTION ── */}
-      <motion.section 
-        id="contact" 
-        initial={{ opacity: 0, scale: 0.95 }} 
-        whileInView={{ opacity: 1, scale: 1 }} 
-        viewport={{ once: true, margin: "-50px" }} 
-        transition={{ duration: 0.7 }} 
-        className="py-24 px-6 relative overflow-hidden z-10"
-      >
-        <div className="max-w-4xl mx-auto text-center relative z-10 bg-gradient-to-tr from-blue-900/40 via-slate-900/60 to-violet-900/40 border border-blue-500/30 rounded-3xl p-8 md:p-14 shadow-[0_0_80px_rgba(59,130,246,0.2)] backdrop-blur-md">
-          
-          <div className="absolute inset-0 bg-[#0d1322]/80 -z-10 rounded-3xl" />
-          
-          <div className="space-y-4 mb-10">
-            <h2 className="text-2xl md:text-4xl font-extrabold text-white">
-              {t.cta.title}
-            </h2>
-            <p className="max-w-xl mx-auto text-slate-400 text-xs md:text-sm font-light">
-              {t.cta.subtitle}
-            </p>
-          </div>
-
-          <form onSubmit={handleContactSubmit} className="max-w-md mx-auto">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input 
-                type="text" 
-                required
-                value={contactInput}
-                onChange={(e) => setContactInput(e.target.value)}
-                placeholder={t.cta.inputPlaceholder}
-                disabled={isSubmitted}
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 transition-colors"
-              />
-              <button 
-                type="submit"
-                disabled={isSubmitted}
-                className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white px-6 py-3 rounded-xl text-xs md:text-sm font-bold transition-all whitespace-nowrap"
-              >
-                {t.cta.btn}
-              </button>
-            </div>
-
-            {isSubmitted && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-xs text-green-400 font-semibold mt-4"
-              >
-                {t.cta.success}
-              </motion.div>
-            )}
-          </form>
-
-        </div>
-      </motion.section>
-
-      {/* ── 10. FOOTER ── */}
-      <footer className="border-t border-white/5 bg-[#06080f] py-12 px-6 text-slate-500 text-xs md:text-sm">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white text-xs">
-              A
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-white text-xs tracking-tight">{t.footer.company}</div>
-              <div className="text-[10px] text-slate-500 font-mono">v3.0 // ENTERPRISE</div>
-            </div>
-          </div>
-
-          <div className="flex gap-6">
-            <a href="#features" className="hover:text-white transition-colors">{t.nav.features}</a>
-            <a href="#ai-showcase" className="hover:text-white transition-colors">{t.nav.aiShowcase}</a>
-            <a href="#dashboard-showcase" className="hover:text-white transition-colors">{t.nav.dashboard}</a>
-          </div>
-
+      <section id="ai" className="pl-section">
+        <div className="pl-shell pl-split">
           <div>
-            © {new Date().getFullYear()} {t.footer.company}. {t.footer.rights}
+            <div className="pl-label">AI showcase</div>
+            <h2 className="pl-h2">{t.aiTitle}</h2>
+            <p className="pl-muted">
+              Generate quizzes, summarize regulations, recommend next modules and surface risk signals before employees fail exams.
+            </p>
           </div>
+          <div className="pl-ai-list">
+            {[
+              [BrainCircuit, 'AI-generated quizzes', 'Question banks from course materials in seconds.'],
+              [Sparkles, 'AI summaries', 'Long regulations converted into executive briefs.'],
+              [CheckCircle2, 'Recommendations', 'Next lessons matched to skill gaps.'],
+              [Globe2, 'Multilingual intelligence', 'Uzbek Latin and Russian Cyrillic layouts.'],
+            ].map(([Icon, title, text]) => (
+              <div className="pl-ai-item" key={title as string}>
+                <Icon size={26} />
+                <strong>{title as string}</strong>
+                <span>{text as string}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
+      <section id="analytics" className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-section-head">
+            <div className="pl-label">Dashboard</div>
+            <h2 className="pl-h2">{t.dashboardTitle}</h2>
+          </div>
+          <div className="pl-device-grid">
+            {[
+              [MonitorSmartphone, 'Desktop cockpit', 'Deep analytics, course operations and department monitoring.'],
+              [TabletSmartphone, 'Tablet workflows', 'Training center reviews, webinars and instructor controls.'],
+              [Award, 'Certificate center', 'QR certificates, renewals and compliance status.'],
+              [ShieldCheck, 'Admin governance', 'Role permissions, audit-friendly access and secure data.'],
+            ].map(([Icon, title, text]) => (
+              <div className="pl-device" key={title as string}>
+                <Icon size={28} />
+                <strong>{title as string}</strong>
+                <span>{text as string}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-section-head">
+            <div className="pl-label">Benefits</div>
+            <h2 className="pl-h2">{t.benefitsTitle}</h2>
+          </div>
+          <div className="pl-benefit-grid">
+            {benefits.map((title, index) => (
+              <div className="pl-benefit" key={title}>
+                <Sparkles size={25} />
+                <strong>{title}</strong>
+                <span>{['10k+ employees without operational clutter.', 'Less manual work for HR and instructors.', 'Less searching, more measurable learning.', 'One view for onboarding and compliance.'][index]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-quote">
+            <blockquote>“{t.quote}”</blockquote>
+            <div className="pl-avatar">HR</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-cta">
+            <div>
+              <h2>{t.ctaTitle}</h2>
+              <p>{t.ctaText}</p>
+            </div>
+            <button className="pl-btn pl-btn-primary">
+              {t.demo}
+              <ArrowRight size={17} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="pl-footer">
+        <div className="pl-shell pl-footer-inner">
+          <div className="pl-brand">
+            <span className="pl-brand-mark">A</span>
+            <span>
+              <span className="pl-brand-name">AGMK LMS</span>
+              <span className="pl-brand-sub">ENTERPRISE AI</span>
+            </span>
+          </div>
+          <span>{t.footer}</span>
         </div>
       </footer>
-
-    </div>
+    </main>
   );
 }

@@ -9,6 +9,8 @@ import {
   Trophy, Flame, Target, Zap, Calendar,
   ChevronRight, Star, CheckCircle, Bell, Video,
 } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { getInitials, type EnterpriseRole } from '@/shared/lib/auth-user';
 
 /* ── Data ─────────────────────────────────────── */
 const areaData = [
@@ -71,9 +73,135 @@ const Tip = ({ active, payload, label }: any) => active && payload?.length ? (
 
 const rankColors = ['#f59e0b', '#94a3b8', '#b45309', '#64748b', '#64748b'];
 
+const roleDashboards: Record<EnterpriseRole, {
+  title: string;
+  subtitle: string;
+  goal: number;
+  badges: Array<{ icon: typeof Flame; label: string; color: string }>;
+  stats: Array<{ label: string; value: string; change: string; up: boolean; icon: typeof CheckCircle; c: string; bg: string }>;
+  primaryAction: string;
+  secondaryAction: string;
+}> = {
+  super_admin: {
+    title: 'Tizim boshqaruvi dashboardi',
+    subtitle: 'Platforma, foydalanuvchilar, rollar va xavfsizlik holati',
+    goal: 96,
+    badges: [
+      { icon: Award, label: '6 ta rol faol', color: '#3b82f6' },
+      { icon: Trophy, label: 'System health 99.9%', color: '#22c55e' },
+      { icon: Target, label: 'Audit tayyor', color: '#f59e0b' },
+    ],
+    stats: [
+      { label: 'Foydalanuvchilar', value: '1,284', change: '+42', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Faol rollar', value: '6', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Audit ball', value: '99.1', change: '+0.4', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Sertifikatlar', value: '24k', change: '+318', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Admin panel',
+    secondaryAction: 'System AI',
+  },
+  hr_manager: {
+    title: 'HR boshqaruv dashboardi',
+    subtitle: 'Xodimlar onboarding, progress va hisobotlari',
+    goal: 84,
+    badges: [
+      { icon: Flame, label: '42 yangi onboarding', color: '#f59e0b' },
+      { icon: Trophy, label: 'HR KPI 84%', color: '#22c55e' },
+      { icon: Target, label: 'Compliance nazorat', color: '#3b82f6' },
+    ],
+    stats: [
+      { label: 'Onboarding', value: '42', change: '+12', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Faol xodimlar', value: '1,128', change: '+36', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Ortacha progress', value: '81%', change: '+4%', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Hisobotlar', value: '18', change: '+3', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Xodimlar',
+    secondaryAction: 'HR AI',
+  },
+  trainer: {
+    title: 'Instruktor dashboardi',
+    subtitle: 'Kurslar, vebinarlar, imtihonlar va oquvchilar natijasi',
+    goal: 78,
+    badges: [
+      { icon: Flame, label: '8 ta dars tayyor', color: '#f59e0b' },
+      { icon: Trophy, label: '245 learner', color: '#22c55e' },
+      { icon: Target, label: 'Test sifati 91%', color: '#3b82f6' },
+    ],
+    stats: [
+      { label: 'Kurslar', value: '12', change: '+2', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Vebinarlar', value: '6', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Ortacha ball', value: '89.2', change: '+1.8', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Sertifikat', value: '318', change: '+24', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Kurs yaratish',
+    secondaryAction: 'AI test',
+  },
+  employee: {
+    title: 'Mening oquv dashboardim',
+    subtitle: 'Kurslar, imtihonlar, sertifikatlar va AI tavsiyalar',
+    goal: 73,
+    badges: [
+      { icon: Flame, label: '12 kunlik streak', color: '#f59e0b' },
+      { icon: Trophy, label: 'Top 3 da turibsiz', color: '#f59e0b' },
+      { icon: Target, label: '73% maqsad', color: '#3b82f6' },
+    ],
+    stats: [
+      { label: 'Yakunlangan', value: '24', change: '+3', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Jarayondagi', value: '3', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: "O'rtacha ball", value: '87.4', change: '+2.1', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Sertifikatlar', value: '5', change: '+1', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Davom etish',
+    secondaryAction: 'AI Maslahat',
+  },
+  executive: {
+    title: 'Executive analytics dashboard',
+    subtitle: 'Korporativ ta lim KPI, risklar va strategik hisobotlar',
+    goal: 91,
+    badges: [
+      { icon: Flame, label: 'KPI 91%', color: '#22c55e' },
+      { icon: Trophy, label: '24k sertifikat', color: '#f59e0b' },
+      { icon: Target, label: 'Risk nazorat', color: '#3b82f6' },
+    ],
+    stats: [
+      { label: 'Completion', value: '91%', change: '+6%', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Faol bolimlar', value: '18', change: '+2', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Risk score', value: '7.2', change: '-1.4', up: false, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'ROI indeks', value: '3.4x', change: '+0.6', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Analytics',
+    secondaryAction: 'Executive AI',
+  },
+  department_manager: {
+    title: 'Bolim rahbari dashboardi',
+    subtitle: 'Bolim xodimlari progressi, imtihonlar va compliance',
+    goal: 82,
+    badges: [
+      { icon: Flame, label: '64 xodim kuzatuvda', color: '#f59e0b' },
+      { icon: Trophy, label: 'Compliance 82%', color: '#22c55e' },
+      { icon: Target, label: '4 ta risk guruhi', color: '#ef4444' },
+    ],
+    stats: [
+      { label: 'Bolim progress', value: '82%', change: '+5%', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Xodimlar', value: '64', change: '+3', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Imtihon ball', value: '84.6', change: '+2.2', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Sertifikatlar', value: '51', change: '+8', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Bolim hisoboti',
+    secondaryAction: 'Risk AI',
+  },
+};
+
+
 /* ── Component ─────────────────────────────────── */
 export default function Dashboard() {
   const { t } = useTranslation();
+  const user = useAuthStore((state) => state.user);
+  const role = (user?.role || user?.roles?.[0] || 'employee') as EnterpriseRole;
+  const dashboard = roleDashboards[role] || roleDashboards.employee;
+  const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
+  const displayName = user?.firstName || user?.fullName?.split(' ')[0] || 'Alisher';
+  const userSubtitle = `${user?.department || 'AGMK'} • ${user?.position || dashboard.subtitle} • ${user?.roleLabel || role}`;
 
   return (
     <div>
@@ -82,21 +210,22 @@ export default function Dashboard() {
       <div className="dash-hero fade-in" style={{ marginBottom: 24 }}>
         <div className="dash-hero-left">
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-            <div className="avatar avatar-lg" style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', flexShrink: 0 }}>AH</div>
+            <div className="avatar avatar-lg" style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', flexShrink: 0 }}>{initials}</div>
             <div>
               <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px' }}>
-                {t('dash.hello')}, Alisher! 👋
+                {t('dash.hello')}, {displayName}!
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
-                IT Bo'limi • Senior Developer • AGMK
+                {userSubtitle}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--blue-400)', marginTop: 6, fontWeight: 700 }}>
+                {dashboard.title}
               </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 20, marginBottom: 18, flexWrap: 'wrap' }}>
             {[
-              { icon: Flame, label: '12 kunlik streak', color: '#f59e0b' },
-              { icon: Trophy, label: 'Top 3 da turibsiz', color: '#f59e0b' },
-              { icon: Target, label: '73% maqsad', color: '#3b82f6' },
+              ...dashboard.badges,
             ].map((b, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
                 <b.icon size={15} color={b.color} />
@@ -107,15 +236,15 @@ export default function Dashboard() {
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
               <span style={{ color: 'var(--text-secondary)' }}>Oylik maqsad</span>
-              <span style={{ fontWeight: 700, color: '#3b82f6' }}>73%</span>
+              <span style={{ fontWeight: 700, color: '#3b82f6' }}>{dashboard.goal}%</span>
             </div>
             <div className="progress-bar" style={{ height: 8 }}>
-              <div className="progress-fill" style={{ width: '73%' }} />
+              <div className="progress-fill" style={{ width: `${dashboard.goal}%` }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary btn-sm"><Play size={13} /> Davom etish</button>
-            <button className="btn btn-secondary btn-sm"><Sparkles size={13} /> AI Maslahat</button>
+            <button className="btn btn-primary btn-sm"><Play size={13} /> {dashboard.primaryAction}</button>
+            <button className="btn btn-secondary btn-sm"><Sparkles size={13} /> {dashboard.secondaryAction}</button>
           </div>
         </div>
 
@@ -150,12 +279,7 @@ export default function Dashboard() {
 
       {/* ── STATS ── */}
       <div className="grid grid-4 fade-in fade-in-1" style={{ marginBottom: 24 }}>
-        {[
-          { label: 'Yakunlangan', value: '24', change: '+3', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
-          { label: 'Jarayondagi', value: '3', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-          { label: "O'rtacha ball", value: '87.4', change: '+2.1', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-          { label: 'Sertifikatlar', value: '5', change: '+1', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
-        ].map((s, i) => (
+            {dashboard.stats.map((s, i) => (
           <div key={i} className="stat-card">
             <div className="stat-header">
               <div>

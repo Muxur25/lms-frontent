@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import {
@@ -9,6 +10,8 @@ import {
   ChevronDown, LogOut, User, HelpCircle, Plus,
   Home, Layers,
 } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { getInitials } from '@/shared/lib/auth-user';
 
 /* ─── Types ────────────────────────────────────────────────── */
 interface SidebarProps {
@@ -73,6 +76,17 @@ const BOTTOM_NAV = [
 /* ─── Sidebar ───────────────────────────────────────────────── */
 export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mobileOpen, setMobileOpen }: SidebarProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
+  const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
+  const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/auth/login');
+  };
 
   return (
     <>
@@ -155,15 +169,15 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
 
         {/* Footer User */}
         <div className="sidebar-footer">
-          <div className="user-card" title={collapsed ? 'Alisher Hasanov' : undefined}>
-            <div className="avatar">AH</div>
+          <div className="user-card" title={collapsed ? fullName : undefined}>
+            <div className="avatar">{initials}</div>
             {!collapsed && (
               <>
                 <div className="user-info">
-                  <div className="user-name">Alisher Hasanov</div>
-                  <div className="user-role">Administrator</div>
+                  <div className="user-name">{fullName}</div>
+                  <div className="user-role">{roleLabel}</div>
                 </div>
-                <button className="icon-btn" style={{ width: 28, height: 28, minWidth: 28 }}>
+                <button className="icon-btn" onClick={handleLogout} style={{ width: 28, height: 28, minWidth: 28 }}>
                   <LogOut size={13} />
                 </button>
               </>
@@ -208,8 +222,21 @@ function NavItem({ item, active, collapsed, onClick, t }: {
 /* ─── Topbar ────────────────────────────────────────────────── */
 export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang, theme, setTheme }: TopbarProps) {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
+  const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
+  const shortName = user?.firstName ? `${user.firstName} ${user.lastName?.[0] || ''}.` : fullName;
+  const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
+
+  const handleLogout = () => {
+    logout();
+    setProfileOpen(false);
+    navigate('/auth/login');
+  };
 
   const switchLang = (l: string) => { setLang(l); i18n.changeLanguage(l); };
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -278,9 +305,9 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
             className="profile-btn"
             onClick={() => setProfileOpen(!profileOpen)}
           >
-            <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>AH</div>
+            <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{initials}</div>
             <div className="profile-info">
-              <span className="profile-name">Alisher H.</span>
+              <span className="profile-name">{shortName}</span>
             </div>
             <ChevronDown size={12} color="var(--text-muted)" />
           </button>
@@ -288,11 +315,11 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
           {profileOpen && (
             <div className="profile-dropdown" onClick={() => setProfileOpen(false)}>
               <div className="pd-header">
-                <div className="avatar avatar-lg">AH</div>
+                <div className="avatar avatar-lg">{initials}</div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Alisher Hasanov</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>a.hasanov@agmk.uz</div>
-                  <span className="badge badge-blue" style={{ marginTop: 4, fontSize: 10 }}>Administrator</span>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{fullName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{user?.email || 'user@agmk.uz'}</div>
+                  <span className="badge badge-blue" style={{ marginTop: 4, fontSize: 10 }}>{roleLabel}</span>
                 </div>
               </div>
               <hr className="divider" style={{ margin: '8px 0' }} />
@@ -307,7 +334,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
                 </div>
               ))}
               <hr className="divider" style={{ margin: '8px 0' }} />
-              <div className="pd-item pd-item-danger">
+              <div className="pd-item pd-item-danger" onClick={handleLogout}>
                 <LogOut size={14} />
                 <span>Chiqish</span>
               </div>
