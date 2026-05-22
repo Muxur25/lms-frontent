@@ -481,13 +481,15 @@ export default function LandingPage() {
             initial={{ opacity: 0, scale: 0.95, y: 40 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="relative max-w-5xl mx-auto"
+            className="relative max-w-5xl mx-auto mt-10"
           >
             {/* Ambient Backglow */}
-            <div className="absolute inset-x-10 -top-12 h-64 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+            <div className="absolute inset-x-10 -top-12 h-64 bg-gradient-to-r from-blue-600/20 via-violet-600/20 to-cyan-600/20 rounded-full blur-[100px] pointer-events-none -z-10" />
 
             {/* Glass Container */}
-            <div className="relative bg-[#0d1322]/80 border border-white/10 rounded-2xl shadow-2xl p-3 md:p-4 overflow-hidden backdrop-blur-sm">
+            <div className="relative bg-[#0d1322]/80 border border-white/10 rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)] p-3 md:p-4 overflow-hidden backdrop-blur-xl">
+              {/* Shine effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] to-transparent pointer-events-none" />
               
               {/* Window controls */}
               <div className="flex items-center gap-1.5 pb-3 border-b border-white/5 mb-3 px-2">
@@ -631,7 +633,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── 2. TRUST / STATISTICS SECTION ── */}
-      <section className="py-16 border-y border-white/5 bg-white/[0.01]">
+      <motion.section 
+        initial={{ opacity: 0, y: 30 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.6 }} 
+        className="py-16 border-y border-white/5 bg-white/[0.01] relative z-10"
+      >
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
             
@@ -673,10 +681,17 @@ export default function LandingPage() {
 
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 3. FEATURES SECTION ── */}
-      <section id="features" className="py-24 px-6 relative">
+      <motion.section 
+        id="features" 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 relative z-10"
+      >
         <div className="max-w-7xl mx-auto">
           
           <div className="text-center space-y-4 mb-16">
@@ -759,10 +774,17 @@ export default function LandingPage() {
           </div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 4. AI COPLAY / SHOWCASE SECTION ── */}
-      <section id="ai-showcase" className="py-24 px-6 bg-gradient-to-b from-[#080b12] to-[#0d1220]">
+      <motion.section 
+        id="ai-showcase" 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 bg-gradient-to-b from-[#080b12] to-[#0d1220] relative z-10"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
@@ -902,10 +924,17 @@ export default function LandingPage() {
 
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 5. INTERACTIVE DASHBOARD SHOWCASE ── */}
-      <section id="dashboard-showcase" className="py-24 px-6 bg-[#080b12]">
+      <motion.section 
+        id="dashboard-showcase" 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 bg-[#080b12] relative z-10"
+      >
         <div className="max-w-7xl mx-auto text-center space-y-12">
           
           <div className="space-y-4">
@@ -1104,10 +1133,16 @@ export default function LandingPage() {
           </div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 6. RESPONSIVE EXPERIENCE SECTION ── */}
-      <section className="py-24 px-6 border-t border-white/5 bg-[#0d1220]/50 relative overflow-hidden">
+      <motion.section 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 border-t border-white/5 bg-[#0d1220]/50 relative overflow-hidden z-10"
+      >
         
         {/* Animated Glow Grid in background */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none -z-10" />
@@ -1162,10 +1197,17 @@ export default function LandingPage() {
 
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 7. ENTERPRISE BENEFITS ── */}
-      <section id="benefits" className="py-24 px-6 relative">
+      <motion.section 
+        id="benefits" 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 relative z-10"
+      >
         <div className="max-w-7xl mx-auto">
           
           <div className="text-center space-y-4 mb-16">
@@ -1192,10 +1234,16 @@ export default function LandingPage() {
           </div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 8. TESTIMONIALS SECTION ── */}
-      <section className="py-24 px-6 border-t border-white/5 bg-white/[0.01]">
+      <motion.section 
+        initial={{ opacity: 0, y: 40 }} 
+        whileInView={{ opacity: 1, y: 0 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 border-t border-white/5 bg-white/[0.01] relative z-10"
+      >
         <div className="max-w-7xl mx-auto">
           
           <div className="text-center space-y-4 mb-16">
@@ -1242,11 +1290,18 @@ export default function LandingPage() {
           </div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 9. FINAL CTA SECTION ── */}
-      <section id="contact" className="py-24 px-6 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto text-center relative z-10 bg-gradient-to-tr from-blue-900/30 via-slate-900/20 to-violet-900/30 border border-blue-500/20 rounded-3xl p-8 md:p-12 shadow-2xl">
+      <motion.section 
+        id="contact" 
+        initial={{ opacity: 0, scale: 0.95 }} 
+        whileInView={{ opacity: 1, scale: 1 }} 
+        viewport={{ once: true, margin: "-50px" }} 
+        transition={{ duration: 0.7 }} 
+        className="py-24 px-6 relative overflow-hidden z-10"
+      >
+        <div className="max-w-4xl mx-auto text-center relative z-10 bg-gradient-to-tr from-blue-900/40 via-slate-900/60 to-violet-900/40 border border-blue-500/30 rounded-3xl p-8 md:p-14 shadow-[0_0_80px_rgba(59,130,246,0.2)] backdrop-blur-md">
           
           <div className="absolute inset-0 bg-[#0d1322]/80 -z-10 rounded-3xl" />
           
@@ -1291,7 +1346,7 @@ export default function LandingPage() {
           </form>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* ── 10. FOOTER ── */}
       <footer className="border-t border-white/5 bg-[#06080f] py-12 px-6 text-slate-500 text-xs md:text-sm">
