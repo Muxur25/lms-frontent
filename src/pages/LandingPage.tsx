@@ -28,7 +28,7 @@ const i18n = {
   uz: {
     nav: ['Platforma', 'AI', 'Analytics', 'Natijalar'],
     login: 'Tizimga kirish',
-    demo: 'Demo so‘rash',
+    demo: 'Ro‘yxatdan o‘tish',
     eyebrow: 'Enterprise AI LMS 2026',
     heroTitle: 'Korporativ ta’limni AI bilan boshqaradigan premium LMS',
     heroText:
@@ -45,14 +45,14 @@ const i18n = {
     benefitsTitle: 'Korporativ transformatsiya uchun real foyda',
     quote:
       'Platforma ta’lim jarayonini tarqoq Excel va qo‘lda nazoratdan yagona, ko‘rinadigan va o‘lchanadigan tizimga olib chiqdi.',
-    ctaTitle: 'Korxonangiz LMS tizimini yangi darajaga olib chiqing',
-    ctaText: 'Demo so‘rang va AGMK LMS qanday ishlashini real enterprise ssenariyda ko‘ring.',
+    ctaTitle: 'Korxonangiz LMS tizimini yeni darajaga olib chiqing',
+    ctaText: 'Hozir ro‘yxatdan o‘ting va AGMK LMS platformasining imkoniyatlaridan to‘liq foydalaning.',
     footer: 'Uzbek va Russian interfeys, enterprise xavfsizlik va AI analytics.',
   },
   ru: {
     nav: ['Платформа', 'ИИ', 'Аналитика', 'Результаты'],
     login: 'Войти',
-    demo: 'Запросить демо',
+    demo: 'Регистрация',
     eyebrow: 'Enterprise AI LMS 2026',
     heroTitle: 'Премиальная LMS для управления корпоративным обучением с ИИ',
     heroText:
@@ -70,7 +70,7 @@ const i18n = {
     quote:
       'Платформа перевела обучение из разрозненных Excel-файлов и ручного контроля в единую, прозрачную и измеримую систему.',
     ctaTitle: 'Выведите LMS предприятия на новый уровень',
-    ctaText: 'Запросите демо и посмотрите AGMK LMS в реальном enterprise-сценарии.',
+    ctaText: 'Зарегистрируйтесь сейчас и используйте все возможности платформы AGMK LMS.',
     footer: 'Интерфейс на узбекском и русском, enterprise-безопасность и AI-аналитика.',
   },
 };
@@ -759,10 +759,10 @@ export default function LandingPage() {
             <Link className="pl-login" to="/auth/login">
               {t.login}
             </Link>
-            <button className="pl-btn pl-btn-primary" onClick={() => scrollToSection('contact')}>
+            <Link className="pl-btn pl-btn-primary" to="/auth/register">
               {t.demo}
               <ArrowRight size={16} />
-            </button>
+            </Link>
           </div>
 
           <button className="pl-menu-btn" onClick={() => setMenuOpen((value) => !value)} aria-label="Menu">
@@ -801,10 +801,10 @@ export default function LandingPage() {
             </h1>
             <p className="pl-lead">{t.heroText}</p>
             <div className="pl-hero-actions">
-              <button className="pl-btn pl-btn-primary" onClick={() => scrollToSection('contact')}>
+              <Link className="pl-btn pl-btn-primary" to="/auth/register">
                 {t.demo}
                 <ChevronRight size={17} />
-              </button>
+              </Link>
               <button className="pl-btn pl-btn-dark" onClick={() => scrollToSection('analytics')}>
                 <Play size={16} />
                 {t.watch}
@@ -1015,10 +1015,10 @@ export default function LandingPage() {
               <h2>{t.ctaTitle}</h2>
               <p>{t.ctaText}</p>
             </div>
-            <button className="pl-btn pl-btn-primary">
+            <Link className="pl-btn pl-btn-primary" to="/auth/register">
               {t.demo}
               <ArrowRight size={17} />
-            </button>
+            </Link>
           </div>
         </div>
       </section>

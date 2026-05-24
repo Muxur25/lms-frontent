@@ -1,9 +1,9 @@
 import axios from 'axios';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/store/auth.store';
 
 // Create a configured Axios instance for enterprise API calls
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://api.agmk-lms.uz/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,7 +13,7 @@ export const apiClient = axios.create({
 // Request Interceptor to automatically attach JWT token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = useAuthStore.getState().token;
+    const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,25 +29,20 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
-    // Handle 401 Unauthorized globally
+
+    // Handle 401 Unauthorized globally — only logout if not already retried
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
-      try {
-        // Example refresh logic
-        // const { data } = await axios.post('/auth/refresh');
-        // useAuthStore.getState().setToken(data.token);
-        // return apiClient(originalRequest);
-        
-        // If refresh fails, logout user
-        useAuthStore.getState().logout();
-      } catch (refreshError) {
-        useAuthStore.getState().logout();
-        return Promise.reject(refreshError);
-      }
+
+      // Clear stale credentials and let ProtectedRoute handle redirect
+      const { logout } = useAuthStore.getState();
+      logout();
+
+      // Do NOT reject with error here — just silently logout.
+      // ProtectedRoute will redirect to /auth/login automatically.
+      return Promise.reject(error);
     }
-    
+
     return Promise.reject(error);
   }
 );

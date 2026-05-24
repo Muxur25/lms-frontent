@@ -11,6 +11,7 @@ import {
   Home, Layers,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { useNotificationStore } from '@/store/notification.store';
 import { getInitials } from '@/shared/lib/auth-user';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -79,6 +80,7 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
   const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
   const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
@@ -136,23 +138,36 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
           </div>
         )}
 
-        {/* Nav */}
         <nav className="sidebar-nav">
-          {NAV.map(section => (
-            <div key={section.section}>
-              <div className="nav-section-label">{t(section.section)}</div>
-              {section.items.map(item => (
-                <NavItem
-                  key={item.id}
-                  item={item}
-                  active={activePage === item.id}
-                  collapsed={collapsed}
-                  onClick={() => { setActivePage(item.id); setMobileOpen(false); }}
-                  t={t}
-                />
-              ))}
-            </div>
-          ))}
+          {NAV.map(section => {
+            const items = section.items.filter(item => {
+              if (item.id === 'admin') {
+                return user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'hr_manager';
+              }
+              return true;
+            });
+            if (items.length === 0) return null;
+            return (
+              <div key={section.section}>
+                <div className="nav-section-label">{t(section.section)}</div>
+                {items.map(item => {
+                  const dynamicItem = item.id === 'notifications'
+                    ? { ...item, badge: unreadCount > 0 ? unreadCount.toString() : null }
+                    : item;
+                  return (
+                    <NavItem
+                      key={item.id}
+                      item={dynamicItem}
+                      active={activePage === item.id}
+                      collapsed={collapsed}
+                      onClick={() => { setActivePage(item.id); setMobileOpen(false); }}
+                      t={t}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
 
         {/* AI Quick Access */}
@@ -225,6 +240,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
@@ -287,15 +303,17 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
 
         {/* Notifications */}
         <div className="tooltip-wrap">
-          <button className="icon-btn" id="notif-btn">
+          <button className="icon-btn" id="notif-btn" onClick={() => setActivePage('notifications')}>
             <Bell size={17} />
-            <span className="notif-dot" />
+            {unreadCount > 0 && <span className="notif-dot" />}
           </button>
-          <span className="tooltip">8 yangi bildirishnoma</span>
+          <span className="tooltip">
+            {unreadCount > 0 ? `${unreadCount} ta yangi bildirishnoma` : "Yangi bildirishnomalar yo'q"}
+          </span>
         </div>
 
         {/* Quick Add */}
-        <button className="icon-btn">
+        <button className="icon-btn quick-add-btn">
           <Plus size={17} />
         </button>
 

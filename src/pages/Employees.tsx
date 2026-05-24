@@ -1,38 +1,86 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Filter, Mail, MoreHorizontal } from 'lucide-react';
 import { clsx } from 'clsx';
-
-const employees = [
-  { id: 1, name: 'Alisher Hasanov', nameRu: 'Алишер Хасанов', dept: 'IT', deptRu: 'IT', position: 'Senior Developer', positionRu: 'Старший разработчик', email: 'a.hasanov@agmk.uz', joined: '2022-03-15', courses: 8, progress: 87, status: 'active' },
-  { id: 2, name: 'Kamola Yusupova', nameRu: 'Камола Юсупова', dept: 'HR', deptRu: 'HR', position: 'HR Manager', positionRu: 'HR Менеджер', email: 'k.yusupova@agmk.uz', joined: '2021-07-01', courses: 12, progress: 95, status: 'active' },
-  { id: 3, name: 'Jahongir Toshmatov', nameRu: 'Жахонгир Тошматов', dept: 'Muhandislik', deptRu: 'Инженерия', position: 'Chief Engineer', positionRu: 'Главный инженер', email: 'j.toshmatov@agmk.uz', joined: '2019-11-20', courses: 15, progress: 72, status: 'active' },
-  { id: 4, name: 'Dilnoza Karimova', nameRu: 'Дилноза Каримова', dept: 'Moliya', deptRu: 'Финансы', position: 'Finance Analyst', positionRu: 'Финансовый аналитик', email: 'd.karimova@agmk.uz', joined: '2023-01-10', courses: 6, progress: 61, status: 'active' },
-  { id: 5, name: 'Bobur Rahimov', nameRu: 'Бобур Рахимов', dept: 'Xavfsizlik', deptRu: 'Безопасность', position: 'Safety Officer', positionRu: 'Специалист по безопасности', email: 'b.rahimov@agmk.uz', joined: '2020-05-14', courses: 10, progress: 88, status: 'active' },
-  { id: 6, name: 'Sarvinoz Nazarova', nameRu: 'Сарвиноз Назарова', dept: 'HR', deptRu: 'HR', position: 'Recruiter', positionRu: 'Рекрутер', email: 's.nazarova@agmk.uz', joined: '2024-02-28', courses: 4, progress: 45, status: 'inactive' },
-  { id: 7, name: 'Muzaffar Umarov', nameRu: 'Музаффар Умаров', dept: 'IT', deptRu: 'IT', position: 'DevOps Engineer', positionRu: 'DevOps инженер', email: 'm.umarov@agmk.uz', joined: '2022-09-01', courses: 9, progress: 79, status: 'active' },
-  { id: 8, name: 'Nargiza Sultanova', nameRu: 'Наргиза Султанова', dept: 'Boshqaruv', deptRu: 'Управление', position: 'Project Manager', positionRu: 'Менеджер проектов', email: 'n.sultanova@agmk.uz', joined: '2021-04-12', courses: 14, progress: 93, status: 'active' },
-];
+import { apiClient } from '@/api/axios';
 
 const deptColors: Record<string, string> = {
   IT: '#3b82f6', HR: '#8b5cf6', Muhandislik: '#06b6d4', Moliya: '#f59e0b',
   Xavfsizlik: '#ef4444', Boshqaruv: '#22c55e', Инженерия: '#06b6d4',
+  'IT va Raqamli Transformatsiya': '#3b82f6', 'HR departamenti': '#8b5cf6', 
+  'Oquv markazi': '#06b6d4', 'Muhandislik bolimi': '#06b6d4',
+  'Ijroiya boshqaruvi': '#22c55e', 'Texnika xavfsizligi': '#ef4444'
 };
 
 export default function Employees() {
   const { t, i18n } = useTranslation();
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const isRu = i18n.language === 'ru';
 
+  useEffect(() => {
+    let isMounted = true;
+    apiClient.get('/users')
+      .then(res => {
+        if (isMounted) {
+          const fetchedData = res.data?.data || res.data || [];
+          setEmployees(Array.isArray(fetchedData) ? fetchedData : []);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          console.error('Error fetching employees:', err);
+          setError(t('common.error') || 'Xatolik yuz berdi');
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [t]);
+
   const filtered = employees.filter(e => {
-    const name = isRu ? e.nameRu : e.name;
+    const name = isRu ? (e.nameRu || e.name || e.fullName || '') : (e.name || e.fullName || '');
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   };
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header fade-in">
+          <div>
+            <div className="page-title">{t('employees.title')}</div>
+            <div className="page-sub">Yuklanmoqda...</div>
+          </div>
+        </div>
+        <div className="card fade-in" style={{ padding: 20 }}>
+          <div className="skeleton" style={{ height: 40, width: '100%', marginBottom: 20, borderRadius: 12 }} />
+          <div className="skeleton" style={{ height: 300, width: '100%', borderRadius: 12 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px' }} className="fade-in">
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{error}</h3>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Ma'lumotlarni yuklashda xatolik yuz berdi. Tizim bilan ulanishni tekshiring.</p>
+        <button className="btn btn-primary" onClick={() => { setLoading(true); setError(null); window.location.reload(); }}>Qayta yuklash</button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -74,8 +122,10 @@ export default function Employees() {
             </thead>
             <tbody>
               {filtered.map(emp => {
-                const color = deptColors[emp.dept] || '#3b82f6';
-                const initials = (isRu ? emp.nameRu : emp.name).split(' ').map(n => n[0]).join('');
+                const displayName = isRu ? (emp.nameRu || emp.name || emp.fullName || 'Xodim') : (emp.name || emp.fullName || 'Xodim');
+                const deptKey = emp.dept || emp.departmentName || '';
+                const color = deptColors[deptKey] || '#3b82f6';
+                const initials = displayName.split(' ').filter(Boolean).map((n: string) => n[0]).join('').toUpperCase() || '??';
                 return (
                   <tr key={emp.id}>
                     <td style={{ paddingLeft: 20 }}>
@@ -85,21 +135,21 @@ export default function Employees() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="avatar" style={{ width: 34, height: 34, fontSize: 12, background: `${color}25`, color }}>{initials}</div>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{isRu ? emp.nameRu : emp.name}</div>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td><span className="badge badge-blue" style={{ background: `${color}15`, color, borderColor: `${color}30` }}>{isRu ? emp.deptRu : emp.dept}</span></td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{isRu ? emp.positionRu : emp.position}</td>
+                    <td><span className="badge badge-blue" style={{ background: `${color}15`, color, borderColor: `${color}30` }}>{isRu ? emp.deptRu || emp.dept || emp.departmentName : emp.dept || emp.departmentName}</span></td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{isRu ? emp.positionRu || emp.position : emp.position}</td>
                     <td>
-                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.courses}</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.courses ?? emp.coursesCount ?? 0}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> ta</span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div className="progress-bar" style={{ height: 5, width: 80 }}>
-                          <div className="progress-fill" style={{ width: `${emp.progress}%` }} />
+                          <div className="progress-fill" style={{ width: `${emp.progress}%`, background: color }} />
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 700, color: emp.progress >= 80 ? 'var(--green-400)' : emp.progress >= 60 ? 'var(--amber-400)' : 'var(--red-400)' }}>{emp.progress}%</span>
                       </div>

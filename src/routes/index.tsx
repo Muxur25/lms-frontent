@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import AppLayout from '@/layouts/AppLayout';
 import AuthLayout from '@/layouts/AuthLayout';
+import { ProtectedRoute } from '@/features/auth/ui/ProtectedRoute';
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary';
 import { Placeholder } from '@/components/Placeholder';
 
@@ -38,9 +39,9 @@ export const router = createBrowserRouter([
     errorElement: <ErrorBoundary />,
     element: <Suspense fallback={<PageLoader />}><LandingPage /></Suspense>,
   },
-  // Main App wrapped in AppLayout
+  // Main App wrapped in AppLayout and ProtectedRoute
   {
-    element: <AppLayout />,
+    element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
     errorElement: <ErrorBoundary />,
     children: [
       { 
@@ -78,10 +79,9 @@ export const router = createBrowserRouter([
       { 
         path: 'admin', 
         element: (
-          // Example of Role-Based Route Protection
-          // <ProtectedRoute allowedRoles={['super_admin', 'hr_manager']}>
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr_manager']}>
             <Suspense fallback={<PageLoader />}><AdminPage /></Suspense>
-          // </ProtectedRoute>
+          </ProtectedRoute>
         ) 
       },
       { 

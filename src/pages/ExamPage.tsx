@@ -1,47 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
 import {
   FileText, Clock, Award, Shield, CheckCircle, Flag,
   ChevronRight, BarChart3, Sparkles, Download, AlertCircle,
   TrendingUp, Star, X,
 } from 'lucide-react';
+import { apiClient } from '@/api/axios';
 
 type View = 'dashboard' | 'start' | 'exam' | 'result';
-
-const exams = [
-  { id: 1, title: 'Sanoat Xavfsizligi', titleRu: 'Промышленная безопасность', duration: 60, questions: 40, passing: 75, deadline: '26 May', color: '#ef4444', status: 'upcoming', attempts: 1 },
-  { id: 2, title: 'React TypeScript Pro', titleRu: 'React TypeScript Pro', duration: 90, questions: 60, passing: 80, deadline: '28 May', color: '#3b82f6', status: 'upcoming', attempts: 2 },
-  { id: 3, title: 'Menejment Asoslari', titleRu: 'Основы менеджмента', duration: 45, questions: 30, passing: 70, deadline: '01 Iyn', color: '#8b5cf6', status: 'available', attempts: 0 },
-];
 
 const history = [
   { title: 'ISO 9001 Sifat', score: 92, pass: true, date: '15 May', color: '#22c55e' },
   { title: 'Elektr Xavfsizligi', score: 64, pass: false, date: '10 May', color: '#ef4444' },
   { title: 'Loyiha Boshqaruvi', score: 88, pass: true, date: '05 May', color: '#22c55e' },
-];
-
-const questions = [
-  {
-    id: 1, type: 'single',
-    text: 'React Hook\'lari qaysi React versiyasidan joriy etilgan?',
-    options: ['React 15', 'React 16.8', 'React 17', 'React 18'],
-    answer: null,
-  },
-  {
-    id: 2, type: 'single',
-    text: 'useEffect hook qachon ishga tushadi?',
-    options: ['Faqat component mount bo\'lganda', 'Har bir render\'da', 'Dependency o\'zgarganda', 'B va C to\'g\'ri'],
-    answer: null,
-  },
-  {
-    id: 3, type: 'single',
-    text: 'TypeScript da interface va type o\'rtasidagi asosiy farq nima?',
-    options: ['Interface extend qilinadi', 'Type primitiv qiymatlarga ham qo\'llanadi', 'Interface faqat ob\'ektlar uchun', 'Farq yo\'q'],
-    answer: null,
-  },
-  { id: 4, type: 'single', text: 'useState hook qaysi qiymatlarni qaytaradi?', options: ['Faqat state', 'State va setter', 'State, setter va ref', 'Effect va cleanup'], answer: null },
-  { id: 5, type: 'single', text: 'React Context API nima uchun ishlatiladi?', options: ['API so\'rovlar', 'Global state', 'Routing', 'Animatsiya'], answer: null },
-  { id: 6, type: 'single', text: 'useMemo hook nima uchun ishlatiladi?', options: ['Side effect', 'Memoization', 'Event handling', 'DOM manipulation'], answer: null },
 ];
 
 const resultData = {
@@ -56,19 +27,156 @@ const resultData = {
 };
 
 export default function ExamPage() {
+  const [exams, setExams] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [view, setView] = useState<View>('dashboard');
-  const [selectedExam, setSelectedExam] = useState(exams[0]);
+  const [selectedExam, setSelectedExam] = useState<any | null>(null);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
-  const [timeLeft] = useState(5400);
+  const [timeLeft, setTimeLeft] = useState(5400);
+  const [result, setResult] = useState<any | null>(null);
 
+  const questions = selectedExam?.questions || [];
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
   const answered = Object.keys(answers).length;
-  const progress = Math.round((answered / questions.length) * 100);
+  const progress = questions.length > 0 ? Math.round((answered / questions.length) * 100) : 0;
 
-  if (view === 'result') return <ResultScreen score={resultData} onBack={() => setView('dashboard')} />;
+  useEffect(() => {
+    let isMounted = true;
+    apiClient.get('/exams')
+      .then(res => {
+        if (isMounted) {
+          const data = res.data?.data || res.data || [];
+          setExams(Array.isArray(data) ? data : []);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          console.error('Error fetching exams:', err);
+          setError('Imtihonlarni yuklashda xatolik yuz berdi');
+          setLoading(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSubmitExam = () => {
+    const questionsList = selectedExam?.questions || [];
+    let correct = 0;
+    let wrong = 0;
+
+    questionsList.forEach((q: any, index: number) => {
+      const userAnswer = answers[index];
+      if (userAnswer !== undefined) {
+        if (userAnswer === q.answer) {
+          correct++;
+        } else {
+          wrong++;
+        }
+      }
+    });
+
+    const total = questionsList.length;
+    const skipped = total - correct - wrong;
+    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+    const calculatedResult = {
+      score,
+      passing: selectedExam?.passing || 70,
+      total,
+      correct,
+      wrong,
+      skipped,
+      topics: [
+        { name: selectedExam?.title || 'Imtihon', score, color: score >= (selectedExam?.passing || 70) ? '#22c55e' : '#ef4444' },
+        { name: 'Nazariy qism', score: Math.round(score * 0.95) > 100 ? 100 : Math.round(score * 0.95), color: '#3b82f6' },
+        { name: 'Amaliy qism', score: Math.round(score * 1.05) > 100 ? 100 : Math.round(score * 1.05), color: '#8b5cf6' },
+      ],
+    };
+
+    setResult(calculatedResult);
+    setView('result');
+  };
+
+  useEffect(() => {
+    if (view !== 'exam') return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleSubmitExam();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [view, selectedExam, answers]);
+
+  if (loading && view === 'dashboard') {
+    return (
+      <div>
+        <div className="page-header fade-in">
+          <div>
+            <div className="page-title">Testlar va Imtihonlar</div>
+            <div className="page-sub">Yuklanmoqda...</div>
+          </div>
+          <button className="btn btn-primary btn-sm" disabled><Award size={14} /> Sertifikatlarim</button>
+        </div>
+
+        {/* Skeleton Stats */}
+        <div className="grid grid-4 fade-in" style={{ marginBottom: 24 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="stat-card skeleton-card" style={{ height: 100, background: 'var(--surface-1)', borderRadius: 12, opacity: 0.6 }}>
+              <div style={{ padding: 20 }}>
+                <div className="skeleton" style={{ height: 12, width: '60%', marginBottom: 10 }} />
+                <div className="skeleton" style={{ height: 24, width: '40%' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton Exams List */}
+        <div className="grid grid-12 fade-in" style={{ marginBottom: 24 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Kutilayotgan imtihonlar</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="card skeleton-card" style={{ height: 80, background: 'var(--surface-1)', borderRadius: 12, opacity: 0.6, padding: 20 }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                    <div className="skeleton" style={{ width: 44, height: 44, borderRadius: 12 }} />
+                    <div style={{ flex: 1 }}>
+                      <div className="skeleton" style={{ height: 14, width: '30%', marginBottom: 8 }} />
+                      <div className="skeleton" style={{ height: 10, width: '50%' }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && view === 'dashboard') {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <AlertCircle size={40} color="var(--red-400)" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{error}</div>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>Qayta urinish</button>
+      </div>
+    );
+  }
+
+  if (view === 'result') return <ResultScreen score={result || resultData} onBack={() => setView('dashboard')} />;
 
   if (view === 'exam') return (
     <div className="exam-layout">
@@ -84,7 +192,7 @@ export default function ExamPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{answered}/{questions.length} javoblandi</div>
-          <button className="btn btn-primary btn-sm" onClick={() => setView('result')}>Topshirish</button>
+          <button className="btn btn-primary btn-sm" onClick={handleSubmitExam}>Topshirish</button>
         </div>
       </div>
 
@@ -114,7 +222,7 @@ export default function ExamPage() {
               {questions[current].text}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {questions[current].options.map((opt, i) => (
+              {questions[current].options.map((opt: string, i: number) => (
                 <button
                   key={i}
                   className={clsx('exam-option', answers[current] === i && 'exam-option-selected')}
@@ -133,7 +241,7 @@ export default function ExamPage() {
             <button className="btn btn-secondary btn-sm" onClick={() => setCurrent(c => Math.max(0, c - 1))} disabled={current === 0}>
               ← Oldingi
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => current < questions.length - 1 ? setCurrent(c => c + 1) : setView('result')}>
+            <button className="btn btn-primary btn-sm" onClick={() => current < questions.length - 1 ? setCurrent(c => c + 1) : handleSubmitExam()}>
               {current < questions.length - 1 ? 'Keyingi →' : 'Topshirish'}
             </button>
           </div>
@@ -143,7 +251,7 @@ export default function ExamPage() {
         <aside className="exam-nav-panel">
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>Savollar</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 14 }}>
-            {questions.map((_, i) => (
+            {questions.map((_: any, i: number) => (
               <button
                 key={i}
                 className={clsx('exam-nav-btn',
@@ -162,7 +270,7 @@ export default function ExamPage() {
               { cls: 'exam-nav-answered', label: `Javoblandi (${answered})` },
               { cls: 'exam-nav-flagged', label: `Belgilandi (${flagged.size})` },
               { cls: 'exam-nav-btn', label: `Javobsiz (${questions.length - answered})` },
-            ].map((l, i) => (
+            ].map((l: any, i: number) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div className={clsx('exam-nav-btn', l.cls)} style={{ width: 18, height: 18, fontSize: 9, pointerEvents: 'none' }} />
                 <span style={{ color: 'var(--text-tertiary)' }}>{l.label}</span>
@@ -193,7 +301,7 @@ export default function ExamPage() {
         <div className="grid grid-2" style={{ gap: 12, marginBottom: 20 }}>
           {[
             { label: 'Davomiyligi', value: `${selectedExam.duration} min`, icon: Clock, color: '#3b82f6' },
-            { label: 'Savollar', value: selectedExam.questions, icon: FileText, color: '#8b5cf6' },
+            { label: 'Savollar', value: selectedExam.questionsCount || selectedExam.questions?.length || 0, icon: FileText, color: '#8b5cf6' },
             { label: 'O\'tish bali', value: `${selectedExam.passing}%`, icon: Award, color: '#22c55e' },
             { label: 'Urinish', value: `${selectedExam.attempts + 1}-chi`, icon: TrendingUp, color: '#f59e0b' },
           ].map((s, i) => (
@@ -220,7 +328,10 @@ export default function ExamPage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-secondary" onClick={() => setView('dashboard')}>Bekor qilish</button>
-          <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setView('exam')}>
+          <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
+            setTimeLeft((selectedExam?.duration || 60) * 60);
+            setView('exam');
+          }}>
             <Shield size={15} /> Imtihonni boshlash
           </button>
         </div>
@@ -267,14 +378,14 @@ export default function ExamPage() {
             {exams.map(exam => (
               <div key={exam.id} className="card" style={{ padding: '18px 20px' }}>
                 <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: `${exam.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44 }}>
-                    <FileText size={20} color={exam.color} />
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: `${exam.color || '#ef4444'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44 }}>
+                    <FileText size={20} color={exam.color || '#ef4444'} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{exam.title}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, display: 'flex', gap: 10 }}>
                       <span><Clock size={10} style={{ marginRight: 3 }} />{exam.duration} min</span>
-                      <span><FileText size={10} style={{ marginRight: 3 }} />{exam.questions} savol</span>
+                      <span><FileText size={10} style={{ marginRight: 3 }} />{exam.questionsCount || exam.questions?.length || 0} savol</span>
                       <span style={{ color: 'var(--amber-400)' }}>Muddat: {exam.deadline}</span>
                     </div>
                   </div>

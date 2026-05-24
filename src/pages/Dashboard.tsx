@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
@@ -11,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { getInitials, type EnterpriseRole } from '@/shared/lib/auth-user';
+import { apiClient } from '@/api/axios';
 
 /* ── Data ─────────────────────────────────────── */
 const areaData = [
@@ -19,18 +22,18 @@ const areaData = [
   { m: 'Iyl', h: 34 },
 ];
 const pieData = [
-  { name: 'Yakunlagan', value: 45, color: '#22c55e' },
-  { name: 'Jarayonda', value: 30, color: '#3b82f6' },
-  { name: 'Boshlamagan', value: 25, color: '#334155' },
+  { name: 'Yakunlagan', value: 45, color: 'var(--green-500)' },
+  { name: 'Jarayonda', value: 30, color: 'var(--blue-500)' },
+  { name: 'Boshlamagan', value: 25, color: 'var(--border-3)' },
 ];
 const barData = [
   { d: 'IT', v: 87 }, { d: 'HR', v: 74 }, { d: 'Mol', v: 91 },
   { d: 'Muh', v: 68 }, { d: 'Xav', v: 82 },
 ];
-const courses = [
-  { title: 'React va TypeScript', cat: 'IT', prog: 68, lessons: 32, color: '#3b82f6', instructor: 'A.Toshev', left: '4 soat' },
-  { title: 'Sanoat Xavfsizligi', cat: 'Xavfsizlik', prog: 34, lessons: 18, color: '#ef4444', instructor: 'B.Rahimov', left: '8 soat' },
-  { title: 'Menejment Asoslari', cat: 'Boshqaruv', prog: 85, lessons: 24, color: '#8b5cf6', instructor: 'N.Karimova', left: '1 soat' },
+const MOCK_COURSES = [
+  { id: '1', title: 'React va TypeScript', cat: 'IT', prog: 68, lessons: 32, color: '#3b82f6', instructor: 'A.Toshev', left: '4 soat' },
+  { id: '2', title: 'Sanoat Xavfsizligi', cat: 'Xavfsizlik', prog: 34, lessons: 18, color: '#ef4444', instructor: 'B.Rahimov', left: '8 soat' },
+  { id: '3', title: 'Menejment Asoslari', cat: 'Boshqaruv', prog: 85, lessons: 24, color: '#8b5cf6', instructor: 'N.Karimova', left: '1 soat' },
 ];
 const events = [
   { type: 'webinar', title: 'React 2026 Yangiliklari', date: '24 May', time: '14:00', color: '#3b82f6', icon: Video },
@@ -56,12 +59,12 @@ const activity = [
   { color: '#8b5cf6', text: 'AI test natijasi: 94/100', time: '2 kun oldin', icon: Star },
 ];
 const quickActions = [
-  { label: 'Davom etish', icon: Play, color: '#3b82f6', sub: 'React kursi' },
-  { label: 'Test boshlash', icon: FileText, color: '#f59e0b', sub: 'Xavfsizlik' },
-  { label: 'Vebinar', icon: Video, color: '#22c55e', sub: 'Bugun 14:00' },
-  { label: 'AI Assistant', icon: Sparkles, color: '#8b5cf6', sub: 'Yordam so\'rash' },
-  { label: 'Kurslar', icon: BookOpen, color: '#06b6d4', sub: '68 mavjud' },
-  { label: 'Sertifikatlar', icon: Award, color: '#f59e0b', sub: '3 ta sizniki' },
+  { label: 'Davom etish', icon: Play, color: '#3b82f6', sub: 'React kursi', link: '/courses' },
+  { label: 'Test boshlash', icon: FileText, color: '#f59e0b', sub: 'Xavfsizlik', link: '/assessments' },
+  { label: 'Vebinar', icon: Video, color: '#22c55e', sub: 'Bugun 14:00', link: '/webinars' },
+  { label: 'AI Assistant', icon: Sparkles, color: '#8b5cf6', sub: 'Yordam so\'rash', link: '/ai' },
+  { label: 'Kurslar', icon: BookOpen, color: '#06b6d4', sub: 'Mavjud kurslar', link: '/courses' },
+  { label: 'Sertifikatlar', icon: Award, color: '#f59e0b', sub: 'Sertifikatlarim', link: '/certifications' },
 ];
 
 const Tip = ({ active, payload, label }: any) => active && payload?.length ? (
@@ -81,24 +84,48 @@ const roleDashboards: Record<EnterpriseRole, {
   stats: Array<{ label: string; value: string; change: string; up: boolean; icon: typeof CheckCircle; c: string; bg: string }>;
   primaryAction: string;
   secondaryAction: string;
+  primaryLink: string;
+  secondaryLink: string;
 }> = {
   super_admin: {
+    title: 'Super Admin Boshqaruv Dashboardi',
+    subtitle: 'Tizimning to\'liq boshqaruvi va nazorati (Super Admin)',
+    goal: 98,
+    badges: [
+      { icon: Award, label: 'Barcha tizimlar faol', color: '#8b5cf6' },
+      { icon: Trophy, label: 'System health 100%', color: '#22c55e' },
+      { icon: Target, label: 'Barcha huquqlar', color: '#ef4444' },
+    ],
+    stats: [
+      { label: 'Foydalanuvchilar', value: '1,284', change: '+42', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+      { label: 'Faol rollar', value: '7', change: '+2', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Audit ball', value: '99.9', change: '+0.8', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+      { label: 'Sertifikatlar', value: '24k', change: '+318', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+    ],
+    primaryAction: 'Admin panel',
+    secondaryAction: 'System AI',
+    primaryLink: '/admin',
+    secondaryLink: '/ai',
+  },
+  admin: {
     title: 'Tizim boshqaruvi dashboardi',
     subtitle: 'Platforma, foydalanuvchilar, rollar va xavfsizlik holati',
     goal: 96,
     badges: [
-      { icon: Award, label: '6 ta rol faol', color: '#3b82f6' },
+      { icon: Award, label: '7 ta rol faol', color: '#3b82f6' },
       { icon: Trophy, label: 'System health 99.9%', color: '#22c55e' },
       { icon: Target, label: 'Audit tayyor', color: '#f59e0b' },
     ],
     stats: [
       { label: 'Foydalanuvchilar', value: '1,284', change: '+42', up: true, icon: CheckCircle, c: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
-      { label: 'Faol rollar', value: '6', change: '+1', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+      { label: 'Faol rollar', value: '7', change: '+2', up: true, icon: BookOpen, c: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
       { label: 'Audit ball', value: '99.1', change: '+0.4', up: true, icon: Star, c: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
       { label: 'Sertifikatlar', value: '24k', change: '+318', up: true, icon: Award, c: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
     ],
     primaryAction: 'Admin panel',
     secondaryAction: 'System AI',
+    primaryLink: '/admin',
+    secondaryLink: '/ai',
   },
   hr_manager: {
     title: 'HR boshqaruv dashboardi',
@@ -117,6 +144,8 @@ const roleDashboards: Record<EnterpriseRole, {
     ],
     primaryAction: 'Xodimlar',
     secondaryAction: 'HR AI',
+    primaryLink: '/employees',
+    secondaryLink: '/ai',
   },
   trainer: {
     title: 'Instruktor dashboardi',
@@ -135,6 +164,8 @@ const roleDashboards: Record<EnterpriseRole, {
     ],
     primaryAction: 'Kurs yaratish',
     secondaryAction: 'AI test',
+    primaryLink: '/courses',
+    secondaryLink: '/ai',
   },
   employee: {
     title: 'Mening oquv dashboardim',
@@ -153,6 +184,8 @@ const roleDashboards: Record<EnterpriseRole, {
     ],
     primaryAction: 'Davom etish',
     secondaryAction: 'AI Maslahat',
+    primaryLink: '/courses',
+    secondaryLink: '/ai',
   },
   executive: {
     title: 'Executive analytics dashboard',
@@ -171,6 +204,8 @@ const roleDashboards: Record<EnterpriseRole, {
     ],
     primaryAction: 'Analytics',
     secondaryAction: 'Executive AI',
+    primaryLink: '/analytics',
+    secondaryLink: '/ai',
   },
   department_manager: {
     title: 'Bolim rahbari dashboardi',
@@ -189,19 +224,54 @@ const roleDashboards: Record<EnterpriseRole, {
     ],
     primaryAction: 'Bolim hisoboti',
     secondaryAction: 'Risk AI',
+    primaryLink: '/analytics',
+    secondaryLink: '/ai',
   },
 };
 
 
 /* ── Component ─────────────────────────────────── */
 export default function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const role = (user?.role || user?.roles?.[0] || 'employee') as EnterpriseRole;
   const dashboard = roleDashboards[role] || roleDashboards.employee;
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
   const displayName = user?.firstName || user?.fullName?.split(' ')[0] || 'Alisher';
   const userSubtitle = `${user?.department || 'AGMK'} • ${user?.position || dashboard.subtitle} • ${user?.roleLabel || role}`;
+  const isRu = i18n.language === 'ru';
+
+  const [courses, setCourses] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    apiClient.get('/courses')
+      .then(res => {
+        const fetched = res.data?.data || res.data || [];
+        const formatted = fetched.slice(0, 3).map((c: any) => ({
+          id: c._id || c.id,
+          title: isRu ? c.titleRu || c.title : c.title,
+          cat: isRu ? c.catRu || c.cat : c.cat,
+          prog: c.completion || 0,
+          lessons: c.lessons,
+          color: c.color || '#3b82f6',
+          instructor: c.instructor,
+          left: c.duration || '10 soat'
+        }));
+        if (isMounted) {
+          setCourses(formatted.length > 0 ? formatted : MOCK_COURSES);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching dashboard courses:', err);
+        if (isMounted) {
+          setCourses(MOCK_COURSES);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isRu]);
 
   return (
     <div>
@@ -243,8 +313,8 @@ export default function Dashboard() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary btn-sm"><Play size={13} /> {dashboard.primaryAction}</button>
-            <button className="btn btn-secondary btn-sm"><Sparkles size={13} /> {dashboard.secondaryAction}</button>
+            <Link to={dashboard.primaryLink} className="btn btn-primary btn-sm"><Play size={13} /> {dashboard.primaryAction}</Link>
+            <Link to={dashboard.secondaryLink} className="btn btn-secondary btn-sm"><Sparkles size={13} /> {dashboard.secondaryAction}</Link>
           </div>
         </div>
 
@@ -305,12 +375,12 @@ export default function Dashboard() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
           {quickActions.map((a, i) => (
-            <button key={i} className="btn btn-secondary" style={{ flexDirection: 'column', height: 80, gap: 6, borderRadius: 14, padding: '10px 6px' }}>
+            <Link key={i} to={a.link} className="btn btn-secondary" style={{ flexDirection: 'column', height: 80, gap: 6, borderRadius: 14, padding: '10px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: `${a.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <a.icon size={16} color={a.color} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 700 }}>{a.label}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </div>
@@ -321,7 +391,7 @@ export default function Dashboard() {
           <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
             <BookOpen size={16} color="var(--blue-400)" /> Joriy kurslarim
           </div>
-          <button className="btn btn-ghost btn-sm">Barchasi <ChevronRight size={13} /></button>
+          <Link to="/courses" className="btn btn-ghost btn-sm">Barchasi <ChevronRight size={13} /></Link>
         </div>
         <div className="grid grid-3 fade-in fade-in-2">
           {courses.map((c, i) => (
@@ -340,9 +410,9 @@ export default function Dashboard() {
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 800, color: c.color }}>{c.prog}%</span>
                 </div>
-                <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                <Link to={`/courses/${c.id}`} className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
                   <Play size={12} /> Davom etish
-                </button>
+                </Link>
               </div>
             </div>
           ))}
@@ -440,7 +510,7 @@ export default function Dashboard() {
           <div style={{ height: 200 }}>
             <ResponsiveContainer>
               <BarChart data={barData} barSize={20}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
                 <XAxis dataKey="d" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[50, 100]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<Tip />} />

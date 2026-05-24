@@ -1,54 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   Play, Pause, Volume2, Maximize2, Settings,
   ChevronDown, ChevronRight, CheckCircle,
   Clock, BookOpen, Star, Users, Award, Sparkles,
-
   FileText, Download, MessageSquare, Bookmark,
   SkipForward, SkipBack, X, Send, ThumbsUp,
+  Trash2, Plus, Edit3, Save, Loader,
 } from 'lucide-react';
+import { apiClient } from '@/api/axios';
+import { useAuthStore } from '@/store/auth.store';
 
-/* ── Data ─────────────────────────────────────── */
-const course = {
+/* ── Types ─────────────────────────────────────── */
+interface LessonItem {
+  id: number;
+  title: string;
+  titleRu?: string;
+  dur: string;
+  done?: boolean;
+  type: 'video' | 'quiz' | 'assignment';
+  videoUrl?: string;
+  current?: boolean;
+}
+
+interface Module {
+  id: number;
+  title: string;
+  titleRu?: string;
+  lessons: number;
+  done?: number;
+  items: LessonItem[];
+}
+
+/* ── Default fallback data ─────────────────────── */
+const DEFAULT_COURSE = {
   title: 'React va TypeScript Professional',
   titleRu: 'React и TypeScript Professional',
   instructor: 'Alisher Toshev',
   rating: 4.9, enrolled: 847, duration: '24 soat',
-  lessons: 64, level: "O'rta", color: '#3b82f6',
+  lessons: 14, level: "O'rta", color: '#3b82f6',
   progress: 68,
   description: 'Zamonaviy React.js va TypeScript texnologiyalarini professional darajada o\'zlashtiring.',
+  modules: [] as Module[],
 };
 
-const modules = [
+const DEFAULT_MODULES: Module[] = [
   {
     id: 1, title: 'Kirish', titleRu: 'Введение', lessons: 4, done: 4,
     items: [
-      { id: 1, title: 'Kurs haqida', dur: '5:20', done: true, type: 'video' },
-      { id: 2, title: 'Muhit sozlash', dur: '12:45', done: true, type: 'video' },
-      { id: 3, title: 'Birinchi loyiha', dur: '18:30', done: true, type: 'video' },
-      { id: 4, title: 'Kirish testi', dur: '10 savol', done: true, type: 'quiz' },
+      { id: 1, title: 'Kurs haqida', titleRu: 'О курсе', dur: '5:20', done: true, type: 'video' },
+      { id: 2, title: 'Muhit sozlash', titleRu: 'Настройка окружения', dur: '12:45', done: true, type: 'video' },
+      { id: 3, title: 'Birinchi loyiha', titleRu: 'Первый проект', dur: '18:30', done: true, type: 'video' },
+      { id: 4, title: 'Kirish testi', titleRu: 'Входной тест', dur: '10 savol', done: true, type: 'quiz' },
     ],
   },
   {
     id: 2, title: 'React Asoslari', titleRu: 'Основы React', lessons: 8, done: 5,
     items: [
-      { id: 5, title: 'JSX va Komponentlar', dur: '22:10', done: true, type: 'video' },
-      { id: 6, title: 'Props va State', dur: '28:45', done: true, type: 'video' },
-      { id: 7, title: 'Hooks: useState', dur: '25:30', done: true, type: 'video' },
-      { id: 8, title: 'Hooks: useEffect', dur: '30:15', done: true, type: 'video', current: true },
-      { id: 9, title: 'Context API', dur: '20:00', done: false, type: 'video' },
-      { id: 10, title: 'Custom Hooks', dur: '18:40', done: false, type: 'video' },
-      { id: 11, title: 'Amaliy mashq', dur: 'Loyiha', done: false, type: 'assignment' },
-      { id: 12, title: 'Bo\'lim testi', dur: '15 savol', done: false, type: 'quiz' },
+      { id: 5, title: 'JSX va Komponentlar', titleRu: 'JSX и компоненты', dur: '22:10', done: true, type: 'video' },
+      { id: 6, title: 'Props va State', titleRu: 'Props и State', dur: '28:45', done: true, type: 'video' },
+      { id: 7, title: 'Hooks: useState', titleRu: 'Hooks: useState', dur: '25:30', done: true, type: 'video' },
+      { id: 8, title: 'Hooks: useEffect', titleRu: 'Hooks: useEffect', dur: '30:15', done: true, type: 'video', current: true },
+      { id: 9, title: 'Context API', titleRu: 'Context API', dur: '20:00', done: false, type: 'video' },
+      { id: 10, title: 'Custom Hooks', titleRu: 'Custom Hooks', dur: '18:40', done: false, type: 'video' },
+      { id: 11, title: 'Amaliy mashq', titleRu: 'Практическое упражнение', dur: 'Loyiha', done: false, type: 'assignment' },
+      { id: 12, title: 'Bo\'lim testi', titleRu: 'Тест раздела', dur: '15 savol', done: false, type: 'quiz' },
     ],
   },
   {
-    id: 3, title: 'TypeScript Chuqurlashish', titleRu: 'Углублённый TypeScript', lessons: 10, done: 0,
+    id: 3, title: 'TypeScript Chuqurlashish', titleRu: 'Углублённый TypeScript', lessons: 2, done: 0,
     items: [
-      { id: 13, title: 'Tiplash asoslari', dur: '24:00', done: false, type: 'video' },
-      { id: 14, title: 'Interfeys va Tiplar', dur: '20:15', done: false, type: 'video' },
+      { id: 13, title: 'Tiplash asoslari', titleRu: 'Основы типизации', dur: '24:00', done: false, type: 'video' },
+      { id: 14, title: 'Interfeys va Tiplar', titleRu: 'Интерфейсы и типы', dur: '20:15', done: false, type: 'video' },
     ],
   },
 ];
@@ -70,20 +95,201 @@ const comments = [
   { name: 'Bobur R.', time: 'Kecha', text: 'Juda yaxshi tushuntirilgan! dependency array haqida ko\'p savollarim bor edi.', likes: 8, avatar: 'BR', color: '#22c55e' },
 ];
 
+const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
+
+/* ── Helpers ─────────────────────────────────── */
+function nextId(items: { id: number }[]) {
+  return items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+}
+
 /* ── Component ─────────────────────────────────── */
 export default function CoursePage() {
   const { i18n } = useTranslation();
+  const { courseId } = useParams<{ courseId: string }>();
+  const user = useAuthStore(s => s.user);
+  const [course, setCourse] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'overview' | 'player'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'ai' | 'notes' | 'materials' | 'discussion'>('ai');
   const [openModule, setOpenModule] = useState<number | null>(2);
   const [playing, setPlaying] = useState(false);
   const [aiInput, setAiInput] = useState('');
+
+  // Course modules state — driven from backend
+  const [courseModules, setCourseModules] = useState<Module[]>([]);
+
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [newModuleTitle, setNewModuleTitle] = useState('');
+  const [addingModule, setAddingModule] = useState(false);
+
   const isRu = i18n.language === 'ru';
-  const title = isRu ? course.titleRu : course.title;
+  const canEdit = user && EDITOR_ROLES.includes(user.role as string);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCourse = async () => {
+      try {
+        setLoading(true);
+        let fetched: any = null;
+        if (!courseId) {
+          const res = await apiClient.get('/courses');
+          const data = res.data?.data || res.data || [];
+          fetched = Array.isArray(data) && data.length > 0 ? data[0] : null;
+        } else {
+          const res = await apiClient.get(`/courses/${courseId}`);
+          fetched = res.data?.data || res.data;
+        }
+
+        if (fetched && isMounted) {
+          const courseData = {
+            ...fetched,
+            id: fetched._id || fetched.id,
+            progress: fetched.completion || fetched.progress || 0,
+          };
+          setCourse(courseData);
+          const mods: Module[] = (fetched.modules && fetched.modules.length > 0)
+            ? fetched.modules
+            : DEFAULT_MODULES;
+          setCourseModules(mods);
+        } else if (isMounted) {
+          setCourse(DEFAULT_COURSE);
+          setCourseModules(DEFAULT_MODULES);
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err);
+        if (isMounted) {
+          setCourse(DEFAULT_COURSE);
+          setCourseModules(DEFAULT_MODULES);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchCourse();
+    return () => { isMounted = false; };
+  }, [courseId]);
+
+  /* ── Edit mode actions ─────────────────────── */
+  const handleSave = useCallback(async () => {
+    if (!course?.id) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await apiClient.patch(`/courses/${course.id}`, { modules: courseModules });
+      setEditMode(false);
+    } catch (e) {
+      setSaveError('Saqlashda xatolik. Qayta urinib ko\'ring.');
+    } finally {
+      setSaving(false);
+    }
+  }, [course, courseModules]);
+
+  const addModule = () => {
+    const title = newModuleTitle.trim();
+    if (!title) return;
+    const newMod: Module = {
+      id: nextId(courseModules),
+      title,
+      titleRu: title,
+      lessons: 0,
+      done: 0,
+      items: [],
+    };
+    setCourseModules(prev => [...prev, newMod]);
+    setNewModuleTitle('');
+    setAddingModule(false);
+    setOpenModule(newMod.id);
+  };
+
+  const deleteModule = (modId: number) => {
+    setCourseModules(prev => prev.filter(m => m.id !== modId));
+  };
+
+  const updateModuleTitle = (modId: number, title: string) => {
+    setCourseModules(prev => prev.map(m =>
+      m.id === modId ? { ...m, title, titleRu: title } : m
+    ));
+  };
+
+  const addLesson = (modId: number) => {
+    setCourseModules(prev => prev.map(m => {
+      if (m.id !== modId) return m;
+      const allItems = courseModules.flatMap(mod => mod.items);
+      const newItem: LessonItem = {
+        id: nextId(allItems),
+        title: 'Yangi dars',
+        titleRu: 'Новый урок',
+        dur: '0:00',
+        done: false,
+        type: 'video',
+      };
+      return { ...m, lessons: m.lessons + 1, items: [...m.items, newItem] };
+    }));
+  };
+
+  const deleteLesson = (modId: number, lessonId: number) => {
+    setCourseModules(prev => prev.map(m => {
+      if (m.id !== modId) return m;
+      const newItems = m.items.filter(i => i.id !== lessonId);
+      return { ...m, lessons: newItems.length, items: newItems };
+    }));
+  };
+
+  const updateLesson = (modId: number, lessonId: number, field: keyof LessonItem, value: string) => {
+    setCourseModules(prev => prev.map(m => {
+      if (m.id !== modId) return m;
+      return {
+        ...m,
+        items: m.items.map(item =>
+          item.id === lessonId ? { ...item, [field]: value } : item
+        ),
+      };
+    }));
+  };
+
+  /* ── Render ─────────────────────────────────── */
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%' }} />
+      </div>
+    );
+  }
+
+  const title = isRu ? (course?.titleRu || course?.title) : course?.title;
 
   if (view === 'overview') {
-    return <CourseOverview course={course} title={title} isRu={isRu} onStart={() => setView('player')} />;
+    return (
+      <CourseOverview
+        course={course}
+        title={title}
+        isRu={isRu}
+        onStart={() => setView('player')}
+        courseModules={courseModules}
+        editMode={editMode}
+        canEdit={!!canEdit}
+        saving={saving}
+        saveError={saveError}
+        addingModule={addingModule}
+        newModuleTitle={newModuleTitle}
+        onToggleEdit={() => { setEditMode(e => !e); setSaveError(null); }}
+        onSave={handleSave}
+        onAddModule={addModule}
+        onDeleteModule={deleteModule}
+        onUpdateModuleTitle={updateModuleTitle}
+        onAddLesson={addLesson}
+        onDeleteLesson={deleteLesson}
+        onUpdateLesson={updateLesson}
+        setAddingModule={setAddingModule}
+        setNewModuleTitle={setNewModuleTitle}
+      />
+    );
   }
 
   return (
@@ -95,7 +301,9 @@ export default function CoursePage() {
           <div className="video-screen">
             <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
               <Play size={64} />
-              <div style={{ marginTop: 12, fontSize: 16 }}>Hooks: useEffect — 30:15</div>
+              <div style={{ marginTop: 12, fontSize: 16 }}>
+                {courseModules[1]?.items.find(i => (i as any).current)?.title || 'Dars'} — {courseModules[1]?.items.find(i => (i as any).current)?.dur || ''}
+              </div>
             </div>
             <div className="video-overlay-top">
               <button className="btn btn-ghost btn-sm" style={{ color: '#fff' }} onClick={() => setView('overview')}>
@@ -236,13 +444,13 @@ export default function CoursePage() {
         <aside className="lesson-sidebar">
           <div className="lesson-sidebar-header">
             <div style={{ fontWeight: 700, fontSize: 14 }}>Darslar</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{course.progress}% bajarildi</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{course?.progress || 0}% bajarildi</div>
           </div>
           <div className="progress-bar" style={{ height: 4, margin: '0 16px 12px', borderRadius: 99 }}>
-            <div className="progress-fill" style={{ width: `${course.progress}%` }} />
+            <div className="progress-fill" style={{ width: `${course?.progress || 0}%` }} />
           </div>
           <div className="lesson-sidebar-body">
-            {modules.map(mod => (
+            {courseModules.map(mod => (
               <div key={mod.id} className="lesson-module">
                 <button
                   className="lesson-module-header"
@@ -253,7 +461,7 @@ export default function CoursePage() {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{isRu ? mod.titleRu : mod.title}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{mod.done}/{mod.lessons} dars</div>
                   </div>
-                  {mod.done === mod.lessons && <CheckCircle size={14} color="var(--green-400)" />}
+                  {mod.done === mod.lessons && mod.lessons > 0 && <CheckCircle size={14} color="var(--green-400)" />}
                 </button>
                 {openModule === mod.id && (
                   <div className="lesson-items">
@@ -268,7 +476,7 @@ export default function CoursePage() {
                           }
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isRu ? item.titleRu || item.title : item.title}</div>
                         </div>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{item.dur}</span>
                       </div>
@@ -285,72 +493,119 @@ export default function CoursePage() {
 }
 
 /* ── Course Overview ────────────────────────────── */
-function CourseOverview({ course, title, isRu, onStart }: any) {
+function CourseOverview({
+  course, title, isRu, onStart,
+  courseModules, editMode, canEdit, saving, saveError,
+  addingModule, newModuleTitle,
+  onToggleEdit, onSave, onAddModule, onDeleteModule, onUpdateModuleTitle,
+  onAddLesson, onDeleteLesson, onUpdateLesson,
+  setAddingModule, setNewModuleTitle,
+}: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
+  const [editingModId, setEditingModId] = useState<number | null>(null);
+  const [editingLessonKey, setEditingLessonKey] = useState<string | null>(null); // 'modId-lessonId'
+
+  const desc = isRu ? (course.descriptionRu || course.description) : course.description;
+  const level = isRu ? (course.levelRu || course.level) : course.level;
+  const cat = isRu ? (course.catRu || course.cat) : course.cat;
 
   return (
     <div>
       {/* Hero */}
       <div className="course-hero" style={{ marginBottom: 24 }}>
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}20, rgba(0,0,0,0.7))`, borderRadius: 'inherit' }} />
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color || '#3b82f6'}20, rgba(0,0,0,0.7))`, borderRadius: 'inherit' }} />
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.07 }}>
           <BookOpen size={200} />
         </div>
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 680 }}>
-          <span className="badge badge-blue" style={{ marginBottom: 12, display: 'inline-flex' }}>IT • {isRu ? 'Средний' : "O'rta daraja"}</span>
+          <span className="badge badge-blue" style={{ marginBottom: 12, display: 'inline-flex' }}>{cat} • {level}</span>
           <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.5px', marginBottom: 10, lineHeight: 1.25 }}>{title}</h1>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 20, lineHeight: 1.6 }}>{course.description}</p>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 20, lineHeight: 1.6 }}>{desc}</p>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 20, fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Star size={13} color="#f59e0b" fill="#f59e0b" /> {course.rating}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Users size={13} /> {course.enrolled} o'quvchi</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Star size={13} color="#f59e0b" fill="#f59e0b" /> {course.rating || 5.0}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Users size={13} /> {course.enrolled || 0} {isRu ? 'учеников' : "o'quvchi"}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={13} /> {course.duration}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={13} /> {course.lessons} dars</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={13} /> {course.lessons} {isRu ? 'уроков' : 'dars'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <div className="avatar" style={{ width: 30, height: 30, fontSize: 11, background: `${course.color}40` }}>AT</div>
+            <div className="avatar" style={{ width: 30, height: 30, fontSize: 11, background: `${course.color || '#3b82f6'}40` }}>
+              {course.instructor ? course.instructor.split(' ').map((n: string) => n[0]).join('') : 'T'}
+            </div>
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{course.instructor}</span>
           </div>
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-              <span>Umumiy jarayon</span>
-              <span style={{ fontWeight: 700, color: course.color }}>{course.progress}%</span>
+              <span>{isRu ? 'Общий прогресс' : 'Umumiy jarayon'}</span>
+              <span style={{ fontWeight: 700, color: course.color || '#3b82f6' }}>{course.progress || 0}%</span>
             </div>
             <div className="progress-bar" style={{ height: 8 }}>
-              <div className="progress-fill" style={{ width: `${course.progress}%` }} />
+              <div className="progress-fill" style={{ width: `${course.progress || 0}%`, background: course.color || '#3b82f6' }} />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary" onClick={onStart}><Play size={15} /> Davom etish</button>
-            <button className="btn btn-secondary"><Bookmark size={14} /> Saqlash</button>
-            <button className="btn btn-secondary"><Award size={14} /> Sertifikat</button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={onStart}><Play size={15} /> {isRu ? 'Продолжить' : 'Davom etish'}</button>
+            <button className="btn btn-secondary"><Bookmark size={14} /> {isRu ? 'Сохранить' : 'Saqlash'}</button>
+            <button className="btn btn-secondary"><Award size={14} /> {isRu ? 'Сертификат' : 'Sertifikat'}</button>
+            {canEdit && (
+              <button
+                className={`btn btn-sm ${editMode ? 'btn-primary' : 'btn-secondary'}`}
+                style={editMode ? { background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', border: 'none' } : {}}
+                onClick={onToggleEdit}
+              >
+                <Edit3 size={13} /> {editMode ? (isRu ? 'Режим редактирования' : 'Tahrirlash rejimi') : (isRu ? 'Редактировать' : 'Tahrirlash')}
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 14, padding: 4, width: 'fit-content' }}>
-        {[{ id: 'overview', label: 'Umumiy' }, { id: 'modules', label: 'Darslar' }, { id: 'reviews', label: 'Sharhlar' }].map(tab => (
-          <button key={tab.id} className={clsx('btn btn-sm', activeTab === tab.id ? 'btn-primary' : 'btn-ghost')} style={{ borderRadius: 10 }} onClick={() => setActiveTab(tab.id as any)}>
+        {[
+          { id: 'overview', label: isRu ? 'Общий' : 'Umumiy' },
+          { id: 'modules', label: isRu ? 'Уроки' : 'Darslar' },
+          { id: 'reviews', label: isRu ? 'Отзывы' : 'Sharhlar' },
+        ].map(tab => (
+          <button key={tab.id} className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius: 10 }} onClick={() => setActiveTab(tab.id as any)}>
             {tab.label}
           </button>
         ))}
       </div>
 
+      {/* Edit mode save bar */}
+      {editMode && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+          background: 'var(--ai-promo-bg)',
+          border: '1px solid var(--ai-promo-border)', borderRadius: 14, marginBottom: 20,
+        }}>
+          <Edit3 size={16} color="#8b5cf6" />
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>
+            {isRu ? 'Режим редактирования активен. Добавьте модули и уроки, затем сохраните.' : 'Tahrirlash rejimi faol. Modul va darslarni qo\'shib, saqlang.'}
+          </span>
+          {saveError && <span style={{ fontSize: 12, color: 'var(--red-400)' }}>{saveError}</span>}
+          <button className="btn btn-sm btn-secondary" onClick={onToggleEdit} disabled={saving}>
+            <X size={13} /> {isRu ? 'Отмена' : 'Bekor'}
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={onSave} disabled={saving} style={{ background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', border: 'none' }}>
+            {saving ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
+            {isRu ? 'Сохранить' : 'Saqlash'}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-12">
         <div>
           {activeTab === 'overview' && (
             <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Kurs haqida</div>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                Ushbu kurs orqali siz React.js va TypeScript texnologiyalarini professional darajada o'rganasiz.
-                Hook'lar, Context API, Custom Hook'lar, va zamonaviy state management'ni amalda qo'llaysiz.
-              </p>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{isRu ? 'О курсе' : 'Kurs haqida'}</div>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
               <div className="grid grid-2" style={{ marginTop: 16, gap: 12 }}>
                 {[
-                  { icon: CheckCircle, text: '64 ta video dars' },
-                  { icon: FileText, text: '8 ta test va topshiriq' },
-                  { icon: Award, text: 'Sertifikat beriladi' },
-                  { icon: Clock, text: '24 soat kontent' },
+                  { icon: CheckCircle, text: isRu ? `${course.lessons} видеоуроков` : `${course.lessons} ta video dars` },
+                  { icon: FileText, text: isRu ? 'Тесты и задания' : 'Testlar va topshiriqlar' },
+                  { icon: Award, text: isRu ? 'Выдается сертификат' : 'Sertifikat beriladi' },
+                  { icon: Clock, text: course.duration },
                 ].map((f, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
                     <f.icon size={15} color="var(--green-400)" /> {f.text}
@@ -361,20 +616,142 @@ function CourseOverview({ course, title, isRu, onStart }: any) {
           )}
 
           {activeTab === 'modules' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {modules.map(mod => (
-                <div key={mod.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{mod.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{mod.lessons} dars • {mod.done} bajarildi</div>
-                    </div>
-                    <div className="progress-bar" style={{ width: 80, height: 6 }}>
-                      <div className="progress-fill" style={{ width: `${(mod.done / mod.lessons) * 100}%` }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(courseModules as Module[]).map((mod: Module) => (
+                <div key={mod.id} className="card" style={editMode ? { border: '1px solid rgba(139,92,246,0.3)' } : {}}>
+                  {/* Module header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editMode && mod.items.length > 0 ? 12 : 0 }}>
+                    {editMode && editingModId === mod.id ? (
+                      <input
+                        className="input"
+                        style={{ fontSize: 14, fontWeight: 700, flex: 1, marginRight: 8, padding: '6px 10px' }}
+                        value={mod.title}
+                        autoFocus
+                        onChange={e => onUpdateModuleTitle(mod.id, e.target.value)}
+                        onBlur={() => setEditingModId(null)}
+                        onKeyDown={e => e.key === 'Enter' && setEditingModId(null)}
+                      />
+                    ) : (
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{isRu ? mod.titleRu : mod.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{mod.lessons} dars • {mod.done || 0} bajarildi</div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {!editMode && (
+                        <div className="progress-bar" style={{ width: 80, height: 6 }}>
+                          <div className="progress-fill" style={{ width: `${mod.lessons > 0 ? ((mod.done || 0) / mod.lessons) * 100 : 0}%` }} />
+                        </div>
+                      )}
+                      {editMode && (
+                        <>
+                          <button className="btn btn-ghost btn-sm btn-icon" title="Nomini o'zgartirish" onClick={() => setEditingModId(mod.id)}>
+                            <Edit3 size={13} color="#8b5cf6" />
+                          </button>
+                          <button className="btn btn-ghost btn-sm btn-icon" title="Bo'limni o'chirish" onClick={() => onDeleteModule(mod.id)}>
+                            <Trash2 size={13} color="var(--red-400)" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {/* Lesson list in edit mode */}
+                  {editMode && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {mod.items.map((item: LessonItem) => (
+                        <div key={item.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 10,
+                          border: '1px solid var(--border-1)'
+                        }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 24 }}>
+                            {item.type === 'quiz' ? <FileText size={11} color="#3b82f6" />
+                              : item.type === 'assignment' ? <Award size={11} color="#f59e0b" />
+                              : <Play size={11} color="#3b82f6" />}
+                          </div>
+                          {editingLessonKey === `${mod.id}-${item.id}` ? (
+                            <input
+                              className="input"
+                              style={{ fontSize: 13, flex: 1, padding: '4px 8px' }}
+                              value={item.title}
+                              autoFocus
+                              onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
+                              onBlur={() => setEditingLessonKey(null)}
+                              onKeyDown={(e: any) => e.key === 'Enter' && setEditingLessonKey(null)}
+                            />
+                          ) : (
+                            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>{item.title}</span>
+                          )}
+                          <select
+                            className="input"
+                            style={{ width: 100, fontSize: 11, padding: '3px 6px' }}
+                            value={item.type}
+                            onChange={e => onUpdateLesson(mod.id, item.id, 'type', e.target.value)}
+                          >
+                            <option value="video">Video</option>
+                            <option value="quiz">Test</option>
+                            <option value="assignment">Topshiriq</option>
+                          </select>
+                          <input
+                            className="input"
+                            style={{ width: 70, fontSize: 11, padding: '3px 6px' }}
+                            value={item.dur}
+                            placeholder="10:00"
+                            onChange={e => onUpdateLesson(mod.id, item.id, 'dur', e.target.value)}
+                          />
+                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setEditingLessonKey(`${mod.id}-${item.id}`)}>
+                            <Edit3 size={11} color="#8b5cf6" />
+                          </button>
+                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onDeleteLesson(mod.id, item.id)}>
+                            <Trash2 size={11} color="var(--red-400)" />
+                          </button>
+                        </div>
+                      ))}
+
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ alignSelf: 'flex-start', marginTop: 4, fontSize: 12, color: '#3b82f6', border: '1px dashed rgba(59,130,246,0.4)', borderRadius: 8 }}
+                        onClick={() => onAddLesson(mod.id)}
+                      >
+                        <Plus size={12} /> {isRu ? '+ Новый урок' : '+ Yangi dars'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {/* Add new module */}
+              {editMode && (
+                <div className="card" style={{ border: '1px dashed var(--ai-msg-border)', background: 'var(--ai-msg-bg)' }}>
+                  {addingModule ? (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        style={{ flex: 1, fontSize: 14, padding: '8px 12px' }}
+                        placeholder={isRu ? "Название нового модуля" : "Yangi bo'lim nomi"}
+                        value={newModuleTitle}
+                        autoFocus
+                        onChange={e => setNewModuleTitle(e.target.value)}
+                        onKeyDown={(e: any) => {
+                          if (e.key === 'Enter') onAddModule();
+                          if (e.key === 'Escape') { setAddingModule(false); setNewModuleTitle(''); }
+                        }}
+                      />
+                      <button className="btn btn-primary btn-sm" onClick={onAddModule}><Plus size={13} /> {isRu ? 'Добавить' : 'Qo\'shish'}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setAddingModule(false); setNewModuleTitle(''); }}><X size={13} /></button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ width: '100%', justifyContent: 'center', color: '#8b5cf6', fontSize: 14 }}
+                      onClick={() => setAddingModule(true)}
+                    >
+                      <Plus size={15} /> {isRu ? '+ Yangi bo\'lim qo\'shish' : '+ Yangi bo\'lim qo\'shish'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -401,7 +778,7 @@ function CourseOverview({ course, title, isRu, onStart }: any) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ background: 'linear-gradient(135deg,rgba(139,92,246,0.08),rgba(59,130,246,0.05))', border: '1px solid rgba(139,92,246,0.2)' }}>
+          <div className="card" style={{ background: 'var(--ai-promo-bg)', border: '1px solid var(--ai-promo-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Sparkles size={14} color="#fff" />
@@ -431,3 +808,4 @@ function CourseOverview({ course, title, isRu, onStart }: any) {
     </div>
   );
 }
+

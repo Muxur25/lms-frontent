@@ -21,14 +21,17 @@ interface AuthState {
   login: (user: User, accessToken: string, refreshToken: string) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  updateUser: (user: Partial<User>) => void;
 }
 
 const storedUser = localStorage.getItem('lms_user');
+const storedToken = localStorage.getItem('access_token');
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: storedUser ? JSON.parse(storedUser) : null,
-  isAuthenticated: !!localStorage.getItem('access_token'),
-  isLoading: true,
+  isAuthenticated: !!storedToken,
+  // If we already have stored credentials, auth is already resolved (no loading needed)
+  isLoading: !storedToken,
   
   login: (user, accessToken, refreshToken) => {
     localStorage.setItem('access_token', accessToken);
@@ -45,4 +48,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   
   setLoading: (loading) => set({ isLoading: loading }),
+  
+  updateUser: (updatedFields) => set((state) => {
+    if (!state.user) return {};
+    const newUser = { ...state.user, ...updatedFields };
+    localStorage.setItem('lms_user', JSON.stringify(newUser));
+    return { user: newUser };
+  }),
 }));

@@ -27,9 +27,9 @@ class AuthService {
       return {
         user: {
           id: 'user_123',
-          name: 'Super Admin',
+          name: 'Admin',
           email: data.email,
-          role: 'super_admin',
+          role: 'admin',
         },
         token: 'mock_jwt_token_header.payload.signature',
         refreshToken: 'mock_refresh_token_string'
@@ -52,9 +52,9 @@ class AuthService {
       await mockDelay(400);
       return {
         id: 'user_123',
-        name: 'Super Admin',
+        name: 'Admin',
         email: 'admin@agmk.uz',
-        role: 'super_admin',
+        role: 'admin',
       };
     }
     const response = await apiClient.get<AuthResponse['user']>('/auth/me');

@@ -6,6 +6,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AGMK LMS — Korporativ ta'lim boshqaruv tizimi. Enterprise darajasida zamonaviy o'quv platformasi." />
     <title>AGMK LMS — Enterprise Learning Platform</title>
+    <script>
+      (function() {
+        try {
+          const storage = localStorage.getItem('ui-storage');
+          if (storage) {
+            const state = JSON.parse(storage)?.state;
+            if (state && state.theme) {
+              let t = state.theme;
+              if (t === 'system') {
+                t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+              }
+              document.documentElement.setAttribute('data-theme', t);
+            } else {
+              document.documentElement.setAttribute('data-theme', 'dark');
+            }
+          } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

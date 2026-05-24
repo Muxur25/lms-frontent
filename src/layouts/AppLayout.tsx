@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar, Topbar } from '@/components/Layout';
 import { useTranslation } from 'react-i18next';
+import { useSocket } from '@/hooks/useSocket';
+import { useUIStore } from '@/store/useUIStore';
 
 /**
  * Enterprise Application Layout
@@ -9,21 +11,36 @@ import { useTranslation } from 'react-i18next';
  * Provides the React Router <Outlet /> for nested pages.
  */
 export default function AppLayout() {
+  useSocket();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { i18n } = useTranslation();
+  const { theme, setTheme, language, setLanguage } = useUIStore();
   
   // Example of syncing local UI state with Router
   const location = useLocation();
   const navigate = useNavigate();
   const activePage = location.pathname.split('/')[1] || 'dashboard';
 
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
-  
-  const handleThemeChange = (newTheme: string) => {
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-  };
+  useEffect(() => {
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => {
+        document.documentElement.setAttribute('data-theme', mediaQuery.matches ? 'dark' : 'light');
+      };
+      handleChange();
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (i18n.language !== language) {
+      i18n.changeLanguage(language);
+    }
+  }, [language, i18n]);
 
   const handlePageChange = (pageId: string) => {
     navigate(`/${pageId}`);
@@ -45,10 +62,10 @@ export default function AppLayout() {
           activePage={activePage}
           setActivePage={handlePageChange}
           setMobileOpen={setMobileOpen}
-          lang={i18n.language}
-          setLang={(l) => i18n.changeLanguage(l)}
+          lang={language}
+          setLang={(l) => setLanguage(l as 'uz' | 'ru')}
           theme={theme}
-          setTheme={handleThemeChange}
+          setTheme={(t) => setTheme(t as 'dark' | 'light' | 'system')}
         />
         
         {/* Animated Page Transition Wrapper */}
@@ -59,3 +76,4 @@ export default function AppLayout() {
     </div>
   );
 }
+

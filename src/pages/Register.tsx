@@ -1,27 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowRight,
   BadgeCheck,
   Bot,
-  BriefcaseBusiness,
-  Building2,
-  Camera,
-  Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Eye,
   EyeOff,
   FileCheck2,
   IdCard,
-  KeyRound,
   LockKeyhole,
   Mail,
-  Phone,
   ShieldCheck,
   Sparkles,
-  Upload,
   UserRound,
 } from 'lucide-react';
 import { api } from '@/services/api';
@@ -32,18 +23,14 @@ type Lang = 'uz' | 'ru';
 type FormState = {
   fullName: string;
   employeeId: string;
+  jshshir: string;
   email: string;
-  phone: string;
-  department: string;
-  position: string;
-  organizationCode: string;
-  inviteCode: string;
+  username: string;
   password: string;
   confirmPassword: string;
-  avatarName: string;
 };
 
-const steps = ['welcome', 'employee', 'department', 'security', 'profile', 'success'] as const;
+const steps = ['personal', 'security'] as const;
 
 const copy = {
   uz: {
@@ -53,40 +40,24 @@ const copy = {
       'AI-powered ta’lim platformasiga xavfsiz profil yarating, bo‘limingizni ulang va sertifikatlash jarayonini boshlang.',
     lang: 'Til',
     backLogin: 'Login sahifasiga qaytish',
-    start: 'Boshlash',
     next: 'Davom etish',
     back: 'Orqaga',
-    finish: 'Onboardingni yakunlash',
+    finish: 'Tugatish va Kirish',
     progress: 'Onboarding progress',
-    welcomeTitle: 'Xush kelibsiz',
-    welcomeText: 'Bu jarayon xodim profilini, bo‘lim rolini va enterprise xavfsizlik sozlamalarini tayyorlaydi.',
-    employeeTitle: 'Xodim ma’lumotlari',
-    employeeText: 'Korporativ identifikatsiya va aloqa ma’lumotlarini kiriting.',
-    departmentTitle: 'Bo‘lim va rol sozlamasi',
-    departmentText: 'AI platforma kurs tavsiyalarini bo‘lim va lavozim asosida moslaydi.',
-    securityTitle: 'Xavfsizlik sozlamasi',
-    securityText: 'Kuchli parol yarating va enterprise verification kodlarini qo‘shing.',
-    profileTitle: 'Profil personalizatsiyasi',
-    profileText: 'Avatar, preview va onboarding tasdiqlash bosqichi.',
-    successTitle: 'Profil tayyor',
-    successText: 'Xodim onboarding muvaffaqiyatli yakunlandi. Dashboardga o‘tishingiz mumkin.',
+    personalTitle: 'Shaxsiy ma’lumotlar',
+    personalText: 'Korporativ identifikatsiya va shaxsiy ma’lumotlaringizni kiriting.',
+    securityTitle: 'Xavfsizlik sozlamalari',
+    securityText: 'Tizimga kirish uchun username va kuchli parol yarating.',
     fullName: 'To‘liq ism',
-    employeeId: 'Xodim ID',
-    email: 'Korporativ email',
-    phone: 'Telefon raqami',
-    department: 'Bo‘lim',
-    position: 'Lavozim',
-    organizationCode: 'Tashkilot kodi',
-    inviteCode: 'Taklif kodi',
+    employeeId: 'Tabel raqami',
+    jshshir: 'JShShIR (14 talik raqam)',
+    email: 'Email (majburiy emas)',
+    username: 'Username',
     password: 'Parol',
     confirmPassword: 'Parolni tasdiqlash',
-    avatar: 'Avatar yuklash',
-    avatarHint: 'PNG yoki JPG, maksimal 5MB',
-    rolePreview: 'Rol preview',
-    secure: 'Enterprise verification',
-    dashboard: 'Dashboardga o‘tish',
     errorsRequired: 'Majburiy maydonlarni to‘ldiring.',
     errorsPassword: 'Parollar mos emas yoki 6 belgidan qisqa.',
+    errorsJshshir: 'JShShIR 14 ta raqamdan iborat bo‘lishi kerak.',
   },
   ru: {
     eyebrow: 'Enterprise onboarding',
@@ -95,63 +66,48 @@ const copy = {
       'Создайте защищенный профиль в AI-powered платформе обучения, подключите подразделение и начните путь сертификации.',
     lang: 'Язык',
     backLogin: 'Вернуться к входу',
-    start: 'Начать',
     next: 'Продолжить',
     back: 'Назад',
-    finish: 'Завершить onboarding',
+    finish: 'Завершить и Войти',
     progress: 'Прогресс onboarding',
-    welcomeTitle: 'Добро пожаловать',
-    welcomeText: 'Этот процесс подготовит профиль сотрудника, роль подразделения и настройки enterprise-безопасности.',
-    employeeTitle: 'Данные сотрудника',
-    employeeText: 'Введите корпоративную идентификацию и контактные данные.',
-    departmentTitle: 'Подразделение и роль',
-    departmentText: 'AI-платформа адаптирует рекомендации курсов по подразделению и должности.',
-    securityTitle: 'Настройка безопасности',
-    securityText: 'Создайте надежный пароль и добавьте коды enterprise verification.',
-    profileTitle: 'Персонализация профиля',
-    profileText: 'Аватар, preview и финальное подтверждение onboarding.',
-    successTitle: 'Профиль готов',
-    successText: 'Onboarding сотрудника успешно завершен. Можно перейти в dashboard.',
+    personalTitle: 'Личные данные',
+    personalText: 'Введите корпоративную идентификацию и личные данные.',
+    securityTitle: 'Настройки безопасности',
+    securityText: 'Создайте имя пользователя и надежный пароль для входа.',
     fullName: 'Полное имя',
-    employeeId: 'ID сотрудника',
-    email: 'Корпоративная почта',
-    phone: 'Телефон',
-    department: 'Подразделение',
-    position: 'Должность',
-    organizationCode: 'Код организации',
-    inviteCode: 'Код приглашения',
+    employeeId: 'Табельный номер',
+    jshshir: 'ПИНФЛ (14 цифр)',
+    email: 'Email (необязательно)',
+    username: 'Имя пользователя',
     password: 'Пароль',
     confirmPassword: 'Подтверждение пароля',
-    avatar: 'Загрузить аватар',
-    avatarHint: 'PNG или JPG, до 5MB',
-    rolePreview: 'Preview роли',
-    secure: 'Enterprise verification',
-    dashboard: 'Перейти в dashboard',
     errorsRequired: 'Заполните обязательные поля.',
     errorsPassword: 'Пароли не совпадают или короче 6 символов.',
+    errorsJshshir: 'ПИНФЛ должен состоять из 14 цифр.',
   },
 };
-
-const departments = ['Metallurgiya', 'Konchilik', 'HR', 'Texnika xavfsizligi', 'Avtomatlashtirish', 'O‘quv markazi'];
-const positions = ['Muhandis', 'Operator', 'HR mutaxassis', 'Instruktor', 'Administrator', 'Bo‘lim rahbari'];
 
 const initialForm: FormState = {
   fullName: '',
   employeeId: '',
+  jshshir: '',
   email: '',
-  phone: '',
-  department: departments[0],
-  position: positions[0],
-  organizationCode: 'AGMK-ENTERPRISE',
-  inviteCode: '',
+  username: '',
   password: '',
   confirmPassword: '',
-  avatarName: '',
 };
 
 export default function Register() {
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const [lang, setLang] = useState<Lang>('uz');
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
@@ -163,11 +119,7 @@ export default function Register() {
   const t = copy[lang];
   const percent = Math.round((step / (steps.length - 1)) * 100);
 
-  const initials = useMemo(() => {
-    const parts = form.fullName.trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return 'AG';
-    return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
-  }, [form.fullName]);
+
 
   const update = (key: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -175,36 +127,61 @@ export default function Register() {
   };
 
   const validateStep = () => {
-    if (step === 1 && (!form.fullName || !form.employeeId || !form.email)) {
-      setError(t.errorsRequired);
-      return false;
+    if (step === 0) {
+      if (!form.fullName.trim() || !form.employeeId.trim() || !form.jshshir.trim()) {
+        setError(t.errorsRequired);
+        return false;
+      }
+      if (form.jshshir.trim().length !== 14 || !/^\d+$/.test(form.jshshir.trim())) {
+        setError(t.errorsJshshir);
+        return false;
+      }
+      if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+        setError(lang === 'uz' ? 'Noto‘g‘ri email formati.' : 'Неверный формат email.');
+        return false;
+      }
     }
-    if (step === 2 && (!form.department || !form.position)) {
-      setError(t.errorsRequired);
-      return false;
-    }
-    if (step === 3 && (form.password.length < 6 || form.password !== form.confirmPassword)) {
-      setError(t.errorsPassword);
-      return false;
+    if (step === 1) {
+      if (!form.username.trim() || !form.password || !form.confirmPassword) {
+        setError(t.errorsRequired);
+        return false;
+      }
+      if (form.password.length < 6) {
+        setError(t.errorsPassword);
+        return false;
+      }
+      if (form.password !== form.confirmPassword) {
+        setError(t.errorsPassword);
+        return false;
+      }
     }
     return true;
   };
 
   const next = async () => {
     if (!validateStep()) return;
-    if (step === 4) {
+    if (step === 0) {
+      setStep(1);
+    } else if (step === 1) {
       setLoading(true);
       try {
-        const response: any = await api.post('/auth/register', form);
+        const response: any = await api.post('/auth/register', {
+          fullName: form.fullName.trim(),
+          employeeId: form.employeeId.trim(),
+          jshshir: form.jshshir.trim(),
+          email: form.email.trim() || undefined,
+          username: form.username.trim(),
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+        });
         loginAction(response.data.user, response.data.accessToken, response.data.refreshToken);
+        navigate('/dashboard');
       } catch (requestError: any) {
         setError(requestError.message || t.errorsRequired);
+      } finally {
         setLoading(false);
-        return;
       }
-      setLoading(false);
     }
-    setStep((current) => Math.min(current + 1, steps.length - 1));
   };
 
   const back = () => {
@@ -398,8 +375,11 @@ export default function Register() {
           position: relative;
           border-radius: 32px;
           padding: 28px;
-          min-height: 720px;
+          min-height: 520px;
           background: linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.045)), rgba(7,12,25,.72);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
         }
         .ob-progress-top {
           display: flex;
@@ -426,7 +406,7 @@ export default function Register() {
         }
         .ob-steps {
           display: grid;
-          grid-template-columns: repeat(6, 1fr);
+          grid-template-columns: repeat(2, 1fr);
           gap: 8px;
           margin-bottom: 28px;
         }
@@ -446,12 +426,13 @@ export default function Register() {
         .ob-step-card {
           border-radius: 24px;
           padding: 24px;
-          min-height: 390px;
+          min-height: 290px;
           background: rgba(255,255,255,.045);
         }
         .ob-step-card h2 { margin: 0; font-size: 30px; line-height: 1.08; letter-spacing: -.045em; }
         .ob-step-card p { margin: 10px 0 0; color: var(--ob-muted); line-height: 1.6; }
         .ob-form-grid { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .ob-field { grid-column: span 1; }
         .ob-field.full { grid-column: span 2; }
         .ob-field label { display: block; margin-bottom: 8px; color: var(--ob-muted); font-size: 12px; font-weight: 900; }
         .ob-input {
@@ -467,7 +448,6 @@ export default function Register() {
           font-weight: 750;
         }
         .ob-input:focus { border-color: rgba(124,245,255,.45); box-shadow: 0 0 0 4px rgba(124,245,255,.08); }
-        .ob-select { appearance: none; }
         .ob-password { display: flex; align-items: center; gap: 8px; padding-right: 8px; }
         .ob-password input { border: 0; background: transparent; outline: 0; color: inherit; width: 100%; min-height: 50px; font-weight: 750; }
         .ob-icon-btn { border: 0; background: transparent; color: var(--ob-cyan); width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; }
@@ -493,38 +473,6 @@ export default function Register() {
           color: #07111f;
           font-weight: 950;
           font-size: 18px;
-        }
-        .ob-upload {
-          margin-top: 24px;
-          border: 1px dashed rgba(124,245,255,.32);
-          background: rgba(124,245,255,.06);
-          border-radius: 22px;
-          padding: 24px;
-          display: grid;
-          place-items: center;
-          text-align: center;
-          cursor: pointer;
-        }
-        .ob-upload input { display: none; }
-        .ob-upload svg { color: var(--ob-cyan); margin-bottom: 12px; }
-        .ob-upload strong { display: block; }
-        .ob-upload span { display: block; margin-top: 6px; color: var(--ob-muted); font-size: 13px; }
-        .ob-success {
-          min-height: 390px;
-          display: grid;
-          place-items: center;
-          text-align: center;
-        }
-        .ob-success-mark {
-          width: 84px;
-          height: 84px;
-          border-radius: 28px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 24px;
-          background: white;
-          color: #07111f;
-          box-shadow: 0 0 54px rgba(124,245,255,.24);
         }
         .ob-error {
           margin-top: 16px;
@@ -567,10 +515,9 @@ export default function Register() {
           .ob-title { font-size: clamp(2.35rem, 13vw, 3.6rem); }
           .ob-lead { font-size: 15px; }
           .ob-preview, .ob-form-grid { grid-template-columns: 1fr; }
-          .ob-visual-card, .ob-field.full { grid-column: span 1; }
+          .ob-visual-card { grid-column: span 1; }
           .ob-card { padding: 18px; min-height: auto; border-radius: 24px; }
           .ob-step-card { padding: 18px; }
-          .ob-steps { grid-template-columns: repeat(3, 1fr); }
           .ob-actions { flex-direction: column-reverse; }
           .ob-btn { width: 100%; }
         }
@@ -614,7 +561,7 @@ export default function Register() {
                 <div>
                   <div className="ob-chip">
                     <ShieldCheck size={14} />
-                    {t.secure}
+                    {lang === 'uz' ? 'Xavfsiz ulanish' : 'Безопасное соединение'}
                   </div>
                   <h2 style={{ margin: '16px 0 0', letterSpacing: '-.04em' }}>Learning readiness</h2>
                 </div>
@@ -629,176 +576,99 @@ export default function Register() {
             <div className="ob-mini">
               <FileCheck2 size={24} />
               <strong>Smart verification</strong>
-              <span>Employee ID, invite code and organization code are checked before activation.</span>
+              <span>Tabel raqami, JShShIR va hisob ma'lumotlari avtomatik tekshiriladi.</span>
             </div>
             <div className="ob-mini">
               <BadgeCheck size={24} />
               <strong>Role-aware LMS</strong>
-              <span>Courses and certification paths are prepared by department and position.</span>
+              <span>Kurslar va sertifikatlash yo'nalishlari xodimning lavozimiga qarab moslashtiriladi.</span>
             </div>
           </div>
         </section>
 
         <section className="ob-card-wrap">
           <form className="ob-card" onSubmit={complete}>
-            <div className="ob-progress-top">
-              <div>
-                <div className="ob-progress-label">{t.progress}</div>
-                <div className="ob-percent">{percent}%</div>
+            <div>
+              <div className="ob-progress-top">
+                <div>
+                  <div className="ob-progress-label">{t.progress}</div>
+                  <div className="ob-percent">{percent}%</div>
+                </div>
+                <button type="button" className="ob-btn ghost" onClick={() => navigate('/auth/login')}>
+                  {t.backLogin}
+                </button>
               </div>
-              <button type="button" className="ob-btn ghost" onClick={() => navigate('/auth/login')}>
-                {t.backLogin}
+
+              <div className="ob-progress">
+                <i style={{ width: `${percent}%` }} />
+              </div>
+
+              <div className="ob-steps">
+                {steps.map((_, index) => (
+                  <div key={index} className={`ob-step-dot ${index === step ? 'active' : ''} ${index < step ? 'done' : ''}`}>
+                    {index + 1}
+                  </div>
+                ))}
+              </div>
+
+              {step === 0 && (
+                <div className="ob-step-card">
+                  <h2>{t.personalTitle}</h2>
+                  <p>{t.personalText}</p>
+                  <div className="ob-form-grid">
+                    <Field label={t.fullName} icon={<UserRound size={16} />}>
+                      <input className="ob-input" value={form.fullName} onChange={(e) => update('fullName', e.target.value)} placeholder="Rustamov Husan" />
+                    </Field>
+                    <Field label={t.employeeId} icon={<IdCard size={16} />}>
+                      <input className="ob-input" value={form.employeeId} onChange={(e) => update('employeeId', e.target.value)} placeholder="AGMK-0004" />
+                    </Field>
+                    <Field label={t.jshshir} icon={<ShieldCheck size={16} />}>
+                      <input className="ob-input" value={form.jshshir} onChange={(e) => update('jshshir', e.target.value)} placeholder="31212951234567" maxLength={14} />
+                    </Field>
+                    <Field label={t.email} icon={<Mail size={16} />}>
+                      <input className="ob-input" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="name@agmk.uz" />
+                    </Field>
+                  </div>
+                </div>
+              )}
+
+              {step === 1 && (
+                <div className="ob-step-card">
+                  <h2>{t.securityTitle}</h2>
+                  <p>{t.securityText}</p>
+                  <div className="ob-form-grid">
+                    <Field label={t.username} icon={<UserRound size={16} />}>
+                      <input className="ob-input" value={form.username} onChange={(e) => update('username', e.target.value)} placeholder="husan_rustamov" />
+                    </Field>
+                    <Field label={t.password} icon={<LockKeyhole size={16} />}>
+                      <div className="ob-input ob-password">
+                        <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="••••••••" />
+                        <button type="button" className="ob-icon-btn" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                      </div>
+                    </Field>
+                    <Field label={t.confirmPassword} icon={<LockKeyhole size={16} />}>
+                      <div className="ob-input ob-password">
+                        <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={(e) => update('confirmPassword', e.target.value)} placeholder="••••••••" />
+                        <button type="button" className="ob-icon-btn" onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                      </div>
+                    </Field>
+                  </div>
+                </div>
+              )}
+
+              {error && <div className="ob-error">{error}</div>}
+            </div>
+
+            <div className="ob-actions">
+              <button type="button" className="ob-btn ghost" onClick={back} disabled={step === 0}>
+                <ChevronLeft size={17} />
+                {t.back}
+              </button>
+              <button type={step === 1 ? 'submit' : 'button'} className="ob-btn primary" onClick={step === 1 ? undefined : next} disabled={loading}>
+                {loading ? '...' : step === 1 ? t.finish : t.next}
+                <ChevronRight size={17} />
               </button>
             </div>
-
-            <div className="ob-progress">
-              <i style={{ width: `${percent}%` }} />
-            </div>
-
-            <div className="ob-steps">
-              {steps.map((_, index) => (
-                <div key={index} className={`ob-step-dot ${index === step ? 'active' : ''} ${index < step ? 'done' : ''}`}>
-                  {index < step ? <Check size={15} /> : index + 1}
-                </div>
-              ))}
-            </div>
-
-            {step === 0 && (
-              <div className="ob-step-card">
-                <h2>{t.welcomeTitle}</h2>
-                <p>{t.welcomeText}</p>
-                <div className="ob-role-preview">
-                  <div className="ob-avatar">AI</div>
-                  <div>
-                    <strong>AI onboarding copilot</strong>
-                    <p style={{ margin: '6px 0 0' }}>Profile, role, security and personalization in one guided flow.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 1 && (
-              <div className="ob-step-card">
-                <h2>{t.employeeTitle}</h2>
-                <p>{t.employeeText}</p>
-                <div className="ob-form-grid">
-                  <Field label={t.fullName} icon={<UserRound size={16} />}>
-                    <input className="ob-input" value={form.fullName} onChange={(e) => update('fullName', e.target.value)} placeholder="Husan Rustamov" />
-                  </Field>
-                  <Field label={t.employeeId} icon={<IdCard size={16} />}>
-                    <input className="ob-input" value={form.employeeId} onChange={(e) => update('employeeId', e.target.value)} placeholder="AGMK-024681" />
-                  </Field>
-                  <Field label={t.email} icon={<Mail size={16} />}>
-                    <input className="ob-input" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="name@agmk.uz" />
-                  </Field>
-                  <Field label={t.phone} icon={<Phone size={16} />}>
-                    <input className="ob-input" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+998 90 000 00 00" />
-                  </Field>
-                </div>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="ob-step-card">
-                <h2>{t.departmentTitle}</h2>
-                <p>{t.departmentText}</p>
-                <div className="ob-form-grid">
-                  <Field label={t.department} icon={<Building2 size={16} />}>
-                    <select className="ob-input ob-select" value={form.department} onChange={(e) => update('department', e.target.value)}>
-                      {departments.map((item) => <option key={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <Field label={t.position} icon={<BriefcaseBusiness size={16} />}>
-                    <select className="ob-input ob-select" value={form.position} onChange={(e) => update('position', e.target.value)}>
-                      {positions.map((item) => <option key={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                </div>
-                <div className="ob-role-preview">
-                  <div className="ob-avatar">{initials}</div>
-                  <div>
-                    <strong>{t.rolePreview}: {form.position}</strong>
-                    <p style={{ margin: '6px 0 0' }}>{form.department} • AI recommended compliance path • Webinar access</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="ob-step-card">
-                <h2>{t.securityTitle}</h2>
-                <p>{t.securityText}</p>
-                <div className="ob-form-grid">
-                  <Field label={t.organizationCode} icon={<ShieldCheck size={16} />}>
-                    <input className="ob-input" value={form.organizationCode} onChange={(e) => update('organizationCode', e.target.value)} />
-                  </Field>
-                  <Field label={t.inviteCode} icon={<KeyRound size={16} />}>
-                    <input className="ob-input" value={form.inviteCode} onChange={(e) => update('inviteCode', e.target.value)} placeholder="INV-2026-LMS" />
-                  </Field>
-                  <Field label={t.password} icon={<LockKeyhole size={16} />}>
-                    <div className="ob-input ob-password">
-                      <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="••••••••" />
-                      <button type="button" className="ob-icon-btn" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                    </div>
-                  </Field>
-                  <Field label={t.confirmPassword} icon={<LockKeyhole size={16} />}>
-                    <div className="ob-input ob-password">
-                      <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={(e) => update('confirmPassword', e.target.value)} placeholder="••••••••" />
-                      <button type="button" className="ob-icon-btn" onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                    </div>
-                  </Field>
-                </div>
-              </div>
-            )}
-
-            {step === 4 && (
-              <div className="ob-step-card">
-                <h2>{t.profileTitle}</h2>
-                <p>{t.profileText}</p>
-                <label className="ob-upload">
-                  <input type="file" accept="image/png,image/jpeg" onChange={(e) => update('avatarName', e.target.files?.[0]?.name || '')} />
-                  <Upload size={26} />
-                  <strong>{form.avatarName || t.avatar}</strong>
-                  <span>{t.avatarHint}</span>
-                </label>
-                <div className="ob-role-preview">
-                  <div className="ob-avatar">{form.avatarName ? <Camera size={22} /> : initials}</div>
-                  <div>
-                    <strong>{form.fullName || 'AGMK Employee'}</strong>
-                    <p style={{ margin: '6px 0 0' }}>{form.position} • {form.department} • {form.employeeId || 'AGMK-ID'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 5 && (
-              <div className="ob-step-card ob-success">
-                <div>
-                  <div className="ob-success-mark"><CheckCircle2 size={38} /></div>
-                  <h2>{t.successTitle}</h2>
-                  <p>{t.successText}</p>
-                  <button type="button" className="ob-btn primary" style={{ marginTop: 24 }} onClick={() => navigate('/dashboard')}>
-                    {t.dashboard}
-                    <ArrowRight size={17} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {error && <div className="ob-error">{error}</div>}
-
-            {step < 5 && (
-              <div className="ob-actions">
-                <button type="button" className="ob-btn ghost" onClick={back} disabled={step === 0}>
-                  <ChevronLeft size={17} />
-                  {t.back}
-                </button>
-                <button type={step === 4 ? 'submit' : 'button'} className="ob-btn primary" onClick={step === 4 ? undefined : next} disabled={loading}>
-                  {loading ? '...' : step === 4 ? t.finish : step === 0 ? t.start : t.next}
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            )}
           </form>
         </section>
       </div>

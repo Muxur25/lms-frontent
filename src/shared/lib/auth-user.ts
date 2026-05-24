@@ -1,5 +1,6 @@
 export type EnterpriseRole =
   | 'super_admin'
+  | 'admin'
   | 'hr_manager'
   | 'trainer'
   | 'employee'

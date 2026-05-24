@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Send, Bot, User, Sparkles, StopCircle } from 'lucide-react';
+import { apiClient } from '@/api/axios';
 
 export default function AiAssistant() {
   const [messages, setMessages] = useState([
@@ -8,23 +9,34 @@ export default function AiAssistant() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSend = (e: any) => {
+  const handleSend = async (e: any) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || loading) return;
 
-    const userMsg = { id: Date.now(), role: 'user', text: input };
-    setMessages([...messages, userMsg]);
+    const currentInput = input;
+    const userMsg = { id: Date.now(), role: 'user', text: currentInput };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
-    setTimeout(() => {
+    try {
+      const response = await apiClient.post('/ai/chat', { prompt: currentInput });
+      const aiReply = response.data?.response || "Kechirasiz, javob olishda xatolik yuz berdi.";
       setMessages(prev => [...prev, { 
         id: Date.now() + 1, 
         role: 'ai', 
-        text: 'Bu qism haqiqiy AI backendga ulanganda javob qaytaradi. Hozircha bu faqat vizual demonstraktsiya.' 
+        text: aiReply 
       }]);
+    } catch (err) {
+      console.error('AI chat error:', err);
+      setMessages(prev => [...prev, { 
+        id: Date.now() + 1, 
+        role: 'ai', 
+        text: "Tizimda xatolik yuz berdi. Iltimos keyinroq qayta urinib ko'ring." 
+      }]);
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -54,8 +66,8 @@ export default function AiAssistant() {
               </div>
               <div style={{ 
                 maxWidth: '80%', padding: 16, fontSize: 14, lineHeight: 1.6,
-                background: msg.role === 'user' ? 'var(--surface-2)' : 'rgba(139,92,246,0.1)',
-                border: msg.role === 'user' ? '1px solid var(--border-2)' : '1px solid rgba(139,92,246,0.2)',
+                background: msg.role === 'user' ? 'var(--surface-2)' : 'var(--ai-msg-bg)',
+                border: msg.role === 'user' ? '1px solid var(--border-2)' : '1px solid var(--ai-msg-border)',
                 color: 'var(--text-primary)',
                 borderRadius: 'var(--radius-xl)',
                 borderTopRightRadius: msg.role === 'user' ? 4 : 'var(--radius-xl)',
@@ -76,7 +88,7 @@ export default function AiAssistant() {
                 <Bot size={16} color="#fff" />
               </div>
               <div style={{ 
-                background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)',
+                background: 'var(--ai-msg-bg)', border: '1px solid var(--ai-msg-border)',
                 borderRadius: 'var(--radius-xl)', borderTopLeftRadius: 4, padding: '16px',
                 display: 'flex', gap: 6, alignItems: 'center'
               }}>

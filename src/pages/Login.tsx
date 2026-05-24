@@ -16,7 +16,6 @@ import {
   Laptop,
   Loader2,
   LockKeyhole,
-  Mail,
   Moon,
   ShieldCheck,
   Sparkles,
@@ -26,16 +25,9 @@ import {
 import { api } from '../services/api';
 import { useAuthStore } from '../store/auth.store';
 
-type TemporaryUserPreview = {
-  email: string;
-  employeeId: string;
-  temporaryPassword: string;
-  roleLabel?: string;
-  role?: string;
-};
 
 type Lang = 'uz' | 'ru';
-type LoginMode = 'email' | 'employee';
+type LoginMode = 'username' | 'employee';
 type ThemeMode = 'dark' | 'light';
 
 const copy = {
@@ -44,10 +36,10 @@ const copy = {
     headline: 'Xavfsiz korporativ ta’lim markaziga kirish',
     subline:
       'AI yordamchi, real-vaqt analytics, imtihonlar va sertifikatlash tizimiga yagona enterprise login orqali ulaning.',
-    email: 'Email',
-    employee: 'Xodim ID',
-    emailLabel: 'Korporativ email',
-    employeeLabel: 'Xodim identifikatori',
+    username: 'Username',
+    employee: 'Tabel raqam',
+    usernameLabel: 'Username',
+    employeeLabel: 'Tabel raqami',
     password: 'Maxfiy parol',
     remember: 'Meni eslab qolish',
     forgot: 'Parolni tiklash',
@@ -70,10 +62,10 @@ const copy = {
     headline: 'Безопасный вход в корпоративный центр обучения',
     subline:
       'Подключайтесь к ИИ-ассистенту, аналитике, экзаменам и сертификации через единый enterprise login.',
-    email: 'Email',
-    employee: 'ID сотрудника',
-    emailLabel: 'Корпоративная почта',
-    employeeLabel: 'Идентификатор сотрудника',
+    username: 'Username',
+    employee: 'Табельный номер',
+    usernameLabel: 'Имя пользователя (username)',
+    employeeLabel: 'Табельный номер',
     password: 'Пароль',
     remember: 'Запомнить меня',
     forgot: 'Восстановить пароль',
@@ -96,31 +88,31 @@ const copy = {
 export default function Login() {
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const [lang, setLang] = useState<Lang>('uz');
   const [theme, setTheme] = useState<ThemeMode>('dark');
-  const [mode, setMode] = useState<LoginMode>('email');
+  const [mode, setMode] = useState<LoginMode>('username');
   const [credential, setCredential] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [temporaryUsers, setTemporaryUsers] = useState<TemporaryUserPreview[]>([]);
 
   const t = copy[lang];
 
   const credentialPlaceholder = useMemo(
-    () => (mode === 'email' ? 'name@agmk.uz' : 'AGMK-024681'),
+    () => (mode === 'username' ? 'husan_rustamov' : 'AGMK-0004'),
     [mode],
   );
 
-  useEffect(() => {
-    api
-      .get('/auth/temporary-users')
-      .then((response: any) => setTemporaryUsers(response.data || []))
-      .catch(() => setTemporaryUsers([]));
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,8 +134,6 @@ export default function Login() {
       const response: any = await api
         .post('/auth/login', {
           credential: credential.trim(),
-          email: mode === 'email' ? credential.trim() : undefined,
-          employeeId: mode === 'employee' ? credential.trim() : undefined,
           password,
           remember,
           loginMode: mode,
@@ -839,11 +829,11 @@ export default function Login() {
             <div className="auth-mode" role="tablist" aria-label="Login method">
               <button
                 type="button"
-                className={mode === 'email' ? 'active' : ''}
-                onClick={() => setMode('email')}
+                className={mode === 'username' ? 'active' : ''}
+                onClick={() => setMode('username')}
               >
-                <Mail size={15} />
-                {t.email}
+                <UserRound size={15} />
+                {t.username}
               </button>
               <button
                 type="button"
@@ -857,16 +847,16 @@ export default function Login() {
 
             <form className="auth-form" onSubmit={handleLogin}>
               <div className="auth-field">
-                <label htmlFor="credential">{mode === 'email' ? t.emailLabel : t.employeeLabel}</label>
+                <label htmlFor="credential">{mode === 'username' ? t.usernameLabel : t.employeeLabel}</label>
                 <div className="auth-input-wrap">
-                  {mode === 'email' ? <Mail size={18} /> : <UserRound size={18} />}
+                  {mode === 'username' ? <UserRound size={18} /> : <IdCard size={18} />}
                   <input
                     id="credential"
-                    type={mode === 'email' ? 'email' : 'text'}
+                    type="text"
                     value={credential}
                     onChange={(event) => setCredential(event.target.value)}
                     placeholder={credentialPlaceholder}
-                    autoComplete={mode === 'email' ? 'email' : 'username'}
+                    autoComplete="username"
                     required
                   />
                 </div>
@@ -954,39 +944,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="auth-demo-users">
-              <div className="auth-demo-title">
-                <KeyRound size={14} />
-                Temporary users
-              </div>
-              <div className="auth-demo-grid">
-                {temporaryUsers.map((user) => (
-                  <button
-                    key={user.employeeId}
-                    type="button"
-                    className="auth-demo-user"
-                    onClick={() => {
-                      setMode('email');
-                      setCredential(user.email);
-                      setPassword(user.temporaryPassword);
-                      setError('');
-                    }}
-                  >
-                    <span>
-                      <strong>{user.roleLabel || user.role}</strong>
-                      <span>{user.email} / {user.employeeId}</span>
-                    </span>
-                    <span className="auth-demo-pass">{user.temporaryPassword}</span>
-                  </button>
-                ))}
-                {!temporaryUsers.length && (
-                  <div className="auth-security-item">
-                    <KeyRound size={15} />
-                    Backend temporary users endpoint ulanmagan yoki server ishga tushmagan.
-                  </div>
-                )}
-              </div>
-            </div>
+
           </div>
         </section>
       </div>

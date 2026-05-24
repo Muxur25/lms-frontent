@@ -1,38 +1,14 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Users, BookOpen, Award, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, BookOpen, Award, Clock, AlertCircle } from 'lucide-react';
+import { apiClient } from '@/api/axios';
 
-const monthlyData = [
-  { m: 'Yan', users: 820, completions: 340, hours: 2100 },
-  { m: 'Fev', users: 890, completions: 420, hours: 2480 },
-  { m: 'Mar', users: 960, completions: 510, hours: 2850 },
-  { m: 'Apr', users: 1020, completions: 580, hours: 3100 },
-  { m: 'May', users: 1100, completions: 640, hours: 3400 },
-  { m: 'Iyn', users: 1180, completions: 710, hours: 3800 },
-  { m: 'Iyl', users: 1284, completions: 790, hours: 4200 },
-];
 
-const deptData = [
-  { dept: 'IT', score: 87, enrolled: 145, completed: 112 },
-  { dept: 'HR', score: 74, enrolled: 98, completed: 68 },
-  { dept: 'Moliya', score: 91, enrolled: 87, completed: 79 },
-  { dept: 'Muhandis', score: 68, enrolled: 234, completed: 142 },
-  { dept: 'Xavfsizlik', score: 82, enrolled: 312, completed: 258 },
-  { dept: 'Boshqaruv', score: 79, enrolled: 56, completed: 44 },
-];
-
-const radarData = [
-  { subject: 'O\'quv', A: 85 },
-  { subject: 'Test', A: 78 },
-  { subject: 'Sertifikat', A: 62 },
-  { subject: 'Davomiylik', A: 91 },
-  { subject: 'Aktiv', A: 74 },
-  { subject: 'Sifat', A: 88 },
-];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
@@ -48,15 +24,111 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const iconMap: Record<string, any> = {
+  users: Users,
+  completions: BookOpen,
+  certs: Award,
+  hours: Clock,
+};
+
 export default function Analytics() {
   const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const kpis = [
-    { label: 'Jami o\'quvchilar', value: '1,284', change: '+8.4%', up: true, icon: Users, color: '#3b82f6' },
-    { label: 'Kurslar yakunladi', value: '790', change: '+12.1%', up: true, icon: BookOpen, color: '#22c55e' },
-    { label: 'Sertifikatlar', value: '342', change: '+5.7%', up: true, icon: Award, color: '#f59e0b' },
-    { label: 'O\'rtacha soat', value: '34.2', change: '-2.3%', up: false, icon: Clock, color: '#8b5cf6' },
-  ];
+  const [kpisData, setKpisData] = useState<any[]>([]);
+  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [deptData, setDeptData] = useState<any[]>([]);
+  const [radarData, setRadarData] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      apiClient.get('/analytics/kpis'),
+      apiClient.get('/analytics/monthly'),
+      apiClient.get('/analytics/departments'),
+      apiClient.get('/analytics/radar')
+    ])
+    .then(([kpisRes, monthlyRes, deptRes, radarRes]) => {
+      if (isMounted) {
+        setKpisData(kpisRes.data?.data || kpisRes.data || []);
+        setMonthlyData(monthlyRes.data?.data || monthlyRes.data || []);
+        setDeptData(deptRes.data?.data || deptRes.data || []);
+        setRadarData(radarRes.data?.data || radarRes.data || []);
+        setLoading(false);
+      }
+    })
+    .catch(err => {
+      if (isMounted) {
+        console.error('Error fetching analytics data:', err);
+        setError('Analitika ma\'lumotlarini yuklashda xatolik yuz berdi');
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header fade-in">
+          <div>
+            <div className="page-title">{t('nav.analytics')}</div>
+            <div className="page-sub">Yuklanmoqda...</div>
+          </div>
+        </div>
+
+        {/* Skeleton KPIs */}
+        <div className="grid grid-4 fade-in" style={{ marginBottom: 24 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="stat-card skeleton-card" style={{ height: 120, background: 'var(--surface-1)', borderRadius: 12, opacity: 0.6 }}>
+              <div style={{ padding: 20 }}>
+                <div className="skeleton" style={{ height: 12, width: '60%', marginBottom: 10 }} />
+                <div className="skeleton" style={{ height: 24, width: '40%', marginBottom: 12 }} />
+                <div className="skeleton" style={{ height: 10, width: '80%' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton Charts */}
+        <div className="grid grid-12 fade-in" style={{ marginBottom: 24 }}>
+          <div className="card skeleton-card" style={{ height: 320, background: 'var(--surface-1)', borderRadius: 12, opacity: 0.6, padding: 20 }}>
+            <div className="skeleton" style={{ height: 16, width: '40%', marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 10, width: '20%', marginBottom: 24 }} />
+            <div className="skeleton" style={{ height: 220, width: '100%' }} />
+          </div>
+          <div className="card skeleton-card" style={{ height: 320, background: 'var(--surface-1)', borderRadius: 12, opacity: 0.6, padding: 20 }}>
+            <div className="skeleton" style={{ height: 16, width: '40%', marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 10, width: '20%', marginBottom: 24 }} />
+            <div className="skeleton" style={{ height: 220, width: '100%' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+        <AlertCircle size={40} color="var(--red-400)" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{error}</div>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>Qayta urinish</button>
+      </div>
+    );
+  }
+
+  const kpis = kpisData.map(k => ({
+    label: k.label,
+    value: k.value,
+    change: k.change,
+    up: k.up,
+    icon: iconMap[k.key] || Users,
+    color: k.color || '#3b82f6'
+  }));
 
   return (
     <div>
@@ -99,12 +171,12 @@ export default function Analytics() {
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                 <XAxis dataKey="m" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="users" name="Foydalanuvchilar" stroke="#3b82f6" strokeWidth={2.5} dot={{ fill: '#3b82f6', r: 4 }} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="completions" name="Yakunlandi" stroke="#22c55e" strokeWidth={2.5} dot={{ fill: '#22c55e', r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="users" name="Foydalanuvchilar" stroke="var(--blue-500)" strokeWidth={2.5} dot={{ fill: 'var(--blue-500)', r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="completions" name="Yakunlandi" stroke="var(--green-500)" strokeWidth={2.5} dot={{ fill: 'var(--green-500)', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -116,10 +188,10 @@ export default function Analytics() {
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="rgba(255,255,255,0.06)" />
+                <PolarGrid stroke="var(--radar-grid)" />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11 }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 10 }} />
-                <Radar name="Ball" dataKey="A" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} strokeWidth={2} />
+                <Radar name="Ball" dataKey="A" stroke="var(--violet-500)" fill="var(--violet-500)" fillOpacity={0.2} strokeWidth={2} />
                 <Tooltip contentStyle={{ background: 'var(--bg-3)', border: '1px solid var(--border-2)', borderRadius: 10, fontSize: 12 }} />
               </RadarChart>
             </ResponsiveContainer>
@@ -133,12 +205,12 @@ export default function Analytics() {
         <div style={{ height: 260 }}>
           <ResponsiveContainer>
             <BarChart data={deptData} barSize={20} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
               <XAxis dataKey="dept" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="enrolled" name="Ro'yxatga olindi" fill="#3b82f6" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
-              <Bar dataKey="completed" name="Yakunlandi" fill="#22c55e" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
+              <Bar dataKey="enrolled" name="Ro'yxatga olindi" fill="var(--blue-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
+              <Bar dataKey="completed" name="Yakunlandi" fill="var(--green-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
             </BarChart>
           </ResponsiveContainer>
         </div>

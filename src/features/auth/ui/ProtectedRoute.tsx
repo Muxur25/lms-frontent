@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/store/auth.store';
 import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
@@ -8,19 +8,26 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { isAuthenticated, user } = useAuthStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const user = useAuthStore((state) => state.user);
   const location = useLocation();
 
+  // Wait for auth state to be resolved from localStorage before redirecting
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%' }} />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    // Redirect them to the /login page, but save the current location they were
-    // trying to go to when they were redirected. This allows us to send them
-    // along to that page after they login, which is a nicer user experience.
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
   if (allowedRoles && user?.role) {
     if (!allowedRoles.includes(user.role)) {
-      // Role not authorized, redirect to dashboard or unathorized page
       return <Navigate to="/unauthorized" replace />;
     }
   }
