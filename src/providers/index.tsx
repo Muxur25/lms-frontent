@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { router } from '@/routes';
+import { Toaster } from 'react-hot-toast';
 import type { ReactNode } from 'react';
 
 // Create a client
@@ -19,6 +20,14 @@ export function AppProviders({ children }: { children?: ReactNode }) {
   // If children passed (for testing), render children.
   return (
     <QueryClientProvider client={queryClient}>
+      <Toaster position="top-right" toastOptions={{
+        className: 'dark:bg-slate-800 dark:text-white',
+        style: {
+          background: 'var(--bg-2)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border-3)'
+        },
+      }} />
       {children || <RouterProvider router={router} />}
     </QueryClientProvider>
   );

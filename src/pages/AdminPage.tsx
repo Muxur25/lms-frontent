@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
 import {
-  Users, BookOpen, Award, Shield, Search, Filter, MoreHorizontal,
+  Users, BookOpen, Award, Shield, Search, Filter,
   TrendingUp, TrendingDown, BarChart3, Settings, Mail, Plus,
   Sparkles, CheckCircle, AlertTriangle, Download, SlidersHorizontal,
-  LayoutDashboard, ServerCrash, Calendar, Clock,
+  LayoutDashboard, ServerCrash, Calendar, Clock, Trash2
 } from 'lucide-react';
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip,
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
 import { apiClient } from '@/api/axios';
+import { useAuthStore } from '@/store/auth.store';
+import toast from 'react-hot-toast';
+import { customConfirm } from '@/shared/lib/toast-utils';
 
 type Tab = 'overview' | 'users' | 'courses' | 'analytics' | 'settings';
 
@@ -76,6 +79,7 @@ const MOCK_DEPT_DATA = [
 ];
 
 export default function AdminPage() {
+  const { user: currentUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   // Users Tab state
@@ -155,7 +159,29 @@ export default function AdminPage() {
     }
   }, [activeTab]);
 
-  const displayUsers = users.length > 0 ? users : mockUsers;
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await apiClient.patch(`/users/${userId}/role`, { role: newRole });
+      setUsers(users.map(u => u.id === userId || u._id === userId ? { ...u, role: newRole } : u));
+      toast.success('Rol muvaffaqiyatli o\'zgartirildi');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Rolni o\'zgartirishda xatolik yuz berdi');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    customConfirm('Haqiqatan ham bu foydalanuvchini o\'chirmoqchimisiz?', async () => {
+      try {
+        await apiClient.delete(`/users/${userId}`);
+        setUsers(users.filter(u => u.id !== userId && u._id !== userId));
+        toast.success('Foydalanuvchi muvaffaqiyatli o\'chirildi');
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || 'Foydalanuvchini o\'chirishda xatolik yuz berdi');
+      }
+    });
+  };
+
+  const displayUsers = users;
   const displayCourses = courses.length > 0 ? courses : MOCK_ADMIN_COURSES;
   const displayExams = exams.length > 0 ? exams : MOCK_ADMIN_EXAMS;
   const displayKpis = kpis.length > 0 ? kpis : MOCK_KPIS;
@@ -324,6 +350,10 @@ export default function AdminPage() {
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--text-tertiary)' }}>Yuklanmoqda...</td>
                     </tr>
+                  ) : displayUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--text-tertiary)' }}>Foydalanuvchilar topilmadi</td>
+                    </tr>
                   ) : (
                     displayUsers.map(u => {
                       const initials = (u.name || u.fullName || 'F U')
@@ -340,6 +370,11 @@ export default function AdminPage() {
                       const isGreen = u.status === 'active';
                       const isGray = u.status === 'offline';
                       
+                      const canManage = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+                      const targetIsAdmin = u.role === 'admin' || u.role === 'super_admin';
+                      
+                      const disableActions = !canManage || (currentUser?.role === 'admin' && targetIsAdmin);
+                      
                       return (
                         <tr key={u.id || u._id}>
                           <td>
@@ -353,7 +388,23 @@ export default function AdminPage() {
                               </div>
                             </div>
                           </td>
-                          <td><span className="badge badge-gray">{roleText}</span></td>
+                          <td>
+                            {canManage && !disableActions ? (
+                              <select 
+                                className="input" 
+                                style={{ padding: '4px 8px', fontSize: 12, height: 'auto', minHeight: 28 }}
+                                value={u.role || 'employee'}
+                                onChange={(e) => handleRoleChange(u.id || u._id, e.target.value)}
+                              >
+                                {Object.entries(roleLabels).map(([key, label]) => {
+                                  if (currentUser?.role === 'admin' && (key === 'super_admin' || key === 'admin')) return null;
+                                  return <option key={key} value={key}>{label}</option>;
+                                })}
+                              </select>
+                            ) : (
+                              <span className="badge badge-gray">{roleText}</span>
+                            )}
+                          </td>
                           <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{deptText}</td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
@@ -369,7 +420,16 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td>
-                            <button className="btn btn-ghost btn-sm btn-icon"><MoreHorizontal size={14} /></button>
+                            {!disableActions && (
+                              <button 
+                                className="btn btn-ghost btn-sm btn-icon" 
+                                style={{ color: 'var(--red-400)' }}
+                                onClick={() => handleDeleteUser(u.id || u._id)}
+                                title="O'chirish"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

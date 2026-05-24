@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
-  Play, Pause, Volume2, Maximize2, Settings,
+  Play, 
   ChevronDown, ChevronRight, CheckCircle,
   Clock, BookOpen, Star, Users, Award, Sparkles,
   FileText, Download, MessageSquare, Bookmark,
-  SkipForward, SkipBack, X, Send, ThumbsUp,
+  X, Send,
   Trash2, Plus, Edit3, Save, Loader,
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
@@ -78,21 +78,15 @@ const DEFAULT_MODULES: Module[] = [
   },
 ];
 
-const aiMessages = [
-  { role: 'ai', text: 'Salom! Hooks: useEffect darsida nimalar haqida savolingiz bor?' },
-  { role: 'user', text: 'useEffect dependency array qanday ishlaydi?' },
-  { role: 'ai', text: 'Dependency array useEffect qachon qayta ishga tushishini belgilaydi. Bo\'sh massiv [] bo\'lsa — faqat bir marta, qiymat bo\'lsa — u o\'zgarganda qayta ishlaydi.' },
-];
-
 const materials = [
   { name: 'React Hooks Cheatsheet.pdf', size: '2.4 MB', type: 'PDF' },
   { name: 'useEffect Examples.zip', size: '1.1 MB', type: 'ZIP' },
   { name: 'Amaliy mashq topshiriq.docx', size: '0.8 MB', type: 'DOC' },
 ];
 
-const comments = [
-  { name: 'Kamola Y.', time: '2 soat oldin', text: 'useEffect dan keyin komponent unmount bo\'lganda cleanup qilishni ham tushintirasizmi?', likes: 12, avatar: 'KY', color: '#8b5cf6' },
-  { name: 'Bobur R.', time: 'Kecha', text: 'Juda yaxshi tushuntirilgan! dependency array haqida ko\'p savollarim bor edi.', likes: 8, avatar: 'BR', color: '#22c55e' },
+const mockReviews = [
+  { name: 'Kamola Y.', text: 'Juda zo\'r kurs, barchasiga tushundim.', avatar: 'KY', color: '#8b5cf6' },
+  { name: 'Bobur R.', text: 'Ajoyib ustoz!', avatar: 'BR', color: '#22c55e' },
 ];
 
 const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
@@ -113,8 +107,19 @@ export default function CoursePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'ai' | 'notes' | 'materials' | 'discussion'>('ai');
   const [openModule, setOpenModule] = useState<number | null>(2);
-  const [playing, setPlaying] = useState(false);
   const [aiInput, setAiInput] = useState('');
+  const [currentLessonId, setCurrentLessonId] = useState<number | null>(null);
+
+  // AI & Discussion State
+  const [aiMessages, setAiMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
+    { role: 'ai', text: 'Salom! Dars haqida savolingiz bo\'lsa so\'rashingiz mumkin.' }
+  ]);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const [discussions, setDiscussions] = useState<any[]>([]);
+  const [discussionInput, setDiscussionInput] = useState('');
+  const [discussionImageUrl, setDiscussionImageUrl] = useState('');
+  const [discussionLoading, setDiscussionLoading] = useState(false);
 
   // Course modules state — driven from backend
   const [courseModules, setCourseModules] = useState<Module[]>([]);
@@ -125,6 +130,8 @@ export default function CoursePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [newModuleTitle, setNewModuleTitle] = useState('');
   const [addingModule, setAddingModule] = useState(false);
+
+  const [materialUploading, setMaterialUploading] = useState(false);
 
   const isRu = i18n.language === 'ru';
   const canEdit = user && EDITOR_ROLES.includes(user.role as string);
@@ -149,12 +156,26 @@ export default function CoursePage() {
           const courseData = {
             ...fetched,
             id: fetched._id || fetched.id,
-            progress: fetched.completion || fetched.progress || 0,
+            progress: fetched.enrollment?.progress || fetched.completion || fetched.progress || 0,
+            enrollment: fetched.enrollment,
           };
           setCourse(courseData);
-          const mods: Module[] = (fetched.modules && fetched.modules.length > 0)
+          
+          let mods: Module[] = (fetched.modules && fetched.modules.length > 0)
             ? fetched.modules
             : DEFAULT_MODULES;
+            
+          // Map completed lessons if enrolled
+          if (fetched.enrollment?.completedLessons) {
+            mods = mods.map(m => ({
+              ...m,
+              done: m.items.filter(i => fetched.enrollment.completedLessons.includes(i.id)).length,
+              items: m.items.map(i => ({
+                ...i,
+                done: fetched.enrollment.completedLessons.includes(i.id)
+              }))
+            }));
+          }
           setCourseModules(mods);
         } else if (isMounted) {
           setCourse(DEFAULT_COURSE);
@@ -253,6 +274,187 @@ export default function CoursePage() {
     }));
   };
 
+  const handleLessonUpload = async (modId: number, lessonId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('visibility', 'public');
+    
+    try {
+      const res = await apiClient.post('/uploads/file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = res.data?.url || res.data?.data?.url;
+      if (url) {
+        updateLesson(modId, lessonId, 'videoUrl', url);
+      }
+    } catch (err) {
+      console.error('Error uploading lesson file:', err);
+    }
+  };
+
+  const handleEnroll = async () => {
+    if (!course?.id) return;
+    try {
+      setLoading(true);
+      await apiClient.post(`/courses/${course.id}/enroll`);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  const handleLessonComplete = async (lessonId: number) => {
+    if (!course?.id) return;
+    try {
+      await apiClient.post(`/courses/${course.id}/progress`, { lessonId });
+      setCourseModules(prev => prev.map(m => {
+        let changed = false;
+        const newItems = m.items.map(i => {
+          if (i.id === lessonId && !i.done) {
+            changed = true;
+            return { ...i, done: true };
+          }
+          return i;
+        });
+        if (changed) {
+          return { ...m, done: (m.done || 0) + 1, items: newItems };
+        }
+        return m;
+      }));
+      setCourse(prev => ({ ...prev, progress: Math.min((prev.progress || 0) + 5, 100) }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  /* ── AI & Discussions ───────────────────────── */
+  const fetchDiscussions = useCallback(async () => {
+    if (!course?.id) return;
+    try {
+      const res = await apiClient.get(`/courses/${course.id}/discussions`);
+      const data = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+      setDiscussions(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [course?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'discussion' && course?.id) {
+      fetchDiscussions();
+    }
+  }, [activeTab, course?.id, fetchDiscussions]);
+
+  const handleAiSend = async () => {
+    const text = aiInput.trim();
+    if (!text || aiLoading) return;
+    setAiInput('');
+    setAiMessages(p => [...p, { role: 'user', text }]);
+    setAiLoading(true);
+    try {
+      const res = await apiClient.post('/ai/chat', { prompt: text });
+      const answer = res.data?.response || res.data?.data?.response || 'Xatolik yuz berdi.';
+      setAiMessages(p => [...p, { role: 'ai', text: answer }]);
+    } catch (err) {
+      setAiMessages(p => [...p, { role: 'ai', text: 'Kechirasiz, xatolik yuz berdi.' }]);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleDiscussionSubmit = async () => {
+    const text = discussionInput.trim();
+    if (!text || !course?.id) return;
+    setDiscussionLoading(true);
+    try {
+      await apiClient.post(`/courses/${course.id}/discussions`, {
+        message: text,
+        imageUrl: discussionImageUrl || undefined
+      });
+      setDiscussionInput('');
+      setDiscussionImageUrl('');
+      await fetchDiscussions();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDiscussionLoading(false);
+    }
+  };
+  const handleDiscussionImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('visibility', 'public');
+    try {
+      const res = await apiClient.post('/uploads/file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = res.data?.url || res.data?.data?.url;
+      if (url) setDiscussionImageUrl(url);
+    } catch (err) {
+      console.error('Upload failed', err);
+    }
+  };
+
+  const handleMaterialUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !course) return;
+    
+    setMaterialUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('visibility', 'public');
+    
+    try {
+      const res = await apiClient.post('/uploads/file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = res.data?.url || res.data?.data?.url;
+      if (url) {
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+        
+        const newMaterial = {
+          name: file.name,
+          url,
+          size: sizeMb,
+          type: ext
+        };
+        
+        const updatedCourse = {
+          ...course,
+          materials: [...(course.materials || []), newMaterial]
+        };
+        
+        setCourse(updatedCourse);
+        
+        // Auto save to backend
+        await apiClient.patch(`/courses/${course.id}`, { materials: updatedCourse.materials });
+      }
+    } catch (err) {
+      console.error('Error uploading material:', err);
+    } finally {
+      setMaterialUploading(false);
+    }
+  };
+
+  const handleDeleteMaterial = async (index: number) => {
+    if (!course) return;
+    const updatedMaterials = [...(course.materials || [])];
+    updatedMaterials.splice(index, 1);
+    const updatedCourse = { ...course, materials: updatedMaterials };
+    setCourse(updatedCourse);
+    try {
+      await apiClient.patch(`/courses/${course.id}`, { materials: updatedMaterials });
+    } catch (err) {
+      console.error(err);
+    }
+  };
   /* ── Render ─────────────────────────────────── */
   if (loading) {
     return (
@@ -263,6 +465,10 @@ export default function CoursePage() {
   }
 
   const title = isRu ? (course?.titleRu || course?.title) : course?.title;
+  const allLessons = courseModules.flatMap(m => m.items);
+  const currentLesson = currentLessonId 
+    ? allLessons.find(i => i.id === currentLessonId) 
+    : allLessons.find(i => (i as any).current) || allLessons[0];
 
   if (view === 'overview') {
     return (
@@ -271,6 +477,8 @@ export default function CoursePage() {
         title={title}
         isRu={isRu}
         onStart={() => setView('player')}
+        onEnroll={handleEnroll}
+        isEnrolled={!!course?.enrollment}
         courseModules={courseModules}
         editMode={editMode}
         canEdit={!!canEdit}
@@ -286,6 +494,7 @@ export default function CoursePage() {
         onAddLesson={addLesson}
         onDeleteLesson={deleteLesson}
         onUpdateLesson={updateLesson}
+        handleLessonUpload={handleLessonUpload}
         setAddingModule={setAddingModule}
         setNewModuleTitle={setNewModuleTitle}
       />
@@ -298,40 +507,31 @@ export default function CoursePage() {
       <div className={clsx('player-main', !sidebarOpen && 'player-main-full')}>
         {/* Video */}
         <div className="video-container">
-          <div className="video-screen">
-            <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
-              <Play size={64} />
-              <div style={{ marginTop: 12, fontSize: 16 }}>
-                {courseModules[1]?.items.find(i => (i as any).current)?.title || 'Dars'} — {courseModules[1]?.items.find(i => (i as any).current)?.dur || ''}
+          {currentLesson?.type === 'video' && currentLesson?.videoUrl ? (
+            <video 
+              src={currentLesson.videoUrl} 
+              controls 
+              autoPlay
+              onEnded={() => handleLessonComplete(currentLesson.id)}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} 
+            />
+          ) : (
+            <div className="video-screen">
+              <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                <Play size={64} />
+                <div style={{ marginTop: 12, fontSize: 16 }}>
+                  {currentLesson?.title || 'Dars'} — {currentLesson?.dur || ''}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                  Video yuklanmagan
+                </div>
               </div>
             </div>
-            <div className="video-overlay-top">
-              <button className="btn btn-ghost btn-sm" style={{ color: '#fff' }} onClick={() => setView('overview')}>
-                <X size={14} /> Kursga qaytish
-              </button>
-            </div>
-          </div>
-          {/* Controls */}
-          <div className="video-controls">
-            <div className="video-progress">
-              <div className="video-progress-fill" style={{ width: '42%' }} />
-            </div>
-            <div className="video-ctrl-row">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="video-btn"><SkipBack size={16} /></button>
-                <button className="video-btn video-btn-play" onClick={() => setPlaying(!playing)}>
-                  {playing ? <Pause size={18} /> : <Play size={18} />}
-                </button>
-                <button className="video-btn"><SkipForward size={16} /></button>
-                <button className="video-btn"><Volume2 size={15} /></button>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>12:48 / 30:15</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="video-btn" style={{ fontSize: 12, width: 'auto', padding: '0 8px' }}>1.0x</button>
-                <button className="video-btn"><Settings size={14} /></button>
-                <button className="video-btn"><Maximize2 size={14} /></button>
-              </div>
-            </div>
+          )}
+          <div className="video-overlay-top" style={{ position: 'absolute', top: 0, right: 0, padding: 16, zIndex: 10 }}>
+            <button className="btn btn-ghost btn-sm" style={{ color: '#fff', background: 'rgba(0,0,0,0.5)' }} onClick={() => setView('overview')}>
+              <X size={14} /> Kursga qaytish
+            </button>
           </div>
         </div>
 
@@ -380,27 +580,53 @@ export default function CoursePage() {
                     placeholder="Savolingizni yozing..."
                     value={aiInput}
                     onChange={e => setAiInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAiSend()}
                     style={{ fontSize: 13 }}
                   />
-                  <button className="btn btn-primary btn-icon btn-sm"><Send size={14} /></button>
+                  <button className="btn btn-primary btn-icon btn-sm" onClick={handleAiSend} disabled={aiLoading}>
+                    {aiLoading ? <Loader size={14} className="spin" /> : <Send size={14} />}
+                  </button>
                 </div>
               </div>
             )}
 
             {activeTab === 'materials' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {materials.map((m, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <FileText size={16} color="#3b82f6" />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.type} • {m.size}</div>
-                    </div>
-                    <button className="btn btn-ghost btn-sm btn-icon"><Download size={14} /></button>
+                {editMode && (
+                  <div style={{ marginBottom: 12 }}>
+                    <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                      {materialUploading ? <Loader size={14} className="spin" /> : <Plus size={14} />} 
+                      {isRu ? 'Загрузить файл' : 'Yangi material yuklash'}
+                      <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
+                    </label>
                   </div>
-                ))}
+                )}
+                
+                {(!course?.materials || course.materials.length === 0) && !editMode ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0', fontSize: 13 }}>
+                    {isRu ? 'Материалы пока не добавлены' : 'Hozircha materiallar yuklanmagan'}
+                  </div>
+                ) : (
+                  (course?.materials || []).map((m: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FileText size={16} color="#3b82f6" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.type} • {m.size}</div>
+                      </div>
+                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => window.open(m.url, '_blank')} title={isRu ? 'Скачать' : 'Yuklab olish'}>
+                        <Download size={14} />
+                      </button>
+                      {editMode && (
+                        <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--red-400)' }} onClick={() => handleDeleteMaterial(i)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -418,18 +644,58 @@ export default function CoursePage() {
 
             {activeTab === 'discussion' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {comments.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10 }}>
-                    <div className="avatar" style={{ width: 32, height: 32, fontSize: 11, background: `${c.color}30`, color: c.color, minWidth: 32 }}>{c.avatar}</div>
+                <div style={{ background: 'var(--surface-1)', padding: 12, borderRadius: 12, border: '1px solid var(--border-1)' }}>
+                  <textarea
+                    className="input"
+                    placeholder="Fikringizni yoki savolingizni qoldiring..."
+                    value={discussionInput}
+                    onChange={e => setDiscussionInput(e.target.value)}
+                    rows={2}
+                    style={{ resize: 'none', marginBottom: 10, fontSize: 13 }}
+                  />
+                  {discussionImageUrl && (
+                    <div style={{ marginBottom: 10, position: 'relative', display: 'inline-block' }}>
+                      <img src={discussionImageUrl} alt="Upload" style={{ maxHeight: 100, borderRadius: 8 }} />
+                      <button 
+                        className="btn btn-ghost btn-sm btn-icon" 
+                        style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', color: '#fff' }}
+                        onClick={() => setDiscussionImageUrl('')}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                      <FileText size={14} /> {isRu ? 'Фото' : 'Rasm'}
+                      <input type="file" style={{ display: 'none' }} accept="image/*" onChange={handleDiscussionImageUpload} />
+                    </label>
+                    <button className="btn btn-primary btn-sm" onClick={handleDiscussionSubmit} disabled={discussionLoading || !discussionInput.trim()}>
+                      {discussionLoading ? <Loader size={13} className="spin" /> : <Send size={13} />} Yuborish
+                    </button>
+                  </div>
+                </div>
+
+                {discussions.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, padding: 12, background: 'var(--surface-2)', borderRadius: 12 }}>
+                    <div className="avatar" style={{ width: 32, height: 32, fontSize: 11, background: 'rgba(59,130,246,0.2)', color: '#3b82f6', minWidth: 32 }}>
+                      {c.user?.firstName ? c.user.firstName[0] : 'U'}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.time}</span>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>{c.user?.firstName} {c.user?.lastName}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {new Date(c.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{c.text}</div>
-                      <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, padding: '4px 8px', fontSize: 11 }}>
-                        <ThumbsUp size={11} /> {c.likes}
-                      </button>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {c.message}
+                      </div>
+                      {c.imageUrl && (
+                        <div style={{ marginTop: 8 }}>
+                          <img src={c.imageUrl} alt="attached" style={{ maxWidth: 200, borderRadius: 8 }} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -466,7 +732,12 @@ export default function CoursePage() {
                 {openModule === mod.id && (
                   <div className="lesson-items">
                     {mod.items.map(item => (
-                      <div key={item.id} className={clsx('lesson-item', item.done && 'lesson-item-done', (item as any).current && 'lesson-item-current')}>
+                      <div 
+                        key={item.id} 
+                        className={clsx('lesson-item', item.done && 'lesson-item-done', currentLesson?.id === item.id && 'lesson-item-current')}
+                        onClick={() => setCurrentLessonId(item.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <div className="lesson-item-icon">
                           {item.done
                             ? <CheckCircle size={13} color="var(--green-400)" />
@@ -494,11 +765,11 @@ export default function CoursePage() {
 
 /* ── Course Overview ────────────────────────────── */
 function CourseOverview({
-  course, title, isRu, onStart,
+  course, title, isRu, onStart, onEnroll, isEnrolled,
   courseModules, editMode, canEdit, saving, saveError,
   addingModule, newModuleTitle,
   onToggleEdit, onSave, onAddModule, onDeleteModule, onUpdateModuleTitle,
-  onAddLesson, onDeleteLesson, onUpdateLesson,
+  onAddLesson, onDeleteLesson, onUpdateLesson, handleLessonUpload,
   setAddingModule, setNewModuleTitle,
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
@@ -543,7 +814,11 @@ function CourseOverview({
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={onStart}><Play size={15} /> {isRu ? 'Продолжить' : 'Davom etish'}</button>
+            {isEnrolled ? (
+              <button className="btn btn-primary" onClick={onStart}><Play size={15} /> {isRu ? 'Продолжить' : 'Davom etish'}</button>
+            ) : (
+              <button className="btn btn-primary" onClick={onEnroll}><Play size={15} /> {isRu ? 'Начать курс' : 'Kursni boshlash'}</button>
+            )}
             <button className="btn btn-secondary"><Bookmark size={14} /> {isRu ? 'Сохранить' : 'Saqlash'}</button>
             <button className="btn btn-secondary"><Award size={14} /> {isRu ? 'Сертификат' : 'Sertifikat'}</button>
             {canEdit && (
@@ -660,52 +935,75 @@ function CourseOverview({
                   {editMode && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {mod.items.map((item: LessonItem) => (
-                        <div key={item.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 10,
-                          border: '1px solid var(--border-1)'
-                        }}>
-                          <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 24 }}>
-                            {item.type === 'quiz' ? <FileText size={11} color="#3b82f6" />
-                              : item.type === 'assignment' ? <Award size={11} color="#f59e0b" />
-                              : <Play size={11} color="#3b82f6" />}
-                          </div>
-                          {editingLessonKey === `${mod.id}-${item.id}` ? (
+                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 10,
+                            border: '1px solid var(--border-1)'
+                          }}>
+                            <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 24 }}>
+                              {item.type === 'quiz' ? <FileText size={11} color="#3b82f6" />
+                                : item.type === 'assignment' ? <Award size={11} color="#f59e0b" />
+                                : <Play size={11} color="#3b82f6" />}
+                            </div>
+                            {editingLessonKey === `${mod.id}-${item.id}` ? (
+                              <input
+                                className="input"
+                                style={{ fontSize: 13, flex: 1, padding: '4px 8px' }}
+                                value={item.title}
+                                autoFocus
+                                onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
+                                onBlur={() => setEditingLessonKey(null)}
+                                onKeyDown={(e: any) => e.key === 'Enter' && setEditingLessonKey(null)}
+                              />
+                            ) : (
+                              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>{item.title}</span>
+                            )}
+                            <select
+                              className="input"
+                              style={{ width: 100, fontSize: 11, padding: '3px 6px' }}
+                              value={item.type}
+                              onChange={e => onUpdateLesson(mod.id, item.id, 'type', e.target.value)}
+                            >
+                              <option value="video">Video</option>
+                              <option value="quiz">Test</option>
+                              <option value="assignment">Topshiriq</option>
+                            </select>
                             <input
                               className="input"
-                              style={{ fontSize: 13, flex: 1, padding: '4px 8px' }}
-                              value={item.title}
-                              autoFocus
-                              onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
-                              onBlur={() => setEditingLessonKey(null)}
-                              onKeyDown={(e: any) => e.key === 'Enter' && setEditingLessonKey(null)}
+                              style={{ width: 70, fontSize: 11, padding: '3px 6px' }}
+                              value={item.dur}
+                              placeholder="10:00"
+                              onChange={e => onUpdateLesson(mod.id, item.id, 'dur', e.target.value)}
                             />
-                          ) : (
-                            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>{item.title}</span>
+                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setEditingLessonKey(`${mod.id}-${item.id}`)}>
+                              <Edit3 size={11} color="#8b5cf6" />
+                            </button>
+                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onDeleteLesson(mod.id, item.id)}>
+                              <Trash2 size={11} color="var(--red-400)" />
+                            </button>
+                          </div>
+                          {editingLessonKey === `${mod.id}-${item.id}` && item.type === 'video' && (
+                            <div style={{ padding: '8px 10px', background: 'var(--surface-1)', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Video URL:</span>
+                              <input
+                                className="input"
+                                style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+                                placeholder="Fayl yuklang yoki YouTube/Video URL kiriting..."
+                                value={item.videoUrl || ''}
+                                onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                              />
+                              <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', padding: '4px 12px' }}>
+                                Yuklash
+                                <input 
+                                  type="file" 
+                                  style={{ display: 'none' }} 
+                                  accept="video/*"
+                                  onChange={e => handleLessonUpload(mod.id, item.id, e)}
+                                />
+                              </label>
+                            </div>
                           )}
-                          <select
-                            className="input"
-                            style={{ width: 100, fontSize: 11, padding: '3px 6px' }}
-                            value={item.type}
-                            onChange={e => onUpdateLesson(mod.id, item.id, 'type', e.target.value)}
-                          >
-                            <option value="video">Video</option>
-                            <option value="quiz">Test</option>
-                            <option value="assignment">Topshiriq</option>
-                          </select>
-                          <input
-                            className="input"
-                            style={{ width: 70, fontSize: 11, padding: '3px 6px' }}
-                            value={item.dur}
-                            placeholder="10:00"
-                            onChange={e => onUpdateLesson(mod.id, item.id, 'dur', e.target.value)}
-                          />
-                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setEditingLessonKey(`${mod.id}-${item.id}`)}>
-                            <Edit3 size={11} color="#8b5cf6" />
-                          </button>
-                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onDeleteLesson(mod.id, item.id)}>
-                            <Trash2 size={11} color="var(--red-400)" />
-                          </button>
                         </div>
                       ))}
 
@@ -757,7 +1055,7 @@ function CourseOverview({
 
           {activeTab === 'reviews' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {comments.map((c, i) => (
+              {mockReviews.map((c, i) => (
                 <div key={i} className="card">
                   <div style={{ display: 'flex', gap: 12 }}>
                     <div className="avatar" style={{ width: 38, height: 38, fontSize: 13, background: `${c.color}25`, color: c.color }}>{c.avatar}</div>

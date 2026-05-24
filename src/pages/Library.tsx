@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { apiClient } from '@/api/axios';
 import { useAuthStore } from '@/store/auth.store';
 import BookReader from '@/components/BookReader';
+import { customConfirm } from '@/shared/lib/toast-utils';
 
 interface Book {
   id: string;
@@ -269,6 +270,7 @@ export default function Library() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('visibility', 'public');
 
     try {
       const response: any = await apiClient.post('/uploads/file', formData, {
@@ -365,7 +367,7 @@ export default function Library() {
       ? 'Вы уверены, что хотите удалить этот раздел и все документы внутри него?'
       : 'Haqiqatan ham ushbu bo\'limni va uning ichidagi barcha hujjatlarni o\'chirmoqchimisiz?';
 
-    if (window.confirm(confirmMsg)) {
+    customConfirm(confirmMsg, async () => {
       try {
         await apiClient.delete(`/library/categories/${catId}`);
         setSelectedCategory('all');
@@ -373,7 +375,7 @@ export default function Library() {
       } catch (err) {
         console.error('Error deleting category:', err);
       }
-    }
+    });
   };
 
   const handleCreateBook = async (e: React.FormEvent) => {
@@ -444,14 +446,14 @@ export default function Library() {
       ? 'Вы уверены, что хотите удалить этот документ?'
       : 'Ushbu hujjatni o\'chirishni tasdiqlaysizmi?';
 
-    if (window.confirm(confirmMsg)) {
+    customConfirm(confirmMsg, async () => {
       try {
         await apiClient.delete(`/library/books/${bookId}`);
         fetchLibraryData();
       } catch (err) {
         console.error('Error deleting book:', err);
       }
-    }
+    });
   };
 
   const scrollTabs = (direction: 'left' | 'right') => {

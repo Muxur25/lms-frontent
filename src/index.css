@@ -7,6 +7,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root, [data-theme='dark'] {
+  color-scheme: dark;
   /* Colors */
   --bg-0: #080b12;
   --bg-1: #0d1117;
@@ -78,6 +79,7 @@
 }
 
 [data-theme='light'] {
+  color-scheme: light;
   --bg-0: #f8fafc;
   --bg-1: #ffffff;
   --bg-2: #f1f5f9;
@@ -561,6 +563,11 @@ tbody td:first-child { color: var(--text-primary); font-weight: 500; }
 }
 .input:hover { border-color: var(--border-2); }
 .input:focus { border-color: var(--blue-500); background: var(--surface-2); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+select.input option {
+  background: var(--bg-1);
+  color: var(--text-primary);
+}
 
 /* Tooltip */
 .tooltip-wrap { position: relative; display: inline-flex; }

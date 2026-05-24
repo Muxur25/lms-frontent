@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, Download, FileText, Info, Calendar, Eye, Tag, Lock, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import { apiClient } from '@/api/axios';
+import toast from 'react-hot-toast';
 
 // ─── URL Helpers ────────────────────────────────────────────────────────────
 
@@ -405,7 +406,7 @@ function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && ['p', 'P', 's', 'S'].includes(e.key)) {
         e.preventDefault();
-        alert(isRu ? 'Печать и скачивание ограничены.' : "Chop etish va yuklab olish cheklangan.");
+        toast.error(isRu ? 'Печать и скачивание ограничены.' : "Chop etish va yuklab olish cheklangan.");
       }
     };
     window.addEventListener('keydown', handler);
