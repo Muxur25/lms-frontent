@@ -12,71 +12,43 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
 import { useAuthStore } from '@/store/auth.store';
+import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
 
-/* ── Types ─────────────────────────────────────── */
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+export interface QuizData {
+  timeLimit: number;
+  passingScore: number;
+  questions: QuizQuestion[];
+}
+
 interface LessonItem {
-  id: number;
+  id: string | number;
   title: string;
-  titleRu?: string;
+  titleRu?: string; // Kept for interface backward compatibility if needed
   dur: string;
   done?: boolean;
   type: 'video' | 'quiz' | 'assignment';
   videoUrl?: string;
+  quizData?: QuizData;
   current?: boolean;
 }
 
 interface Module {
-  id: number;
+  id: string | number;
   title: string;
-  titleRu?: string;
+  titleRu?: string; // Kept for interface backward compatibility if needed
   lessons: number;
   done?: number;
   items: LessonItem[];
 }
 
-/* ── Default fallback data ─────────────────────── */
-const DEFAULT_COURSE = {
-  title: 'React va TypeScript Professional',
-  titleRu: 'React и TypeScript Professional',
-  instructor: 'Alisher Toshev',
-  rating: 4.9, enrolled: 847, duration: '24 soat',
-  lessons: 14, level: "O'rta", color: '#3b82f6',
-  progress: 68,
-  description: 'Zamonaviy React.js va TypeScript texnologiyalarini professional darajada o\'zlashtiring.',
-  modules: [] as Module[],
-};
 
-const DEFAULT_MODULES: Module[] = [
-  {
-    id: 1, title: 'Kirish', titleRu: 'Введение', lessons: 4, done: 4,
-    items: [
-      { id: 1, title: 'Kurs haqida', titleRu: 'О курсе', dur: '5:20', done: true, type: 'video' },
-      { id: 2, title: 'Muhit sozlash', titleRu: 'Настройка окружения', dur: '12:45', done: true, type: 'video' },
-      { id: 3, title: 'Birinchi loyiha', titleRu: 'Первый проект', dur: '18:30', done: true, type: 'video' },
-      { id: 4, title: 'Kirish testi', titleRu: 'Входной тест', dur: '10 savol', done: true, type: 'quiz' },
-    ],
-  },
-  {
-    id: 2, title: 'React Asoslari', titleRu: 'Основы React', lessons: 8, done: 5,
-    items: [
-      { id: 5, title: 'JSX va Komponentlar', titleRu: 'JSX и компоненты', dur: '22:10', done: true, type: 'video' },
-      { id: 6, title: 'Props va State', titleRu: 'Props и State', dur: '28:45', done: true, type: 'video' },
-      { id: 7, title: 'Hooks: useState', titleRu: 'Hooks: useState', dur: '25:30', done: true, type: 'video' },
-      { id: 8, title: 'Hooks: useEffect', titleRu: 'Hooks: useEffect', dur: '30:15', done: true, type: 'video', current: true },
-      { id: 9, title: 'Context API', titleRu: 'Context API', dur: '20:00', done: false, type: 'video' },
-      { id: 10, title: 'Custom Hooks', titleRu: 'Custom Hooks', dur: '18:40', done: false, type: 'video' },
-      { id: 11, title: 'Amaliy mashq', titleRu: 'Практическое упражнение', dur: 'Loyiha', done: false, type: 'assignment' },
-      { id: 12, title: 'Bo\'lim testi', titleRu: 'Тест раздела', dur: '15 savol', done: false, type: 'quiz' },
-    ],
-  },
-  {
-    id: 3, title: 'TypeScript Chuqurlashish', titleRu: 'Углублённый TypeScript', lessons: 2, done: 0,
-    items: [
-      { id: 13, title: 'Tiplash asoslari', titleRu: 'Основы типизации', dur: '24:00', done: false, type: 'video' },
-      { id: 14, title: 'Interfeys va Tiplar', titleRu: 'Интерфейсы и типы', dur: '20:15', done: false, type: 'video' },
-    ],
-  },
-];
 
 const materials = [
   { name: 'React Hooks Cheatsheet.pdf', size: '2.4 MB', type: 'PDF' },
@@ -92,8 +64,8 @@ const mockReviews = [
 const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
 
 /* ── Helpers ─────────────────────────────────── */
-function nextId(items: { id: number }[]) {
-  return items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+function nextId() {
+  return Date.now().toString();
 }
 
 /* ── Component ─────────────────────────────────── */
@@ -106,9 +78,9 @@ export default function CoursePage() {
   const [view, setView] = useState<'overview' | 'player'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'ai' | 'notes' | 'materials' | 'discussion'>('ai');
-  const [openModule, setOpenModule] = useState<number | null>(2);
+  const [openModule, setOpenModule] = useState<string | number | null>(2);
   const [aiInput, setAiInput] = useState('');
-  const [currentLessonId, setCurrentLessonId] = useState<number | null>(null);
+  const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
 
   // AI & Discussion State
   const [aiMessages, setAiMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
@@ -163,14 +135,14 @@ export default function CoursePage() {
           
           let mods: Module[] = (fetched.modules && fetched.modules.length > 0)
             ? fetched.modules
-            : DEFAULT_MODULES;
+            : [];
             
           // Map completed lessons if enrolled
           if (fetched.enrollment?.completedLessons) {
-            mods = mods.map(m => ({
+            mods = mods.map((m: any) => ({
               ...m,
-              done: m.items.filter(i => fetched.enrollment.completedLessons.includes(i.id)).length,
-              items: m.items.map(i => ({
+              done: m.items.filter((i: any) => fetched.enrollment.completedLessons.includes(i.id)).length,
+              items: m.items.map((i: any) => ({
                 ...i,
                 done: fetched.enrollment.completedLessons.includes(i.id)
               }))
@@ -178,14 +150,14 @@ export default function CoursePage() {
           }
           setCourseModules(mods);
         } else if (isMounted) {
-          setCourse(DEFAULT_COURSE);
-          setCourseModules(DEFAULT_MODULES);
+          setCourse(null);
+          setCourseModules([]);
         }
       } catch (err) {
         console.error('Error fetching course:', err);
         if (isMounted) {
-          setCourse(DEFAULT_COURSE);
-          setCourseModules(DEFAULT_MODULES);
+          setCourse(null);
+          setCourseModules([]);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -215,9 +187,8 @@ export default function CoursePage() {
     const title = newModuleTitle.trim();
     if (!title) return;
     const newMod: Module = {
-      id: nextId(courseModules),
+      id: nextId(),
       title,
-      titleRu: title,
       lessons: 0,
       done: 0,
       items: [],
@@ -228,24 +199,23 @@ export default function CoursePage() {
     setOpenModule(newMod.id);
   };
 
-  const deleteModule = (modId: number) => {
+  const deleteModule = (modId: string | number) => {
     setCourseModules(prev => prev.filter(m => m.id !== modId));
   };
 
-  const updateModuleTitle = (modId: number, title: string) => {
+  const updateModuleTitle = (modId: string | number, title: string) => {
     setCourseModules(prev => prev.map(m =>
-      m.id === modId ? { ...m, title, titleRu: title } : m
+      m.id === modId ? { ...m, title } : m
     ));
   };
 
-  const addLesson = (modId: number) => {
+  const addLesson = (modId: string | number) => {
     setCourseModules(prev => prev.map(m => {
       if (m.id !== modId) return m;
-      const allItems = courseModules.flatMap(mod => mod.items);
+
       const newItem: LessonItem = {
-        id: nextId(allItems),
+        id: nextId(),
         title: 'Yangi dars',
-        titleRu: 'Новый урок',
         dur: '0:00',
         done: false,
         type: 'video',
@@ -254,7 +224,7 @@ export default function CoursePage() {
     }));
   };
 
-  const deleteLesson = (modId: number, lessonId: number) => {
+  const deleteLesson = (modId: string | number, lessonId: string | number) => {
     setCourseModules(prev => prev.map(m => {
       if (m.id !== modId) return m;
       const newItems = m.items.filter(i => i.id !== lessonId);
@@ -262,7 +232,7 @@ export default function CoursePage() {
     }));
   };
 
-  const updateLesson = (modId: number, lessonId: number, field: keyof LessonItem, value: string) => {
+  const updateLesson = (modId: string | number, lessonId: string | number, field: keyof LessonItem, value: string) => {
     setCourseModules(prev => prev.map(m => {
       if (m.id !== modId) return m;
       return {
@@ -274,7 +244,7 @@ export default function CoursePage() {
     }));
   };
 
-  const handleLessonUpload = async (modId: number, lessonId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLessonUpload = async (modId: string | number, lessonId: string | number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
@@ -307,7 +277,7 @@ export default function CoursePage() {
     }
   };
 
-  const handleLessonComplete = async (lessonId: number) => {
+  const handleLessonComplete = async (lessonId: string | number) => {
     if (!course?.id) return;
     try {
       await apiClient.post(`/courses/${course.id}/progress`, { lessonId });
@@ -464,7 +434,24 @@ export default function CoursePage() {
     );
   }
 
-  const title = isRu ? (course?.titleRu || course?.title) : course?.title;
+  if (!course) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <BookOpen size={48} color="var(--text-muted)" style={{ marginBottom: 16, opacity: 0.5 }} />
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+          {isRu ? 'Курс не найден' : 'Kurs topilmadi'}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: 14 }}>
+          {isRu ? 'Возможно, курс был удален или ссылка недействительна.' : 'Ehtimol, kurs o\'chirilgan yoki havola noto\'g\'ri.'}
+        </p>
+        <button className="btn btn-primary" onClick={() => window.history.back()}>
+          {isRu ? 'Назад' : 'Orqaga qaytish'}
+        </button>
+      </div>
+    );
+  }
+
+  const title = course?.title || '';
   const allLessons = courseModules.flatMap(m => m.items);
   const currentLesson = currentLessonId 
     ? allLessons.find(i => i.id === currentLessonId) 
@@ -506,27 +493,73 @@ export default function CoursePage() {
       {/* ── VIDEO AREA ── */}
       <div className={clsx('player-main', !sidebarOpen && 'player-main-full')}>
         {/* Video */}
-        <div className="video-container">
-          {currentLesson?.type === 'video' && currentLesson?.videoUrl ? (
-            <video 
-              src={currentLesson.videoUrl} 
-              controls 
-              autoPlay
-              onEnded={() => handleLessonComplete(currentLesson.id)}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} 
-            />
-          ) : (
-            <div className="video-screen">
-              <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
-                <Play size={64} />
-                <div style={{ marginTop: 12, fontSize: 16 }}>
-                  {currentLesson?.title || 'Dars'} — {currentLesson?.dur || ''}
-                </div>
-                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-                  Video yuklanmagan
+        <div className="video-container" style={{ display: 'flex', flexDirection: 'column' }}>
+          {currentLesson?.type === 'video' ? (
+            currentLesson?.videoUrl ? (
+              <video 
+                src={currentLesson.videoUrl} 
+                controls 
+                autoPlay
+                onEnded={() => handleLessonComplete(currentLesson.id)}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} 
+              />
+            ) : (
+              <div className="video-screen">
+                <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                  <Play size={64} />
+                  <div style={{ marginTop: 12, fontSize: 16 }}>
+                    {currentLesson?.title || 'Dars'} — {currentLesson?.dur || ''}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                    Video yuklanmagan
+                  </div>
                 </div>
               </div>
+            )
+          ) : currentLesson?.type === 'quiz' ? (
+            currentLesson.quizData ? (
+              <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+                <QuizPlayer 
+                  quizData={currentLesson.quizData} 
+                  isRu={course?.language === 'ru'}
+                  onComplete={(_, passed) => {
+                    if (passed) handleLessonComplete(currentLesson.id);
+                  }} 
+                />
+              </div>
+            ) : (
+              <div className="video-screen" style={{ background: 'var(--bg-1)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                 <div style={{ textAlign: 'center' }}>
+                   <FileText size={48} color="#3b82f6" style={{ marginBottom: 16, display: 'inline-block' }} />
+                   <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>{currentLesson?.title}</h2>
+                   <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Ushbu bosqichda bilimingizni tekshirish uchun test topshirishingiz kerak.</p>
+                   {currentLesson?.videoUrl ? (
+                     <a href={currentLesson.videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary" onClick={() => handleLessonComplete(currentLesson.id)}>
+                       Testni boshlash
+                     </a>
+                   ) : (
+                     <div style={{ color: 'var(--red-400)', fontSize: 14 }}>Test havolasi yoki savollari biriktirilmagan</div>
+                   )}
+                 </div>
+              </div>
+            )
+          ) : currentLesson?.type === 'assignment' ? (
+            <div className="video-screen" style={{ background: 'var(--bg-1)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+               <div style={{ textAlign: 'center' }}>
+                 <Award size={48} color="#f59e0b" style={{ marginBottom: 16, display: 'inline-block' }} />
+                 <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>{currentLesson?.title}</h2>
+                 <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Bu amaliy topshiriq. Faylni yuklab oling va vazifani bajaring.</p>
+                 {currentLesson?.videoUrl ? (
+                   <a href={currentLesson.videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary" onClick={() => handleLessonComplete(currentLesson.id)}>
+                     Topshiriqni ochish
+                   </a>
+                 ) : (
+                   <div style={{ color: 'var(--red-400)', fontSize: 14 }}>Topshiriq fayli biriktirilmagan</div>
+                 )}
+               </div>
             </div>
+          ) : (
+            <div className="video-screen" style={{ background: 'var(--bg-1)' }}></div>
           )}
           <div className="video-overlay-top" style={{ position: 'absolute', top: 0, right: 0, padding: 16, zIndex: 10 }}>
             <button className="btn btn-ghost btn-sm" style={{ color: '#fff', background: 'rgba(0,0,0,0.5)' }} onClick={() => setView('overview')}>
@@ -724,7 +757,7 @@ export default function CoursePage() {
                 >
                   <ChevronDown size={14} style={{ transform: openModule === mod.id ? 'rotate(0)' : 'rotate(-90deg)', transition: '0.2s', minWidth: 14 }} />
                   <div style={{ flex: 1, textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{isRu ? mod.titleRu : mod.title}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{mod.title}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{mod.done}/{mod.lessons} dars</div>
                   </div>
                   {mod.done === mod.lessons && mod.lessons > 0 && <CheckCircle size={14} color="var(--green-400)" />}
@@ -747,7 +780,7 @@ export default function CoursePage() {
                           }
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isRu ? item.titleRu || item.title : item.title}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
                         </div>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{item.dur}</span>
                       </div>
@@ -773,12 +806,13 @@ function CourseOverview({
   setAddingModule, setNewModuleTitle,
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
-  const [editingModId, setEditingModId] = useState<number | null>(null);
+  const [editingModId, setEditingModId] = useState<string | number | null>(null);
   const [editingLessonKey, setEditingLessonKey] = useState<string | null>(null); // 'modId-lessonId'
+  const [activeQuizBuilder, setActiveQuizBuilder] = useState<{ modId: string | number; lessonId: string | number; item: LessonItem } | null>(null);
 
-  const desc = isRu ? (course.descriptionRu || course.description) : course.description;
-  const level = isRu ? (course.levelRu || course.level) : course.level;
-  const cat = isRu ? (course.catRu || course.cat) : course.cat;
+  const desc = course.description || '';
+  const level = course.level || '';
+  const cat = course.cat || '';
 
   return (
     <div>
@@ -983,25 +1017,54 @@ function CourseOverview({
                               <Trash2 size={11} color="var(--red-400)" />
                             </button>
                           </div>
-                          {editingLessonKey === `${mod.id}-${item.id}` && item.type === 'video' && (
+                          {editingLessonKey === `${mod.id}-${item.id}` && (
                             <div style={{ padding: '8px 10px', background: 'var(--surface-1)', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Video URL:</span>
-                              <input
-                                className="input"
-                                style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
-                                placeholder="Fayl yuklang yoki YouTube/Video URL kiriting..."
-                                value={item.videoUrl || ''}
-                                onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
-                              />
-                              <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', padding: '4px 12px' }}>
-                                Yuklash
-                                <input 
-                                  type="file" 
-                                  style={{ display: 'none' }} 
-                                  accept="video/*"
-                                  onChange={e => handleLessonUpload(mod.id, item.id, e)}
-                                />
-                              </label>
+                              {item.type === 'quiz' ? (
+                                <>
+                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tizim orqali test yaratish yoki havola:</span>
+                                  <input
+                                    className="input"
+                                    style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+                                    placeholder="Google Forms, Quizlet..."
+                                    value={item.videoUrl || ''}
+                                    onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                                  />
+                                  <button type="button" className="btn btn-primary btn-sm" onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setActiveQuizBuilder({ modId: mod.id, lessonId: item.id, item });
+                                  }}>
+                                    <Edit3 size={13} /> {item.quizData ? "Testni tahrirlash" : "Test yaratish"}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                    {item.type === 'assignment' ? 'Topshiriq URL:' : 'Video URL:'}
+                                  </span>
+                                  <input
+                                    className="input"
+                                    style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+                                    placeholder={
+                                      item.type === 'assignment' ? "Topshiriq fayli manzili (Google Drive, Dropbox...)" :
+                                      "YouTube yoki MP4 video URL kiriting..."
+                                    }
+                                    value={item.videoUrl || ''}
+                                    onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                                  />
+                                  {item.type === 'video' && (
+                                    <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', padding: '4px 12px' }}>
+                                      Yuklash
+                                      <input 
+                                        type="file" 
+                                        style={{ display: 'none' }} 
+                                        accept="video/*"
+                                        onChange={e => handleLessonUpload(mod.id, item.id, e)}
+                                      />
+                                    </label>
+                                  )}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1103,7 +1166,18 @@ function CourseOverview({
           </div>
         </div>
       </div>
+
+      {activeQuizBuilder && (
+        <QuizBuilderModal
+          initialData={activeQuizBuilder.item.quizData}
+          isRu={isRu}
+          onSave={(quizData) => {
+            onUpdateLesson(activeQuizBuilder.modId, activeQuizBuilder.lessonId, 'quizData', quizData);
+            setActiveQuizBuilder(null);
+          }}
+          onClose={() => setActiveQuizBuilder(null)}
+        />
+      )}
     </div>
   );
 }
-

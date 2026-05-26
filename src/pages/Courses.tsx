@@ -44,12 +44,10 @@ export default function Courses() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formTab, setFormTab] = useState<'uz' | 'ru'>('uz');
+  const [languageFilter, setLanguageFilter] = useState<'uz' | 'ru'>('uz');
   const [formData, setFormData] = useState({
     title: '',
-    titleRu: '',
     description: '',
-    descriptionRu: '',
     cat: 'IT',
     catRu: 'IT',
     level: "Boshlang'ich",
@@ -59,6 +57,7 @@ export default function Courses() {
     color: '#3b82f6',
     instructor: '',
     status: 'draft',
+    language: 'uz',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +73,8 @@ export default function Courses() {
 
   useEffect(() => {
     let isMounted = true;
-    apiClient.get('/courses')
+    setLoading(true);
+    apiClient.get('/courses', { params: { language: languageFilter } })
       .then(res => {
         if (isMounted) {
           const fetchedData = res.data?.data || res.data || [];
@@ -93,7 +93,7 @@ export default function Courses() {
     return () => {
       isMounted = false;
     };
-  }, [t]);
+  }, [t, languageFilter]);
 
   const handleCategoryChange = (catId: string) => {
     const found = CATEGORIES.find(c => c.id === catId);
@@ -130,9 +130,6 @@ export default function Courses() {
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      if (newErrors.title || newErrors.description) {
-        setFormTab('uz');
-      }
       return;
     }
     
@@ -155,9 +152,7 @@ export default function Courses() {
       setFormData(prev => ({
         ...prev,
         title: '',
-        titleRu: '',
         description: '',
-        descriptionRu: '',
         status: 'draft',
       }));
     } catch (err) {
@@ -174,7 +169,7 @@ export default function Courses() {
   ];
 
   const filtered = courses.filter(c => {
-    const title = isRu ? c.titleRu || c.title : c.title;
+    const title = c.title || '';
     const matchFilter = filter === 'all' || c.status === filter;
     const matchSearch = title.toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
@@ -245,6 +240,22 @@ export default function Courses() {
             <input placeholder={t('courses.search')} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 12, padding: 4, border: '1px solid var(--border-1)' }}>
+            <button
+              className={clsx('btn btn-sm', languageFilter === 'uz' ? 'btn-primary' : 'btn-ghost')}
+              style={{ borderRadius: 8 }}
+              onClick={() => setLanguageFilter('uz')}
+            >
+              O'zbekcha
+            </button>
+            <button
+              className={clsx('btn btn-sm', languageFilter === 'ru' ? 'btn-primary' : 'btn-ghost')}
+              style={{ borderRadius: 8 }}
+              onClick={() => setLanguageFilter('ru')}
+            >
+              Русский
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 12, padding: 4, border: '1px solid var(--border-1)' }}>
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -279,8 +290,8 @@ export default function Courses() {
               </div>
             </div>
             <div className="course-body">
-              <div className="course-category" style={{ color: course.color }}>{isRu ? course.catRu || course.cat : course.cat}</div>
-              <div className="course-title">{isRu ? course.titleRu || course.title : course.title}</div>
+              <div className="course-category" style={{ color: course.color }}>{course.cat}</div>
+              <div className="course-title">{course.title}</div>
               <div className="course-meta">
                 <span><Users size={11} /> {course.enrolled || 0}</span>
                 <span><Clock size={11} /> {course.duration}</span>
@@ -362,16 +373,16 @@ export default function Courses() {
             <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 10, padding: 3, border: '1px solid var(--border-1)', width: 'fit-content', marginBottom: 20 }}>
               <button 
                 type="button"
-                onClick={() => setFormTab('uz')}
-                className={clsx('btn btn-sm', formTab === 'uz' ? 'btn-primary' : 'btn-ghost')}
+                onClick={() => setFormData(prev => ({ ...prev, language: 'uz' }))}
+                className={clsx('btn btn-sm', formData.language === 'uz' ? 'btn-primary' : 'btn-ghost')}
                 style={{ borderRadius: 6, padding: '4px 12px' }}
               >
                 O'zbek tili
               </button>
               <button 
                 type="button"
-                onClick={() => setFormTab('ru')}
-                className={clsx('btn btn-sm', formTab === 'ru' ? 'btn-primary' : 'btn-ghost')}
+                onClick={() => setFormData(prev => ({ ...prev, language: 'ru' }))}
+                className={clsx('btn btn-sm', formData.language === 'ru' ? 'btn-primary' : 'btn-ghost')}
                 style={{ borderRadius: 6, padding: '4px 12px' }}
               >
                 Русский язык
@@ -379,57 +390,29 @@ export default function Courses() {
             </div>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {formTab === 'uz' ? (
-                <>
-                  <div className="input-group">
-                    <label className="input-label">Kurs nomi (UZ) *</label>
-                    <input 
-                      className="input" 
-                      placeholder="Masalan: Sanoat Xavfsizligi Asoslari"
-                      value={formData.title}
-                      onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    />
-                    {errors.title && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.title}</span>}
-                  </div>
+              <div className="input-group">
+                <label className="input-label">{formData.language === 'ru' ? 'Название курса *' : 'Kurs nomi *'}</label>
+                <input 
+                  className="input" 
+                  placeholder={formData.language === 'ru' ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari'}
+                  value={formData.title}
+                  onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                />
+                {errors.title && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.title}</span>}
+              </div>
 
-                  <div className="input-group">
-                    <label className="input-label">Kurs tavsifi (UZ) *</label>
-                    <textarea 
-                      className="input" 
-                      rows={3}
-                      placeholder="Kurs haqida batafsil ma'lumot..."
-                      value={formData.description}
-                      style={{ resize: 'none' }}
-                      onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    />
-                    {errors.description && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.description}</span>}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="input-group">
-                    <label className="input-label">Название курса (RU)</label>
-                    <input 
-                      className="input" 
-                      placeholder="Например: Основы промышленной безопасности"
-                      value={formData.titleRu}
-                      onChange={e => setFormData(prev => ({ ...prev, titleRu: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="input-group">
-                    <label className="input-label">Описание курса (RU)</label>
-                    <textarea 
-                      className="input" 
-                      rows={3}
-                      placeholder="Подробное описание курса..."
-                      value={formData.descriptionRu}
-                      style={{ resize: 'none' }}
-                      onChange={e => setFormData(prev => ({ ...prev, descriptionRu: e.target.value }))}
-                    />
-                  </div>
-                </>
-              )}
+              <div className="input-group">
+                <label className="input-label">{formData.language === 'ru' ? 'Описание курса *' : 'Kurs tavsifi *'}</label>
+                <textarea 
+                  className="input" 
+                  rows={3}
+                  placeholder={formData.language === 'ru' ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...'}
+                  value={formData.description}
+                  style={{ resize: 'none' }}
+                  onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                />
+                {errors.description && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.description}</span>}
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <div className="input-group">
