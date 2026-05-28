@@ -22,14 +22,6 @@ const areaData = [
   { name: 'Apr', users: 480 }, { name: 'May', users: 700 }, { name: 'Iyn', users: 650 },
 ];
 
-const mockUsers = [
-  { id: 1, name: 'Alisher Hasanov', email: 'a.hasanov@agmk.uz', role: 'Admin', dept: 'IT', status: 'active', courses: 12 },
-  { id: 2, name: 'Nargiza Karimova', email: 'n.karimova@agmk.uz', role: 'Manager', dept: 'HR', status: 'active', courses: 8 },
-  { id: 3, name: 'Bobur Rahimov', email: 'b.rahimov@agmk.uz', role: 'Employee', dept: 'Engineering', status: 'offline', courses: 4 },
-  { id: 4, name: 'Kamola Yuldasheva', email: 'k.yuldasheva@agmk.uz', role: 'Trainer', dept: 'Education', status: 'active', courses: 24 },
-  { id: 5, name: 'Rustam Toshmatov', email: 'r.toshmatov@agmk.uz', role: 'Employee', dept: 'Security', status: 'disabled', courses: 2 },
-];
-
 const roleLabels: Record<string, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',

@@ -394,7 +394,7 @@ interface PDFViewerProps {
   scale: number;
 }
 
-function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
+export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState(0);
   const [loading, setLoading] = useState(true);

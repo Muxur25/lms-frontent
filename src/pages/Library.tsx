@@ -277,6 +277,7 @@ export default function Library() {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 0, // Disable timeout for uploads
       });
 
       const fileData = response.data?.data || response.data || response;

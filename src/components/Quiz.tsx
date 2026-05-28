@@ -14,10 +14,13 @@ interface QuizBuilderProps {
 }
 
 export function QuizBuilderModal({ initialData, onSave, onClose, isRu }: QuizBuilderProps) {
-  const [data, setData] = useState<QuizData>(initialData || {
-    timeLimit: 15,
-    passingScore: 70,
-    questions: []
+  const [data, setData] = useState<QuizData>(() => {
+    const base: Partial<QuizData> = initialData || {};
+    return {
+      timeLimit: base.timeLimit ?? 15,
+      passingScore: base.passingScore ?? 70,
+      questions: base.questions ?? []
+    };
   });
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -174,7 +177,22 @@ export function QuizBuilderModal({ initialData, onSave, onClose, isRu }: QuizBui
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 20, borderTop: '1px solid var(--border-1)' }}>
           <button className="btn btn-secondary" onClick={onClose}>Bekor qilish</button>
-          <button className="btn btn-primary" onClick={() => onSave(data)}>Testni tizimga saqlash</button>
+          <button className="btn btn-primary" onClick={() => {
+            let finalData = data;
+            if (currentQuestion && currentQuestion.text.trim()) {
+              const hasEmptyOption = currentQuestion.options.some(o => !o.trim());
+              if (!hasEmptyOption) {
+                const newQuestions = [...data.questions];
+                if (editingIndex !== null && editingIndex < newQuestions.length) {
+                  newQuestions[editingIndex] = currentQuestion;
+                } else {
+                  newQuestions.push(currentQuestion);
+                }
+                finalData = { ...data, questions: newQuestions };
+              }
+            }
+            onSave(finalData);
+          }}>Testni tizimga saqlash</button>
         </div>
       </div>
     </div>
@@ -192,12 +210,28 @@ interface QuizPlayerProps {
 
 export function QuizPlayer({ quizData, onComplete, isRu }: QuizPlayerProps) {
   const [started, setStarted] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [finished, setFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(quizData.timeLimit * 60);
 
-  // Timer logic
+  React.useEffect(() => {
+    setStarted(false);
+    setAnswers({});
+    setFinished(false);
+    setTimeLeft(quizData.timeLimit * 60);
+  }, [quizData]);
+
+  const finishQuiz = React.useCallback((finalAnswers = answers) => {
+    setFinished(true);
+    let correctCount = 0;
+    quizData.questions.forEach((q, i) => {
+      if (finalAnswers[i] === q.correctAnswer) correctCount++;
+    });
+    const score = Math.round((correctCount / quizData.questions.length) * 100) || 0;
+    const passed = score >= quizData.passingScore;
+    onComplete(score, passed);
+  }, [answers, onComplete, quizData]);
+
   React.useEffect(() => {
     if (!started || finished || timeLeft <= 0) return;
     const timer = setInterval(() => {
@@ -210,26 +244,7 @@ export function QuizPlayer({ quizData, onComplete, isRu }: QuizPlayerProps) {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [started, finished, timeLeft]);
-
-  const startQuiz = () => {
-    setStarted(true);
-  };
-
-  const handleSelect = (optionIndex: number) => {
-    setAnswers({ ...answers, [currentIndex]: optionIndex });
-  };
-
-  const finishQuiz = (finalAnswers = answers) => {
-    setFinished(true);
-    let correctCount = 0;
-    quizData.questions.forEach((q, i) => {
-      if (finalAnswers[i] === q.correctAnswer) correctCount++;
-    });
-    const score = Math.round((correctCount / quizData.questions.length) * 100) || 0;
-    const passed = score >= quizData.passingScore;
-    onComplete(score, passed);
-  };
+  }, [started, finished, timeLeft, finishQuiz, answers]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -237,39 +252,31 @@ export function QuizPlayer({ quizData, onComplete, isRu }: QuizPlayerProps) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  if (!quizData || !quizData.questions || quizData.questions.length === 0) {
+  if (!quizData?.questions?.length) {
     return (
-      <div style={{ textAlign: 'center', padding: 40 }}>
-        <h2 style={{ color: 'var(--red-400)', marginBottom: 10 }}>Xatolik</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>Bu testda savollar mavjud emas!</p>
+      <div className="quiz-player-container quiz-empty-state">
+        <h2>{isRu ? 'Ошибка' : 'Xatolik'}</h2>
+        <p>{isRu ? 'В этом тесте нет вопросов!' : 'Bu testda savollar mavjud emas!'}</p>
       </div>
     );
   }
 
   if (!started) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-1)' }}>
-        <div className="card" style={{ maxWidth: 500, width: '100%', textAlign: 'center', background: 'var(--surface-1)', border: '1px solid var(--border-2)', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <Award size={40} color="#3b82f6" />
-          </div>
-          <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 12 }}>{isRu ? 'Проверка знаний' : 'Bilimni sinash testi'}</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: 14 }}>
-            {isRu ? `Этот тест состоит из ${quizData.questions.length} вопросов. Проходной балл ${quizData.passingScore}%.` : `Ushbu test ${quizData.questions.length} ta savoldan iborat. O'tish balli ${quizData.passingScore}%.`}
+      <div className="quiz-player-container quiz-start-screen">
+        <div className="quiz-start-card glass-panel-2">
+          <div className="quiz-card-icon"><Award size={40} /></div>
+          <h2>{isRu ? 'Проверка знаний' : 'Bilimni sinash testi'}</h2>
+          <p>
+            {isRu
+              ? `Этот тест состоит из ${quizData.questions.length} вопросов. Для успешной сдачи нужно набрать минимум ${quizData.passingScore}%.`
+              : `Ushbu test ${quizData.questions.length} ta savoldan iborat. Muvaffaqiyatli o'tish uchun kamida ${quizData.passingScore}% ball to'plashingiz kerak.`}
           </p>
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginBottom: 30 }}>
-            <div style={{ background: 'var(--surface-2)', padding: '12px 20px', borderRadius: 12, border: '1px solid var(--border-1)' }}>
-              <Clock size={18} color="#f59e0b" style={{ marginBottom: 4 }} />
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isRu ? 'Время' : 'Vaqt'}</div>
-              <div style={{ fontWeight: 700 }}>{quizData.timeLimit} {isRu ? 'мин' : 'daqiqa'}</div>
-            </div>
-            <div style={{ background: 'var(--surface-2)', padding: '12px 20px', borderRadius: 12, border: '1px solid var(--border-1)' }}>
-              <CheckCircle size={18} color="#22c55e" style={{ marginBottom: 4 }} />
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{isRu ? 'Проход' : 'O\'tish'}</div>
-              <div style={{ fontWeight: 700 }}>{quizData.passingScore}%</div>
-            </div>
+          <div className="quiz-stat-grid">
+            <div className="quiz-stat-item"><Clock size={24} /><span>{quizData.timeLimit} {isRu ? 'мин' : 'daqiqa'}</span></div>
+            <div className="quiz-stat-item"><CheckCircle size={24} /><span>{quizData.passingScore}%</span></div>
           </div>
-          <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, padding: 14 }} onClick={startQuiz}>
+          <button className="btn btn-primary btn-lg" onClick={() => setStarted(true)}>
             {isRu ? 'Начать тест' : 'Testni boshlash'}
           </button>
         </div>
@@ -286,119 +293,77 @@ export function QuizPlayer({ quizData, onComplete, isRu }: QuizPlayerProps) {
     const passed = score >= quizData.passingScore;
 
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-1)' }}>
-        <div className="card fade-in" style={{ maxWidth: 500, width: '100%', textAlign: 'center', background: 'var(--surface-1)', border: '1px solid var(--border-2)', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
-          <div style={{ width: 100, height: 100, borderRadius: '50%', background: passed ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            {passed ? <Award size={50} color="#22c55e" /> : <X size={50} color="#ef4444" />}
-          </div>
-          <h2 style={{ fontSize: 32, fontWeight: 900, marginBottom: 8, color: passed ? '#22c55e' : '#ef4444' }}>
-            {score}%
-          </h2>
-          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>
-            {passed ? (isRu ? "Поздравляем, вы прошли тест!" : "Tabriklaymiz, testdan o'tdingiz!") : (isRu ? "К сожалению, вы не прошли тест." : "Afsuski, testdan o'ta olmadingiz.")}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 30 }}>
-            {isRu ? `Вы правильно ответили на ${correctCount} из ${quizData.questions.length} вопросов. Минимальный проходной балл ${quizData.passingScore}%.` : `Siz ${quizData.questions.length} ta savoldan ${correctCount} tasiga to'g'ri javob berdingiz. Minimum o'tish balli ${quizData.passingScore}%.`}
+      <div className="quiz-player-container quiz-start-screen">
+        <div className={clsx('quiz-start-card glass-panel-2', passed ? 'passed' : 'failed')}>
+          <div className="quiz-card-icon">{passed ? <Award size={40} /> : <X size={40} />}</div>
+          <h2>{score}%</h2>
+          <p>
+            {isRu
+              ? `Правильных ответов: ${correctCount} из ${quizData.questions.length}. Проходной балл: ${quizData.passingScore}%.`
+              : `To'g'ri javoblar: ${correctCount}/${quizData.questions.length}. Minimal o'tish balli: ${quizData.passingScore}%.`}
           </p>
-          {!passed && (
-            <button className="btn btn-primary" onClick={() => {
-              setFinished(false);
-              setStarted(false);
-              setAnswers({});
-              setTimeLeft(quizData.timeLimit * 60);
-              setCurrentIndex(0);
-            }} style={{ width: '100%' }}>
-              {isRu ? 'Попробовать снова' : 'Qayta urinib ko\'rish'}
+          {!passed ? (
+            <button className="btn btn-primary btn-lg" onClick={() => { setFinished(false); setStarted(false); setAnswers({}); setTimeLeft(quizData.timeLimit * 60); }}>
+              {isRu ? 'Попробовать снова' : 'Qayta urinib ko‘rish'}
             </button>
+          ) : (
+            <div className="quiz-saved-pill">{isRu ? 'Результат сохранен' : 'Natija tizimga saqlandi'}</div>
           )}
         </div>
       </div>
     );
   }
 
-  const q = quizData.questions[currentIndex];
+  const answeredCount = Object.keys(answers).length;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-1)' }}>
-      {/* Quiz Header */}
-      <div style={{ padding: '20px 30px', background: 'var(--surface-1)', borderBottom: '1px solid var(--border-1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="quiz-player-container quiz-scroll-player">
+      <div className="quiz-active-header quiz-scroll-header glass-panel-2">
         <div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
-            Savol {currentIndex + 1} / {quizData.questions.length}
+          <div className="quiz-scroll-kicker">
+            {isRu ? 'Отвечено' : 'Javob berildi'} {answeredCount} / {quizData.questions.length}
           </div>
-          <div className="progress-bar" style={{ width: 200, height: 6 }}>
-            <div className="progress-fill" style={{ width: `${((currentIndex + 1) / quizData.questions.length) * 100}%`, background: '#3b82f6' }} />
+          <div className="progress-bar quiz-scroll-progress">
+            <div className="progress-fill" style={{ width: `${(answeredCount / quizData.questions.length) * 100}%` }} />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: timeLeft < 60 ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)', padding: '8px 16px', borderRadius: 20, color: timeLeft < 60 ? '#ef4444' : '#3b82f6', fontWeight: 700 }}>
-          <Clock size={16} /> {formatTime(timeLeft)}
-        </div>
-      </div>
-
-      {/* Quiz Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ maxWidth: 800, width: '100%' }}>
-          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 30, lineHeight: 1.5 }}>
-            {q.text}
-          </h2>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {q.options.map((opt, i) => {
-              const isSelected = answers[currentIndex] === i;
-              return (
-                <button
-                  key={i}
-                  className={clsx('quiz-option-btn', isSelected && 'selected')}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px',
-                    background: isSelected ? 'rgba(59,130,246,0.1)' : 'var(--surface-1)',
-                    border: `2px solid ${isSelected ? '#3b82f6' : 'var(--border-1)'}`,
-                    borderRadius: 12, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
-                    color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)'
-                  }}
-                  onClick={() => handleSelect(i)}
-                >
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', border: `2px solid ${isSelected ? '#3b82f6' : 'var(--text-muted)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    {isSelected && <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#3b82f6' }} />}
-                  </div>
-                  <span style={{ fontSize: 16 }}>{opt}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className={clsx('quiz-timer-pill', timeLeft < 60 && 'warning')}>
+          <Clock size={16} />
+          <span>{formatTime(timeLeft)}</span>
         </div>
       </div>
 
-      {/* Quiz Footer */}
-      <div style={{ padding: '20px 30px', background: 'var(--surface-1)', borderTop: '1px solid var(--border-1)', display: 'flex', justifyContent: 'space-between' }}>
-        <button 
-          className="btn btn-secondary" 
-          disabled={currentIndex === 0}
-          onClick={() => setCurrentIndex(i => i - 1)}
-        >
-          Oldingi savol
+      <div className="quiz-active-body quiz-scroll-body">
+        <div className="quiz-scroll-list fade-in">
+          {quizData.questions.map((q, questionIndex) => (
+            <section key={q.id || questionIndex} className="quiz-scroll-card">
+              <div className="quiz-scroll-question-meta">{isRu ? 'Вопрос' : 'Savol'} {questionIndex + 1}</div>
+              <h2 className="quiz-question-text quiz-scroll-question-text">{q.text}</h2>
+              <div className="quiz-options-list quiz-scroll-options">
+                {q.options.map((opt, optionIndex) => {
+                  const isSelected = answers[questionIndex] === optionIndex;
+                  return (
+                    <button
+                      key={optionIndex}
+                      className={clsx('quiz-option-button', isSelected && 'selected')}
+                      onClick={() => setAnswers(prev => ({ ...prev, [questionIndex]: optionIndex }))}
+                    >
+                      <div className="quiz-radio-circle"><div className="quiz-radio-inner" /></div>
+                      <span className="quiz-option-text">{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+
+      <div className="quiz-active-footer quiz-scroll-footer glass-panel-2">
+        <span>{isRu ? 'Прокручивайте вопросы вверх и вниз' : 'Savollarni yuqoriga-pastga scroll qilib ishlang'}</span>
+        <button className="btn btn-primary" onClick={() => finishQuiz()} disabled={answeredCount < quizData.questions.length}>
+          {isRu ? 'Завершить тест' : 'Testni yakunlash'}
         </button>
-        {currentIndex === quizData.questions.length - 1 ? (
-          <button 
-            className="btn btn-primary" 
-            style={{ background: '#22c55e', borderColor: '#22c55e' }}
-            onClick={() => finishQuiz()}
-            disabled={answers[currentIndex] === undefined}
-          >
-            Testni yakunlash
-          </button>
-        ) : (
-          <button 
-            className="btn btn-primary" 
-            onClick={() => setCurrentIndex(i => i + 1)}
-            disabled={answers[currentIndex] === undefined}
-          >
-            Keyingi savol
-          </button>
-        )}
       </div>
     </div>
   );

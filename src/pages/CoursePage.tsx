@@ -4,15 +4,16 @@ import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   Play, 
-  ChevronDown, ChevronRight, CheckCircle,
+  ChevronRight, CheckCircle,
   Clock, BookOpen, Star, Users, Award, Sparkles,
   FileText, Download, MessageSquare, Bookmark,
-  X, Send,
+  X, Send, ZoomIn, ZoomOut,
   Trash2, Plus, Edit3, Save, Loader,
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
 import { useAuthStore } from '@/store/auth.store';
 import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
+import { PDFViewer } from '@/components/BookReader';
 
 export interface QuizQuestion {
   id: string;
@@ -68,7 +69,175 @@ function nextId() {
   return Date.now().toString();
 }
 
+function getApiOrigin() {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+  return apiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+}
+
+function normalizeMediaUrl(url?: string) {
+  const value = url?.trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('/')) return `${getApiOrigin()}${value}`;
+  return `${getApiOrigin()}/${value}`;
+}
+
+function getYoutubeEmbedUrl(url?: string) {
+  const value = url?.trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname.includes('youtu.be')) {
+      const id = parsed.pathname.replace('/', '');
+      return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+    if (parsed.hostname.includes('youtube.com')) {
+      const watchId = parsed.searchParams.get('v');
+      const embedMatch = parsed.pathname.match(/\/embed\/([^/?]+)/);
+      const shortsMatch = parsed.pathname.match(/\/shorts\/([^/?]+)/);
+      const id = watchId || embedMatch?.[1] || shortsMatch?.[1];
+      return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
 /* ── Component ─────────────────────────────────── */
+function isPdfUrl(url?: string) {
+  return /\.pdf($|[?#])/i.test(url || '');
+}
+
+function getRequestUrl(url: string) {
+  let clean = url;
+  try {
+    const origin = new URL(import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1').origin;
+    if (clean.startsWith(origin)) clean = clean.slice(origin.length);
+  } catch {}
+  if (clean.startsWith('/api/v1')) clean = clean.slice(7);
+  if (clean.startsWith('api/v1')) clean = clean.slice(6);
+  return clean;
+}
+
+function CourseAssignmentViewer({
+  title,
+  url,
+  isRu,
+  onComplete,
+}: {
+  title?: string;
+  url?: string;
+  isRu: boolean;
+  onComplete: () => void;
+}) {
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const [scale, setScale] = useState(1.2);
+  const normalizedUrl = normalizeMediaUrl(url);
+  const isPdf = isPdfUrl(normalizedUrl);
+
+  useEffect(() => {
+    if (!normalizedUrl || !isPdf) {
+      setPdfData(null);
+      setLoadingPdf(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPdf(true);
+    setPdfError('');
+    setPdfData(null);
+
+    const loadPdf = async () => {
+      try {
+        const isLocal = normalizedUrl.startsWith(getApiOrigin()) || normalizedUrl.startsWith('/');
+        if (isLocal) {
+          const res = await apiClient.get(getRequestUrl(normalizedUrl), { responseType: 'arraybuffer' });
+          if (!cancelled) setPdfData(new Uint8Array(res.data));
+        } else {
+          const res = await fetch(normalizedUrl);
+          const buffer = await res.arrayBuffer();
+          if (!cancelled) setPdfData(new Uint8Array(buffer));
+        }
+      } catch (err) {
+        console.error('Assignment PDF failed to load', err);
+        if (!cancelled) setPdfError(isRu ? 'PDF faylni ochib bo‘lmadi.' : 'PDF faylni ochib bo‘lmadi.');
+      } finally {
+        if (!cancelled) setLoadingPdf(false);
+      }
+    };
+
+    loadPdf();
+    return () => { cancelled = true; };
+  }, [normalizedUrl, isPdf, isRu]);
+
+  if (!normalizedUrl) {
+    return (
+      <div className="assignment-empty-state">
+        <Award size={46} color="#f59e0b" />
+        <h2>{title}</h2>
+        <p>{isRu ? 'Файл задания не прикреплен' : 'Topshiriq fayli biriktirilmagan'}</p>
+      </div>
+    );
+  }
+
+  if (!isPdf) {
+    return (
+      <div className="assignment-empty-state">
+        <FileText size={46} color="#f87171" />
+        <h2>{title}</h2>
+        <p>{isRu ? 'Задание должно быть только в формате PDF.' : 'Topshiriq faqat PDF formatda ko‘rsatiladi.'}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="assignment-reader">
+      <div className="assignment-reader-header">
+        <div className="assignment-reader-title">
+          <span className="badge badge-amber">PDF</span>
+          <div>
+            <h2>{title}</h2>
+            <p>{isRu ? 'Задание открыто в режиме чтения' : 'Topshiriq o‘qish rejimida ochildi'}</p>
+          </div>
+        </div>
+        <div className="assignment-reader-actions">
+          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setScale(s => Math.max(0.6, +(s - 0.2).toFixed(2)))}>
+            <ZoomOut size={15} />
+          </button>
+          <span>{Math.round(scale * 100)}%</span>
+          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setScale(s => Math.min(2.6, +(s + 0.2).toFixed(2)))}>
+            <ZoomIn size={15} />
+          </button>
+          <a className="btn btn-primary btn-sm" href={normalizedUrl} target="_blank" rel="noreferrer" onClick={onComplete}>
+            <Download size={14} /> {isRu ? 'Открыть' : 'Ochish'}
+          </a>
+        </div>
+      </div>
+
+      <div className="assignment-reader-body">
+        {loadingPdf ? (
+          <div className="assignment-empty-state">
+            <Loader size={38} style={{ animation: 'spin 1s linear infinite' }} />
+            <p>{isRu ? 'PDF yuklanmoqda...' : 'PDF yuklanmoqda...'}</p>
+          </div>
+        ) : pdfError ? (
+          <div className="assignment-empty-state">
+            <FileText size={46} color="#f87171" />
+            <p>{pdfError}</p>
+          </div>
+        ) : pdfData ? (
+          <PDFViewer data={pdfData} downloadable isRu={isRu} scale={scale} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function CoursePage() {
   const { i18n } = useTranslation();
   const { courseId } = useParams<{ courseId: string }>();
@@ -78,9 +247,10 @@ export default function CoursePage() {
   const [view, setView] = useState<'overview' | 'player'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'ai' | 'notes' | 'materials' | 'discussion'>('ai');
-  const [openModule, setOpenModule] = useState<string | number | null>(2);
+
   const [aiInput, setAiInput] = useState('');
   const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
+  const [videoError, setVideoError] = useState(false);
 
   // AI & Discussion State
   const [aiMessages, setAiMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
@@ -104,6 +274,7 @@ export default function CoursePage() {
   const [addingModule, setAddingModule] = useState(false);
 
   const [materialUploading, setMaterialUploading] = useState(false);
+  const [uploadingLessons, setUploadingLessons] = useState<Record<string, boolean>>({});
 
   const isRu = i18n.language === 'ru';
   const canEdit = user && EDITOR_ROLES.includes(user.role as string);
@@ -134,7 +305,12 @@ export default function CoursePage() {
           setCourse(courseData);
           
           let mods: Module[] = (fetched.modules && fetched.modules.length > 0)
-            ? fetched.modules
+            ? fetched.modules.map((m: any) => ({
+                ...m,
+                lessons: m.items?.length || 0,
+                done: m.done ?? 0,
+                items: m.items || [],
+              }))
             : [];
             
           // Map completed lessons if enrolled
@@ -174,7 +350,12 @@ export default function CoursePage() {
     setSaving(true);
     setSaveError(null);
     try {
-      await apiClient.patch(`/courses/${course.id}`, { modules: courseModules });
+      const res = await apiClient.patch(`/courses/${course.id}`, { modules: courseModules });
+      // Refresh modules from backend response to get proper DB UUIDs
+      const saved = res.data?.data || res.data;
+      if (saved?.modules && Array.isArray(saved.modules)) {
+        setCourseModules(saved.modules);
+      }
       setEditMode(false);
     } catch (e) {
       setSaveError('Saqlashda xatolik. Qayta urinib ko\'ring.');
@@ -196,7 +377,7 @@ export default function CoursePage() {
     setCourseModules(prev => [...prev, newMod]);
     setNewModuleTitle('');
     setAddingModule(false);
-    setOpenModule(newMod.id);
+
   };
 
   const deleteModule = (modId: string | number) => {
@@ -232,7 +413,7 @@ export default function CoursePage() {
     }));
   };
 
-  const updateLesson = (modId: string | number, lessonId: string | number, field: keyof LessonItem, value: string) => {
+  const updateLesson = (modId: string | number, lessonId: string | number, field: keyof LessonItem, value: any) => {
     setCourseModules(prev => prev.map(m => {
       if (m.id !== modId) return m;
       return {
@@ -248,20 +429,27 @@ export default function CoursePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    const key = `${modId}-${lessonId}`;
+    setUploadingLessons(prev => ({ ...prev, [key]: true }));
+    
     const formData = new FormData();
     formData.append('file', file);
     formData.append('visibility', 'public');
     
     try {
       const res = await apiClient.post('/uploads/file', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        timeout: 0, // Disable timeout for uploads
       });
-      const url = res.data?.url || res.data?.data?.url;
-      if (url) {
-        updateLesson(modId, lessonId, 'videoUrl', url);
+      // Backend returns relative url like /api/v1/uploads/download/:id
+      // Build absolute URL so video player can use it
+      const relativeUrl = res.data?.url || res.data?.data?.url;
+      if (relativeUrl) {
+        updateLesson(modId, lessonId, 'videoUrl', normalizeMediaUrl(relativeUrl));
       }
     } catch (err) {
       console.error('Error uploading lesson file:', err);
+    } finally {
+      setUploadingLessons(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -295,7 +483,7 @@ export default function CoursePage() {
         }
         return m;
       }));
-      setCourse(prev => ({ ...prev, progress: Math.min((prev.progress || 0) + 5, 100) }));
+      setCourse((prev: any) => ({ ...prev, progress: Math.min((prev.progress || 0) + 5, 100) }));
     } catch (err) {
       console.error(err);
     }
@@ -319,8 +507,19 @@ export default function CoursePage() {
     }
   }, [activeTab, course?.id, fetchDiscussions]);
 
-  const handleAiSend = async () => {
-    const text = aiInput.trim();
+  useEffect(() => {
+    setVideoError(false);
+  }, [currentLessonId]);
+
+  useEffect(() => {
+    document.body.classList.toggle('focus-mode-active', view === 'player');
+    return () => {
+      document.body.classList.remove('focus-mode-active');
+    };
+  }, [view]);
+
+  const handleAiSend = async (promptOverride?: string) => {
+    const text = (promptOverride ?? aiInput).trim();
     if (!text || aiLoading) return;
     setAiInput('');
     setAiMessages(p => [...p, { role: 'user', text }]);
@@ -362,7 +561,8 @@ export default function CoursePage() {
     formData.append('visibility', 'public');
     try {
       const res = await apiClient.post('/uploads/file', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0, // Disable timeout for uploads
       });
       const url = res.data?.url || res.data?.data?.url;
       if (url) setDiscussionImageUrl(url);
@@ -382,7 +582,8 @@ export default function CoursePage() {
     
     try {
       const res = await apiClient.post('/uploads/file', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0, // Disable timeout for uploads
       });
       const url = res.data?.url || res.data?.data?.url;
       if (url) {
@@ -456,6 +657,69 @@ export default function CoursePage() {
   const currentLesson = currentLessonId 
     ? allLessons.find(i => i.id === currentLessonId) 
     : allLessons.find(i => (i as any).current) || allLessons[0];
+  const currentMediaUrl = normalizeMediaUrl(currentLesson?.videoUrl);
+  const youtubeEmbedUrl = getYoutubeEmbedUrl(currentMediaUrl);
+  const playerText = isRu
+    ? {
+        back: 'К курсу',
+        lessonFallback: 'Урок',
+        hideLessons: 'Скрыть уроки',
+        showLessons: 'Уроки',
+        learningPlan: 'Учебный план',
+        progress: 'Прогресс',
+        videoMissing: 'Видео пока не загружено',
+        questionsMissing: 'К этому уроку пока не добавлены вопросы.',
+        assignmentIntro: 'Это практическое задание. Откройте файл и выполните задачу.',
+        openAssignment: 'Открыть задание',
+        assignmentMissing: 'Файл задания не прикреплен',
+        ai: 'AI Copilot',
+        notes: 'Заметки',
+        materials: 'Материалы',
+        discussion: 'Обсуждение',
+        askAi: 'Спросите AI Copilot...',
+        aiPrompts: ['Объясни урок', 'Сделай краткое резюме', 'Подготовь мини-тест'],
+        aiSummary: 'AI резюме',
+        bookmark: 'Закладка',
+        uploadFile: 'Загрузить файл',
+        noMaterials: 'Материалы пока не добавлены',
+        download: 'Скачать',
+        notesReady: 'Умные заметки готовы. Добавляйте важные мысли по ходу урока.',
+        addNote: 'Добавить заметку...',
+        save: 'Сохранить',
+        discussionPlaceholder: 'Оставьте вопрос или комментарий...',
+        photo: 'Фото',
+        send: 'Отправить',
+      }
+    : {
+        back: 'Kursga qaytish',
+        lessonFallback: 'Dars',
+        hideLessons: 'Darslarni yashirish',
+        showLessons: 'Darslar',
+        learningPlan: 'O‘quv rejasi',
+        progress: 'Jarayon',
+        videoMissing: 'Video hozircha yuklanmagan',
+        questionsMissing: 'Ushbu dars uchun savollar biriktirilmagan.',
+        assignmentIntro: 'Bu amaliy topshiriq. Faylni oching va vazifani bajaring.',
+        openAssignment: 'Topshiriqni ochish',
+        assignmentMissing: 'Topshiriq fayli biriktirilmagan',
+        ai: 'AI Copilot',
+        notes: 'Eslatmalar',
+        materials: 'Materiallar',
+        discussion: 'Muhokama',
+        askAi: "AI Copilot'dan so'rang...",
+        aiPrompts: ['Darsni tushuntir', 'Qisqa xulosa qil', 'Mini-test tuz'],
+        aiSummary: 'AI xulosa',
+        bookmark: 'Xatcho‘p',
+        uploadFile: 'Yangi material yuklash',
+        noMaterials: 'Hozircha materiallar yuklanmagan',
+        download: 'Yuklab olish',
+        notesReady: 'Aqlli eslatmalar tayyor. Dars davomida muhim fikrlarni yozib boring.',
+        addNote: "Eslatma qo'shish...",
+        save: 'Saqlash',
+        discussionPlaceholder: 'Fikringizni yoki savolingizni qoldiring...',
+        photo: 'Rasm',
+        send: 'Yuborish',
+      };
 
   if (view === 'overview') {
     return (
@@ -484,309 +748,401 @@ export default function CoursePage() {
         handleLessonUpload={handleLessonUpload}
         setAddingModule={setAddingModule}
         setNewModuleTitle={setNewModuleTitle}
+        uploadingLessons={uploadingLessons}
       />
     );
   }
 
   return (
-    <div className="course-player-layout">
-      {/* ── VIDEO AREA ── */}
-      <div className={clsx('player-main', !sidebarOpen && 'player-main-full')}>
-        {/* Video */}
-        <div className="video-container" style={{ display: 'flex', flexDirection: 'column' }}>
-          {currentLesson?.type === 'video' ? (
-            currentLesson?.videoUrl ? (
-              <video 
-                src={currentLesson.videoUrl} 
-                controls 
-                autoPlay
-                onEnded={() => handleLessonComplete(currentLesson.id)}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} 
-              />
-            ) : (
-              <div className="video-screen">
-                <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
-                  <Play size={64} />
-                  <div style={{ marginTop: 12, fontSize: 16 }}>
-                    {currentLesson?.title || 'Dars'} — {currentLesson?.dur || ''}
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-                    Video yuklanmagan
-                  </div>
-                </div>
-              </div>
-            )
-          ) : currentLesson?.type === 'quiz' ? (
-            currentLesson.quizData ? (
-              <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-                <QuizPlayer 
-                  quizData={currentLesson.quizData} 
-                  isRu={course?.language === 'ru'}
-                  onComplete={(_, passed) => {
-                    if (passed) handleLessonComplete(currentLesson.id);
-                  }} 
-                />
-              </div>
-            ) : (
-              <div className="video-screen" style={{ background: 'var(--bg-1)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                 <div style={{ textAlign: 'center' }}>
-                   <FileText size={48} color="#3b82f6" style={{ marginBottom: 16, display: 'inline-block' }} />
-                   <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>{currentLesson?.title}</h2>
-                   <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Ushbu bosqichda bilimingizni tekshirish uchun test topshirishingiz kerak.</p>
-                   {currentLesson?.videoUrl ? (
-                     <a href={currentLesson.videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary" onClick={() => handleLessonComplete(currentLesson.id)}>
-                       Testni boshlash
-                     </a>
-                   ) : (
-                     <div style={{ color: 'var(--red-400)', fontSize: 14 }}>Test havolasi yoki savollari biriktirilmagan</div>
-                   )}
-                 </div>
-              </div>
-            )
-          ) : currentLesson?.type === 'assignment' ? (
-            <div className="video-screen" style={{ background: 'var(--bg-1)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-               <div style={{ textAlign: 'center' }}>
-                 <Award size={48} color="#f59e0b" style={{ marginBottom: 16, display: 'inline-block' }} />
-                 <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>{currentLesson?.title}</h2>
-                 <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Bu amaliy topshiriq. Faylni yuklab oling va vazifani bajaring.</p>
-                 {currentLesson?.videoUrl ? (
-                   <a href={currentLesson.videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary" onClick={() => handleLessonComplete(currentLesson.id)}>
-                     Topshiriqni ochish
-                   </a>
-                 ) : (
-                   <div style={{ color: 'var(--red-400)', fontSize: 14 }}>Topshiriq fayli biriktirilmagan</div>
-                 )}
+    <div className="course-player-layout learning-window">
+      <div className="ambient-bg" />
+      
+      {/* ── VIDEO / CONTENT AREA ── */}
+      <div className={clsx('player-main learning-main', !sidebarOpen && 'player-main-full learning-main-full')}>
+        
+        {/* Main Workspace Card */}
+        <div className="learning-shell glass-panel-2">
+          
+          {/* Header over video */}
+          <div className="learning-header">
+             <div className="learning-title-row">
+               <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setView('overview')} title={playerText.back}>
+                 <X size={16} />
+               </button>
+               <div className="learning-title-block">
+                 <span className="learning-kicker">{title}</span>
+                 <span className="learning-title">{currentLesson?.title || playerText.lessonFallback}</span>
                </div>
-            </div>
-          ) : (
-            <div className="video-screen" style={{ background: 'var(--bg-1)' }}></div>
-          )}
-          <div className="video-overlay-top" style={{ position: 'absolute', top: 0, right: 0, padding: 16, zIndex: 10 }}>
-            <button className="btn btn-ghost btn-sm" style={{ color: '#fff', background: 'rgba(0,0,0,0.5)' }} onClick={() => setView('overview')}>
-              <X size={14} /> Kursga qaytish
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="player-tabs">
-          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-1)', paddingBottom: 0 }}>
-            {[
-              { id: 'ai', icon: Sparkles, label: 'AI Assistant' },
-              { id: 'notes', icon: Bookmark, label: 'Eslatmalar' },
-              { id: 'materials', icon: FileText, label: 'Materiallar' },
-              { id: 'discussion', icon: MessageSquare, label: 'Muhokama' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                className={clsx('player-tab', activeTab === tab.id && 'active')}
-                onClick={() => setActiveTab(tab.id as any)}
-              >
-                <tab.icon size={13} /> {tab.label}
-              </button>
-            ))}
-            <div style={{ marginLeft: 'auto' }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
-                {sidebarOpen ? 'Yopish' : 'Darslar'} <ChevronRight size={13} />
-              </button>
-            </div>
+               <span className="badge badge-blue learning-type-badge">{currentLesson?.type}</span>
+             </div>
+             <div className="learning-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                  {sidebarOpen ? <ChevronRight size={14} /> : <BookOpen size={14} />} 
+                  {sidebarOpen ? playerText.hideLessons : playerText.showLessons}
+                </button>
+             </div>
           </div>
 
-          <div className="player-tab-content">
-            {activeTab === 'ai' && (
-              <div className="ai-chat">
-                <div className="ai-chat-messages">
-                  {aiMessages.map((m, i) => (
-                    <div key={i} className={clsx('ai-msg', m.role === 'user' && 'ai-msg-user')}>
-                      {m.role === 'ai' && (
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 28 }}>
-                          <Sparkles size={13} color="#fff" />
+          {/* Content Area */}
+          <div className={clsx('learning-content', currentLesson?.type === 'quiz' && 'learning-content-quiz')}>
+            
+            {currentLesson?.type === 'video' ? (
+              <div className="video-container" style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {currentMediaUrl && !videoError ? (
+                  <>
+                    {youtubeEmbedUrl ? (
+                      <iframe
+                        key={youtubeEmbedUrl}
+                        src={`${youtubeEmbedUrl}?autoplay=1&rel=0&modestbranding=1`}
+                        title={currentLesson?.title || 'Video dars'}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        style={{ width: '100%', height: '100%', border: 0, zIndex: 2, background: '#000' }}
+                      />
+                    ) : (
+                      <video
+                        key={currentMediaUrl}
+                        src={currentMediaUrl}
+                        controls
+                        autoPlay
+                        playsInline
+                        preload="metadata"
+                        onError={() => setVideoError(true)}
+                        onEnded={() => currentLesson && handleLessonComplete(currentLesson.id)}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', zIndex: 2 }}
+                      />
+                    )}
+                    {/* Blurred background for cinematic effect */}
+                    <div style={{ position: 'absolute', inset: -50, background: 'radial-gradient(circle at center, rgba(59,130,246,0.18), rgba(139,92,246,0.10), transparent 65%)', filter: 'blur(80px)', opacity: 0.8, zIndex: 1, pointerEvents: 'none' }} />
+                    
+                    {/* Cinematic Overlays */}
+                    <div className="video-overlay-cinematic" />
+                    <div className="cinematic-controls">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                         <div style={{ display: 'flex', gap: 12 }}>
+                           <button className="btn btn-primary btn-sm" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}>
+                             <Sparkles size={14} /> {playerText.aiSummary}
+                           </button>
+                           <button className="btn btn-secondary btn-sm" style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}>
+                             <Bookmark size={14} /> {playerText.bookmark}
+                           </button>
+                         </div>
+                         <div style={{ background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: '1px solid rgba(255,255,255,0.1)' }}>
+                           1x
+                         </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="video-screen" style={{ zIndex: 2 }}>
+                    <div style={{ color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                      <Play size={64} />
+                      <div style={{ marginTop: 12, fontSize: 16 }}>
+                        {currentLesson?.title || 'Dars'} — {currentLesson?.dur || ''}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                        {playerText.videoMissing}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : currentLesson?.type === 'quiz' ? (
+              <div style={{ flex: 1, background: 'var(--bg-1)', overflowY: 'auto' }}>
+                {currentLesson.quizData ? (
+                  <QuizPlayer 
+                    key={currentLesson.id}
+                    quizData={currentLesson.quizData} 
+                    isRu={isRu}
+                    onComplete={(_, passed) => {
+                      if (passed) handleLessonComplete(currentLesson.id);
+                    }} 
+                  />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                     <div style={{ textAlign: 'center' }}>
+                       <FileText size={48} color="#3b82f6" style={{ marginBottom: 16, display: 'inline-block' }} />
+                       <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>{currentLesson?.title}</h2>
+                       <p style={{ color: 'var(--text-secondary)' }}>{playerText.questionsMissing}</p>
+                     </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <CourseAssignmentViewer
+                title={currentLesson?.title}
+                url={currentLesson?.videoUrl}
+                isRu={isRu}
+                onComplete={() => currentLesson && handleLessonComplete(currentLesson.id)}
+              />
+            )}
+            
+            {/* Smart Workspace Tabs (AI, Notes, Materials) */}
+            {currentLesson?.type !== 'quiz' && (
+            <div className="learning-panel">
+              <div className="learning-tabbar">
+                {[
+                  { id: 'ai', icon: Sparkles, label: playerText.ai },
+                  { id: 'notes', icon: Bookmark, label: playerText.notes },
+                  { id: 'materials', icon: FileText, label: playerText.materials },
+                  { id: 'discussion', icon: MessageSquare, label: playerText.discussion },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    className={clsx('player-tab', activeTab === tab.id && 'active')}
+                    style={{ flex: 1 }}
+                    onClick={() => setActiveTab(tab.id as any)}
+                  >
+                    <tab.icon size={14} style={{ color: activeTab === tab.id ? 'var(--blue-400)' : 'var(--text-secondary)' }} /> {tab.label}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="learning-panel-body">
+                {activeTab === 'ai' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 8 }}>
+                      {aiMessages.map((m, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 12, alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                          {m.role === 'ai' && (
+                            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'var(--shadow-blue)' }}>
+                              <Sparkles size={12} color="#fff" />
+                            </div>
+                          )}
+                          <div style={{
+                            background: m.role === 'user' ? 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))' : 'var(--surface-1)',
+                            border: `1px solid ${m.role === 'user' ? 'rgba(59,130,246,0.3)' : 'var(--border-1)'}`,
+                            padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.6,
+                            color: m.role === 'user' ? 'var(--blue-400)' : 'var(--text-primary)',
+                            borderTopRightRadius: m.role === 'user' ? 4 : 12,
+                            borderTopLeftRadius: m.role === 'ai' ? 4 : 12,
+                          }}>
+                            {m.text}
+                          </div>
+                        </div>
+                      ))}
+                      {aiLoading && (
+                        <div style={{ display: 'flex', gap: 12, alignSelf: 'flex-start' }}>
+                           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Sparkles size={12} color="#fff" />
+                           </div>
+                           <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border-1)', padding: '10px 14px', borderRadius: 12, borderTopLeftRadius: 4 }}>
+                             <div className="ai-typing-indicator">
+                               <div className="ai-dot" />
+                               <div className="ai-dot" />
+                               <div className="ai-dot" />
+                             </div>
+                           </div>
                         </div>
                       )}
-                      <div className={clsx('ai-bubble', m.role === 'user' && 'ai-bubble-user')}>{m.text}</div>
                     </div>
-                  ))}
-                </div>
-                <div className="ai-input-row">
-                  <input
-                    className="input"
-                    placeholder="Savolingizni yozing..."
-                    value={aiInput}
-                    onChange={e => setAiInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAiSend()}
-                    style={{ fontSize: 13 }}
-                  />
-                  <button className="btn btn-primary btn-icon btn-sm" onClick={handleAiSend} disabled={aiLoading}>
-                    {aiLoading ? <Loader size={14} className="spin" /> : <Send size={14} />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'materials' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {editMode && (
-                  <div style={{ marginBottom: 12 }}>
-                    <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                      {materialUploading ? <Loader size={14} className="spin" /> : <Plus size={14} />} 
-                      {isRu ? 'Загрузить файл' : 'Yangi material yuklash'}
-                      <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
-                    </label>
+                    
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8, overflowX: 'auto' }} className="hide-scrollbar">
+                        {playerText.aiPrompts.map(prompt => (
+                           <button key={prompt} className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '4px 10px', borderRadius: 99, whiteSpace: 'nowrap' }} onClick={() => handleAiSend(prompt)}>
+                             {prompt}
+                           </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, background: 'var(--surface-1)', border: '1px solid var(--border-1)', padding: 6, borderRadius: 12 }}>
+                        <input
+                          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 13, padding: '0 10px' }}
+                          placeholder={playerText.askAi}
+                          value={aiInput}
+                          onChange={e => setAiInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleAiSend()}
+                        />
+                        <button className="btn btn-primary btn-sm btn-icon" onClick={() => handleAiSend()} disabled={aiLoading} style={{ borderRadius: 8 }}>
+                          <Send size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
                 
-                {(!course?.materials || course.materials.length === 0) && !editMode ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0', fontSize: 13 }}>
-                    {isRu ? 'Материалы пока не добавлены' : 'Hozircha materiallar yuklanmagan'}
+                {activeTab === 'materials' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {editMode && (
+                      <div style={{ marginBottom: 12 }}>
+                        <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                          {materialUploading ? <Loader size={14} className="spin" /> : <Plus size={14} />} 
+                          {playerText.uploadFile}
+                          <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
+                        </label>
+                      </div>
+                    )}
+                    
+                    {(!course?.materials || course.materials.length === 0) && !editMode ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0', fontSize: 13.5 }}>
+                        {playerText.noMaterials}
+                      </div>
+                    ) : (
+                      (course?.materials || []).map((m: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 14 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <FileText size={18} color="#3b82f6" />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.name}</div>
+                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{m.type} • {m.size}</div>
+                          </div>
+                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => window.open(normalizeMediaUrl(m.url), '_blank')} title={playerText.download}>
+                            <Download size={15} />
+                          </button>
+                          {editMode && (
+                            <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--red-400)' }} onClick={() => handleDeleteMaterial(i)}>
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
-                ) : (
-                  (course?.materials || []).map((m: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FileText size={16} color="#3b82f6" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.type} • {m.size}</div>
-                      </div>
-                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => window.open(m.url, '_blank')} title={isRu ? 'Скачать' : 'Yuklab olish'}>
-                        <Download size={14} />
-                      </button>
-                      {editMode && (
-                        <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--red-400)' }} onClick={() => handleDeleteMaterial(i)}>
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))
                 )}
-              </div>
-            )}
-
-            {activeTab === 'notes' && (
-              <div>
-                <textarea
-                  className="input"
-                  placeholder="12:48 — Bu yerga eslatmangizni yozing..."
-                  rows={4}
-                  style={{ resize: 'none', marginBottom: 10, fontSize: 13 }}
-                />
-                <button className="btn btn-primary btn-sm"><Bookmark size={13} /> Saqlash</button>
-              </div>
-            )}
-
-            {activeTab === 'discussion' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ background: 'var(--surface-1)', padding: 12, borderRadius: 12, border: '1px solid var(--border-1)' }}>
-                  <textarea
-                    className="input"
-                    placeholder="Fikringizni yoki savolingizni qoldiring..."
-                    value={discussionInput}
-                    onChange={e => setDiscussionInput(e.target.value)}
-                    rows={2}
-                    style={{ resize: 'none', marginBottom: 10, fontSize: 13 }}
-                  />
-                  {discussionImageUrl && (
-                    <div style={{ marginBottom: 10, position: 'relative', display: 'inline-block' }}>
-                      <img src={discussionImageUrl} alt="Upload" style={{ maxHeight: 100, borderRadius: 8 }} />
-                      <button 
-                        className="btn btn-ghost btn-sm btn-icon" 
-                        style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', color: '#fff' }}
-                        onClick={() => setDiscussionImageUrl('')}
-                      >
-                        <X size={12} />
-                      </button>
+                
+                {activeTab === 'notes' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
+                      {/* Placeholder for notes */}
+                      <div style={{ padding: 16, borderLeft: '2px solid var(--blue-500)', background: 'var(--surface-1)', borderRadius: '0 8px 8px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {playerText.notesReady}
+                      </div>
                     </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
-                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                      <FileText size={14} /> {isRu ? 'Фото' : 'Rasm'}
-                      <input type="file" style={{ display: 'none' }} accept="image/*" onChange={handleDiscussionImageUpload} />
-                    </label>
-                    <button className="btn btn-primary btn-sm" onClick={handleDiscussionSubmit} disabled={discussionLoading || !discussionInput.trim()}>
-                      {discussionLoading ? <Loader size={13} className="spin" /> : <Send size={13} />} Yuborish
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="input" placeholder={playerText.addNote} style={{ flex: 1, fontSize: 13 }} />
+                      <button className="btn btn-primary btn-sm"><Bookmark size={14} /> {playerText.save}</button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {discussions.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, padding: 12, background: 'var(--surface-2)', borderRadius: 12 }}>
-                    <div className="avatar" style={{ width: 32, height: 32, fontSize: 11, background: 'rgba(59,130,246,0.2)', color: '#3b82f6', minWidth: 32 }}>
-                      {c.user?.firstName ? c.user.firstName[0] : 'U'}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{c.user?.firstName} {c.user?.lastName}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {new Date(c.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                        {c.message}
-                      </div>
-                      {c.imageUrl && (
-                        <div style={{ marginTop: 8 }}>
-                          <img src={c.imageUrl} alt="attached" style={{ maxWidth: 200, borderRadius: 8 }} />
+                {activeTab === 'discussion' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ background: 'var(--surface-1)', padding: 16, borderRadius: 16, border: '1px solid var(--border-1)' }}>
+                      <textarea
+                        className="input"
+                        placeholder={playerText.discussionPlaceholder}
+                        value={discussionInput}
+                        onChange={e => setDiscussionInput(e.target.value)}
+                        rows={2}
+                        style={{ resize: 'none', marginBottom: 12, fontSize: 13.5 }}
+                      />
+                      {discussionImageUrl && (
+                        <div style={{ marginBottom: 12, position: 'relative', display: 'inline-block' }}>
+                          <img src={discussionImageUrl} alt="Upload" style={{ maxHeight: 110, borderRadius: 10 }} />
+                          <button 
+                            className="btn btn-ghost btn-sm btn-icon" 
+                            style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff' }}
+                            onClick={() => setDiscussionImageUrl('')}
+                          >
+                            <X size={13} />
+                          </button>
                         </div>
                       )}
+                      <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <FileText size={15} /> {playerText.photo}
+                          <input type="file" style={{ display: 'none' }} accept="image/*" onChange={handleDiscussionImageUpload} />
+                        </label>
+                        <button className="btn btn-primary btn-sm" onClick={handleDiscussionSubmit} disabled={discussionLoading || !discussionInput.trim()}>
+                          {discussionLoading ? <Loader size={14} className="spin" /> : <Send size={14} />} {playerText.send}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* ── LESSON SIDEBAR ── */}
-      {sidebarOpen && (
-        <aside className="lesson-sidebar">
-          <div className="lesson-sidebar-header">
-            <div style={{ fontWeight: 700, fontSize: 14 }}>Darslar</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{course?.progress || 0}% bajarildi</div>
-          </div>
-          <div className="progress-bar" style={{ height: 4, margin: '0 16px 12px', borderRadius: 99 }}>
-            <div className="progress-fill" style={{ width: `${course?.progress || 0}%` }} />
-          </div>
-          <div className="lesson-sidebar-body">
-            {courseModules.map(mod => (
-              <div key={mod.id} className="lesson-module">
-                <button
-                  className="lesson-module-header"
-                  onClick={() => setOpenModule(openModule === mod.id ? null : mod.id)}
-                >
-                  <ChevronDown size={14} style={{ transform: openModule === mod.id ? 'rotate(0)' : 'rotate(-90deg)', transition: '0.2s', minWidth: 14 }} />
-                  <div style={{ flex: 1, textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{mod.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{mod.done}/{mod.lessons} dars</div>
-                  </div>
-                  {mod.done === mod.lessons && mod.lessons > 0 && <CheckCircle size={14} color="var(--green-400)" />}
-                </button>
-                {openModule === mod.id && (
-                  <div className="lesson-items">
-                    {mod.items.map(item => (
-                      <div 
-                        key={item.id} 
-                        className={clsx('lesson-item', item.done && 'lesson-item-done', currentLesson?.id === item.id && 'lesson-item-current')}
-                        onClick={() => setCurrentLessonId(item.id)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div className="lesson-item-icon">
-                          {item.done
-                            ? <CheckCircle size={13} color="var(--green-400)" />
-                            : item.type === 'quiz' ? <FileText size={13} />
-                            : item.type === 'assignment' ? <Award size={13} />
-                            : <Play size={13} />
-                          }
+                    {discussions.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 14, padding: 16, background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 16 }}>
+                        <div className="avatar" style={{ width: 36, height: 36, fontSize: 12, background: 'rgba(59,130,246,0.15)', color: '#3b82f6', minWidth: 36, fontWeight: 700 }}>
+                          {c.user?.firstName ? c.user.firstName[0] : 'U'}
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{c.user?.firstName} {c.user?.lastName}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {new Date(c.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                            {c.message}
+                          </div>
+                          {c.imageUrl && (
+                            <div style={{ marginTop: 10 }}>
+                              <img src={c.imageUrl} alt="attached" style={{ maxWidth: 240, borderRadius: 10, border: '1px solid var(--border-1)' }} />
+                            </div>
+                          )}
                         </div>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{item.dur}</span>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+            )}
+            
+          </div>
+        </div>
+      </div>
+
+      {/* ── INTERACTIVE TIMELINE SIDEBAR ── */}
+      {sidebarOpen && (
+        <aside className="lesson-sidebar learning-sidebar glass-panel-2">
+          <div className="learning-sidebar-head">
+            <div className="learning-sidebar-title">
+              {playerText.learningPlan}
+            </div>
+            <div className="learning-progress-row">
+              <span>{playerText.progress}</span>
+              <span style={{ color: 'var(--blue-400)', fontWeight: 700 }}>{course?.progress || 0}%</span>
+            </div>
+            <div className="progress-bar" style={{ height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.05)' }}>
+              <div className="progress-fill" style={{ width: `${course?.progress || 0}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', boxShadow: '0 0 10px rgba(139,92,246,0.5)' }} />
+            </div>
+          </div>
+          
+          <div className="lesson-sidebar-body learning-sidebar-body">
+            {courseModules.map((mod, modIdx) => (
+              <div key={mod.id} style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 24, height: 1, background: 'var(--border-2)' }} />
+                  {isRu ? mod.titleRu || mod.title : mod.title}
+                </div>
+                
+                <div style={{ position: 'relative' }}>
+                  {mod.items.map((item, i) => {
+                    const isCurrent = currentLesson?.id === item.id;
+                    const isLast = i === mod.items.length - 1 && modIdx === courseModules.length - 1;
+                    return (
+                      <div 
+                        key={item.id} 
+                        style={{ display: 'flex', gap: 16, padding: '12px 0', position: 'relative', cursor: 'pointer', opacity: item.done || isCurrent ? 1 : 0.6 }}
+                        onClick={() => setCurrentLessonId(item.id)}
+                      >
+                        {!isLast && <div className={clsx('timeline-connector', item.done && 'active')} />}
+                        
+                        <div style={{ 
+                          width: 34, height: 34, borderRadius: '50%', flexShrink: 0, 
+                          background: isCurrent ? 'linear-gradient(135deg, #3b82f6, #8b5cf6)' : item.done ? 'var(--surface-2)' : 'var(--bg-0)',
+                          border: `2px solid ${isCurrent ? 'transparent' : item.done ? 'var(--blue-500)' : 'var(--border-2)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: isCurrent ? '#fff' : item.done ? 'var(--blue-400)' : 'var(--text-muted)',
+                          position: 'relative', zIndex: 1,
+                          boxShadow: isCurrent ? '0 0 15px rgba(139,92,246,0.4)' : 'none'
+                        }}>
+                          {item.done && !isCurrent ? <CheckCircle size={16} /> : item.type === 'quiz' ? <FileText size={14} /> : item.type === 'assignment' ? <Award size={14} /> : <Play size={14} />}
+                        </div>
+                        
+                        <div style={{ flex: 1, paddingTop: 6 }}>
+                          <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            {item.title}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                            {item.dur}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
@@ -804,10 +1160,10 @@ function CourseOverview({
   onToggleEdit, onSave, onAddModule, onDeleteModule, onUpdateModuleTitle,
   onAddLesson, onDeleteLesson, onUpdateLesson, handleLessonUpload,
   setAddingModule, setNewModuleTitle,
+  uploadingLessons = {},
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
   const [editingModId, setEditingModId] = useState<string | number | null>(null);
-  const [editingLessonKey, setEditingLessonKey] = useState<string | null>(null); // 'modId-lessonId'
   const [activeQuizBuilder, setActiveQuizBuilder] = useState<{ modId: string | number; lessonId: string | number; item: LessonItem } | null>(null);
 
   const desc = course.description || '';
@@ -817,51 +1173,63 @@ function CourseOverview({
   return (
     <div>
       {/* Hero */}
-      <div className="course-hero" style={{ marginBottom: 24 }}>
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color || '#3b82f6'}20, rgba(0,0,0,0.7))`, borderRadius: 'inherit' }} />
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.07 }}>
-          <BookOpen size={200} />
+      {/* Hero */}
+      <div className="course-hero" style={{ marginBottom: 32, borderRadius: 'var(--radius-2xl)', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 30px 60px rgba(0,0,0,0.4)' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color || '#3b82f6'}30, #000)`, zIndex: 0 }} />
+        <div style={{ position: 'absolute', top: -50, right: -50, width: 300, height: 300, background: `${course.color || '#3b82f6'}`, filter: 'blur(100px)', opacity: 0.2, borderRadius: '50%', zIndex: 0 }} />
+        
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', opacity: 0.05, right: 40, pointerEvents: 'none', zIndex: 0 }}>
+          <BookOpen size={240} />
         </div>
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 680 }}>
-          <span className="badge badge-blue" style={{ marginBottom: 12, display: 'inline-flex' }}>{cat} • {level}</span>
-          <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.5px', marginBottom: 10, lineHeight: 1.25 }}>{title}</h1>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 20, lineHeight: 1.6 }}>{desc}</p>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 20, fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Star size={13} color="#f59e0b" fill="#f59e0b" /> {course.rating || 5.0}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Users size={13} /> {course.enrolled || 0} {isRu ? 'учеников' : "o'quvchi"}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={13} /> {course.duration}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><BookOpen size={13} /> {course.lessons} {isRu ? 'уроков' : 'dars'}</span>
+
+        <div style={{ position: 'relative', zIndex: 1, padding: '48px 40px', maxWidth: 800 }}>
+          <span className="badge badge-blue" style={{ marginBottom: 16, display: 'inline-flex', padding: '6px 12px', fontSize: 13, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', backdropFilter: 'blur(10px)' }}>
+            <Sparkles size={12} style={{ marginRight: 6 }} /> {cat} • {level}
+          </span>
+          
+          <h1 style={{ fontSize: 36, fontWeight: 900, letterSpacing: '-1px', marginBottom: 16, lineHeight: 1.1, background: 'linear-gradient(180deg, #fff, #cbd5e1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {title}
+          </h1>
+          
+          <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', marginBottom: 28, lineHeight: 1.6, maxWidth: 600 }}>{desc}</p>
+          
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 28, fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star size={14} color="#f59e0b" fill="#f59e0b" /> <strong style={{ color: '#fff' }}>{course.rating || 5.0}</strong> {isRu ? 'Рейтинг' : 'Reyting'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Users size={14} color="var(--blue-400)" /> <strong style={{ color: '#fff' }}>{course.enrolled || 0}</strong> {isRu ? 'учеников' : "o'quvchi"}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} color="var(--violet-400)" /> <strong style={{ color: '#fff' }}>{course.duration}</strong></span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={14} color="var(--green-400)" /> <strong style={{ color: '#fff' }}>{course.lessons}</strong> {isRu ? 'уроков' : 'dars'}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <div className="avatar" style={{ width: 30, height: 30, fontSize: 11, background: `${course.color || '#3b82f6'}40` }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32, padding: '12px 16px', background: 'rgba(255,255,255,0.05)', borderRadius: 16, width: 'fit-content', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}>
+            <div className="avatar" style={{ width: 36, height: 36, fontSize: 13, background: `linear-gradient(135deg, ${course.color || '#3b82f6'}, #1e3a8a)`, color: '#fff', fontWeight: 700 }}>
               {course.instructor ? course.instructor.split(' ').map((n: string) => n[0]).join('') : 'T'}
             </div>
-            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{course.instructor}</span>
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-              <span>{isRu ? 'Общий прогресс' : 'Umumiy jarayon'}</span>
-              <span style={{ fontWeight: 700, color: course.color || '#3b82f6' }}>{course.progress || 0}%</span>
-            </div>
-            <div className="progress-bar" style={{ height: 8 }}>
-              <div className="progress-fill" style={{ width: `${course.progress || 0}%`, background: course.color || '#3b82f6' }} />
+            <div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{isRu ? 'Инструктор' : 'Instruktor'}</div>
+              <div style={{ fontSize: 14, color: '#fff', fontWeight: 600 }}>{course.instructor}</div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {isEnrolled ? (
-              <button className="btn btn-primary" onClick={onStart}><Play size={15} /> {isRu ? 'Продолжить' : 'Davom etish'}</button>
+              <button className="btn btn-primary" onClick={onStart} style={{ padding: '0 24px', height: 44, fontSize: 15, boxShadow: `0 10px 25px ${course.color || '#3b82f6'}40` }}>
+                <Play size={16} /> {isRu ? 'Продолжить обучение' : 'Ta\'limni davom etish'}
+              </button>
             ) : (
-              <button className="btn btn-primary" onClick={onEnroll}><Play size={15} /> {isRu ? 'Начать курс' : 'Kursni boshlash'}</button>
+              <button className="btn btn-primary" onClick={onEnroll} style={{ padding: '0 24px', height: 44, fontSize: 15, boxShadow: `0 10px 25px ${course.color || '#3b82f6'}40` }}>
+                <Play size={16} /> {isRu ? 'Начать курс' : 'Kursni boshlash'}
+              </button>
             )}
-            <button className="btn btn-secondary"><Bookmark size={14} /> {isRu ? 'Сохранить' : 'Saqlash'}</button>
-            <button className="btn btn-secondary"><Award size={14} /> {isRu ? 'Сертификат' : 'Sertifikat'}</button>
+            <button className="btn btn-secondary" style={{ height: 44, padding: '0 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
+              <Bookmark size={15} /> {isRu ? 'Сохранить' : 'Saqlash'}
+            </button>
             {canEdit && (
               <button
-                className={`btn btn-sm ${editMode ? 'btn-primary' : 'btn-secondary'}`}
-                style={editMode ? { background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', border: 'none' } : {}}
+                className={`btn ${editMode ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ height: 44, padding: '0 20px', ...(editMode ? { background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', border: 'none' } : { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }) }}
                 onClick={onToggleEdit}
               >
-                <Edit3 size={13} /> {editMode ? (isRu ? 'Режим редактирования' : 'Tahrirlash rejimi') : (isRu ? 'Редактировать' : 'Tahrirlash')}
+                <Edit3 size={15} /> {editMode ? (isRu ? 'Выйти из ред.' : 'Tahrirlashni tugatish') : (isRu ? 'Редактировать' : 'Tahrirlash')}
               </button>
             )}
           </div>
@@ -967,116 +1335,209 @@ function CourseOverview({
 
                   {/* Lesson list in edit mode */}
                   {editMode && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: mod.items.length > 0 ? 10 : 0 }}>
                       {mod.items.map((item: LessonItem) => (
-                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 10,
-                            border: '1px solid var(--border-1)'
-                          }}>
-                            <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 24 }}>
-                              {item.type === 'quiz' ? <FileText size={11} color="#3b82f6" />
-                                : item.type === 'assignment' ? <Award size={11} color="#f59e0b" />
-                                : <Play size={11} color="#3b82f6" />}
+                        <div key={item.id} style={{
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--border-1)',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                        }}>
+                          {/* Lesson header row */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 6, background: item.type === 'quiz' ? 'rgba(59,130,246,0.15)' : item.type === 'assignment' ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {item.type === 'quiz' ? <FileText size={12} color="#3b82f6" /> : item.type === 'assignment' ? <Award size={12} color="#f59e0b" /> : <Play size={12} color="#22c55e" />}
                             </div>
-                            {editingLessonKey === `${mod.id}-${item.id}` ? (
-                              <input
-                                className="input"
-                                style={{ fontSize: 13, flex: 1, padding: '4px 8px' }}
-                                value={item.title}
-                                autoFocus
-                                onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
-                                onBlur={() => setEditingLessonKey(null)}
-                                onKeyDown={(e: any) => e.key === 'Enter' && setEditingLessonKey(null)}
-                              />
-                            ) : (
-                              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>{item.title}</span>
-                            )}
+                            {/* Title input */}
+                            <input
+                              className="input"
+                              style={{ flex: 1, fontSize: 13, padding: '5px 10px', height: 32 }}
+                              value={item.title}
+                              placeholder="Dars nomi..."
+                              onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
+                            />
+                            {/* Type selector */}
                             <select
                               className="input"
-                              style={{ width: 100, fontSize: 11, padding: '3px 6px' }}
+                              style={{ width: 110, fontSize: 12, padding: '5px 8px', height: 32, flexShrink: 0 }}
                               value={item.type}
                               onChange={e => onUpdateLesson(mod.id, item.id, 'type', e.target.value)}
                             >
-                              <option value="video">Video</option>
-                              <option value="quiz">Test</option>
-                              <option value="assignment">Topshiriq</option>
+                              <option value="video">🎬 Video</option>
+                              <option value="quiz">📝 Test</option>
+                              <option value="assignment">📎 Topshiriq</option>
                             </select>
+                            {/* Duration */}
                             <input
                               className="input"
-                              style={{ width: 70, fontSize: 11, padding: '3px 6px' }}
+                              style={{ width: 65, fontSize: 12, padding: '5px 8px', height: 32, flexShrink: 0 }}
                               value={item.dur}
                               placeholder="10:00"
                               onChange={e => onUpdateLesson(mod.id, item.id, 'dur', e.target.value)}
                             />
-                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setEditingLessonKey(`${mod.id}-${item.id}`)}>
-                              <Edit3 size={11} color="#8b5cf6" />
-                            </button>
-                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onDeleteLesson(mod.id, item.id)}>
-                              <Trash2 size={11} color="var(--red-400)" />
+                            {/* Delete */}
+                            <button className="btn btn-ghost btn-sm btn-icon" style={{ flexShrink: 0 }} onClick={() => onDeleteLesson(mod.id, item.id)} title="O'chirish">
+                              <Trash2 size={13} color="var(--red-400)" />
                             </button>
                           </div>
-                          {editingLessonKey === `${mod.id}-${item.id}` && (
-                            <div style={{ padding: '8px 10px', background: 'var(--surface-1)', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                              {item.type === 'quiz' ? (
-                                <>
-                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tizim orqali test yaratish yoki havola:</span>
+
+                          {/* Content row — always visible based on type */}
+                          <div style={{ padding: '0 12px 12px 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            {item.type === 'video' && (
+                              <>
+                                <input
+                                  className="input"
+                                  style={{ flex: 1, minWidth: 180, fontSize: 12, padding: '6px 10px', height: 34 }}
+                                  placeholder="YouTube yoki MP4 URL kiriting..."
+                                  value={item.videoUrl || ''}
+                                  onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                                />
+                                <label
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '6px 14px', borderRadius: 8, height: 34,
+                                    background: uploadingLessons[`${mod.id}-${item.id}`] ? 'var(--text-muted)' : 'linear-gradient(135deg,#3b82f6,#2563eb)',
+                                    color: '#fff', fontSize: 12, fontWeight: 600,
+                                    cursor: uploadingLessons[`${mod.id}-${item.id}`] ? 'not-allowed' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
+                                    border: 'none',
+                                    pointerEvents: uploadingLessons[`${mod.id}-${item.id}`] ? 'none' : 'auto',
+                                  }}
+                                >
+                                  {uploadingLessons[`${mod.id}-${item.id}`] ? (
+                                    <>
+                                      <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} /> Yuklanmoqda...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Play size={12} /> Video yuklash
+                                    </>
+                                  )}
                                   <input
-                                    className="input"
-                                    style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
-                                    placeholder="Google Forms, Quizlet..."
-                                    value={item.videoUrl || ''}
-                                    onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                                    type="file"
+                                    style={{ display: 'none' }}
+                                    accept="video/*,audio/*"
+                                    onChange={e => handleLessonUpload(mod.id, item.id, e)}
+                                    disabled={uploadingLessons[`${mod.id}-${item.id}`]}
                                   />
-                                  <button type="button" className="btn btn-primary btn-sm" onClick={(e) => {
+                                </label>
+                                {item.videoUrl && (
+                                  <span style={{ fontSize: 11, color: 'var(--green-400)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <CheckCircle size={11} /> Yuklangan
+                                  </span>
+                                )}
+                              </>
+                            )}
+
+                            {item.type === 'assignment' && (
+                              <>
+                                <input
+                                  className="input"
+                                  style={{ flex: 1, minWidth: 180, fontSize: 12, padding: '6px 10px', height: 34 }}
+                                  placeholder="Topshiriq fayli URL (Google Drive, Dropbox...)..."
+                                  value={item.videoUrl || ''}
+                                  onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
+                                />
+                                <label
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '6px 14px', borderRadius: 8, height: 34,
+                                    background: uploadingLessons[`${mod.id}-${item.id}`] ? 'var(--text-muted)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
+                                    color: '#fff', fontSize: 12, fontWeight: 600,
+                                    cursor: uploadingLessons[`${mod.id}-${item.id}`] ? 'not-allowed' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
+                                    pointerEvents: uploadingLessons[`${mod.id}-${item.id}`] ? 'none' : 'auto',
+                                  }}
+                                >
+                                  {uploadingLessons[`${mod.id}-${item.id}`] ? (
+                                    <>
+                                      <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} /> Yuklanmoqda...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Award size={12} /> Fayl yuklash
+                                    </>
+                                  )}
+                                  <input
+                                    type="file"
+                                    style={{ display: 'none' }}
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar"
+                                    onChange={e => handleLessonUpload(mod.id, item.id, e)}
+                                    disabled={uploadingLessons[`${mod.id}-${item.id}`]}
+                                  />
+                                </label>
+                              </>
+                            )}
+
+                            {item.type === 'quiz' && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                                <div style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <FileText size={13} color="#3b82f6" />
+                                  {item.quizData?.questions?.length
+                                    ? <span style={{ color: 'var(--green-400)', fontWeight: 600 }}>✓ {item.quizData.questions.length} ta savol yaratilgan</span>
+                                    : <span style={{ color: 'var(--text-muted)' }}>Hali savol qo'shilmagan</span>
+                                  }
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  style={{
+                                    background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
+                                    color: '#fff', border: 'none',
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    fontSize: 12, padding: '6px 14px', borderRadius: 8, flexShrink: 0,
+                                  }}
+                                  onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setActiveQuizBuilder({ modId: mod.id, lessonId: item.id, item });
-                                  }}>
-                                    <Edit3 size={13} /> {item.quizData ? "Testni tahrirlash" : "Test yaratish"}
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                    {item.type === 'assignment' ? 'Topshiriq URL:' : 'Video URL:'}
-                                  </span>
-                                  <input
-                                    className="input"
-                                    style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
-                                    placeholder={
-                                      item.type === 'assignment' ? "Topshiriq fayli manzili (Google Drive, Dropbox...)" :
-                                      "YouTube yoki MP4 video URL kiriting..."
-                                    }
-                                    value={item.videoUrl || ''}
-                                    onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
-                                  />
-                                  {item.type === 'video' && (
-                                    <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', padding: '4px 12px' }}>
-                                      Yuklash
-                                      <input 
-                                        type="file" 
-                                        style={{ display: 'none' }} 
-                                        accept="video/*"
-                                        onChange={e => handleLessonUpload(mod.id, item.id, e)}
-                                      />
-                                    </label>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )}
+                                  }}
+                                >
+                                  <Edit3 size={12} />
+                                  {item.quizData?.questions?.length ? 'Testni tahrirlash' : 'Test yaratish'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
 
                       <button
                         className="btn btn-ghost btn-sm"
-                        style={{ alignSelf: 'flex-start', marginTop: 4, fontSize: 12, color: '#3b82f6', border: '1px dashed rgba(59,130,246,0.4)', borderRadius: 8 }}
+                        style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12, color: '#3b82f6', border: '1px dashed rgba(59,130,246,0.4)', borderRadius: 8, padding: '6px 14px' }}
                         onClick={() => onAddLesson(mod.id)}
                       >
-                        <Plus size={12} /> {isRu ? '+ Новый урок' : '+ Yangi dars'}
+                        <Plus size={12} /> {isRu ? '+ Yangi dars' : '+ Yangi dars'}
                       </button>
+                    </div>
+                  )}
+
+                  {/* Lesson list in non-edit mode */}
+                  {!editMode && mod.items && mod.items.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                      {mod.items.map((item: LessonItem) => (
+                        <div key={item.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '10px 14px',
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--border-1)',
+                          borderRadius: 10,
+                        }}>
+                          <div style={{
+                            width: 24, height: 24, borderRadius: 6,
+                            background: item.type === 'quiz' ? 'rgba(59,130,246,0.1)' : item.type === 'assignment' ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                          }}>
+                            {item.type === 'quiz' ? <FileText size={12} color="#3b82f6" /> : item.type === 'assignment' ? <Award size={12} color="#f59e0b" /> : <Play size={12} color="#22c55e" />}
+                          </div>
+                          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                            {item.title}
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {item.type === 'quiz' ? (item.quizData?.questions?.length ? `${item.quizData.questions.length} ta savol` : 'Test') : item.dur}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
