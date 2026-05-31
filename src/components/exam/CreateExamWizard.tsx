@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Check, ChevronRight, ChevronLeft, Save, Plus, Trash2, Settings, FileText, Database,
-  Sparkles, Target, Layers, Activity, Lock, ChevronDown
+  X, Check, ChevronRight, ChevronLeft, Save, Plus, Trash2, Settings,
+  FileText, Layers, Sparkles, Activity, Lock, Shuffle, Eye,
+  Clock, Award, Zap, BookOpen, BarChart2, AlignLeft, Calendar, Key, Copy, Users, Search
 } from 'lucide-react';
 import { examsApi } from '@/api/exams.api';
+import { apiClient } from '@/api/axios';
+import toast from 'react-hot-toast';
 import type { TestQuestion, Exam } from '@/api/exams.api';
 
 interface CreateExamWizardProps {
@@ -12,19 +17,52 @@ interface CreateExamWizardProps {
   onSuccess: (exam: Exam) => void;
 }
 
+const COLORS = [
+  { hex: '#3b82f6', label: 'Ko\'k' },
+  { hex: '#8b5cf6', label: 'Binafsha' },
+  { hex: '#ec4899', label: 'Pushti' },
+  { hex: '#ef4444', label: 'Qizil' },
+  { hex: '#f59e0b', label: 'Sariq' },
+  { hex: '#10b981', label: 'Yashil' },
+  { hex: '#06b6d4', label: 'Moviy' },
+  { hex: '#f97316', label: 'To\'q sariq' },
+];
+
+const CATEGORIES = [
+  'Sifat Menejmenti', 'Xavfsizlik texnikasi', 'Ishlab chiqarish',
+  'Metallurgiya', 'Kimyo texnologiyasi', 'Ekologiya', 'Iqtisodiyot', 'Boshqaruv',
+  'IT va Raqamli texnologiyalar', 'Huquq va Compliance', 'Moliya va Audit',
+  'Kadrlar boshqaruvi', 'Logistika', 'Sog\'liqni saqlash', 'Muhandislik',
+];
+
+const VALIDITY_OPTIONS = [
+  { value: 'months_3', label: '3 oy' },
+  { value: 'months_6', label: '6 oy' },
+  { value: 'year_1', label: '1 yil' },
+  { value: 'years_2', label: '2 yil' },
+  { value: 'lifetime', label: 'Butun umr' },
+];
+
+const STEPS = [
+  { id: 1, label: 'Asosiy ma\'lumot', icon: FileText, desc: 'Test nomi va tavsifi' },
+  { id: 2, label: 'Sozlamalar', icon: Settings, desc: 'Vaqt, ball va qoidalar' },
+  { id: 3, label: 'Savollar', icon: Layers, desc: 'Savollar va javoblar' },
+];
+
 export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) {
   const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const [exam, setExam] = useState<Partial<Exam>>({
+  const [exam, setExam] = useState<Partial<Exam> & {
+    startAt?: string; endAt?: string; password?: string;
+    copyProtection?: boolean; validityPeriod?: string; allowedUsers?: string[];
+    customCategory?: string;
+  }>({
     title: '',
     description: '',
     category: '',
+    customCategory: '',
     timeLimitMinutes: 60,
     passingScore: 70,
     maxAttempts: 3,
@@ -32,7 +70,31 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
     proctored: false,
     visibility: 'public',
     color: '#3b82f6',
+    copyProtection: false,
+    validityPeriod: 'year_1',
+    allowedUsers: [],
   });
+
+  // allowedUsers search
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState<any[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+
+  const searchUsers = async (q: string) => {
+    if (!q.trim()) { setUserResults([]); return; }
+    setUserSearchLoading(true);
+    try {
+      const res = await apiClient.get(`/users?search=${encodeURIComponent(q)}`);
+      const data = res.data?.data ?? res.data ?? [];
+      setUserResults(Array.isArray(data) ? data.slice(0, 10) : []);
+    } catch { setUserResults([]); }
+    finally { setUserSearchLoading(false); }
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => searchUsers(userSearch), 300);
+    return () => clearTimeout(t);
+  }, [userSearch]);
 
   const [questions, setQuestions] = useState<Partial<TestQuestion>[]>([
     {
@@ -79,396 +141,1022 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
     setQuestions(questions.filter((_, i) => i !== index));
   };
 
+  const nextStep = () => {
+    if (step < 3) { setDirection(1); setStep(prev => prev + 1); }
+  };
+  const prevStep = () => {
+    if (step > 1) { setDirection(-1); setStep(prev => prev - 1); }
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const created = await examsApi.create({ ...exam, questions });
+      const payload = {
+        ...exam,
+        category: exam.customCategory?.trim() || exam.category,
+        questions,
+      };
+      delete (payload as any).customCategory;
+      const created = await examsApi.create(payload as any);
+      toast.success('Imtihon muvaffaqiyatli yaratildi! 🎉', { position: 'bottom-right' });
       onSuccess(created);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Xatolik yuz berdi. Konsolni tekshiring.');
+      const msg = err.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg[0] : msg || 'Imtihon yaratishda xatolik yuz berdi', { position: 'bottom-right' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className={clsx(
-      "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-all duration-500",
-      mounted ? "bg-[#020617]/80 backdrop-blur-md" : "bg-transparent backdrop-blur-none"
-    )}>
-      {/* Ambient background glows */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[20%] left-[30%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] mix-blend-screen" />
-        <div className="absolute bottom-[20%] right-[30%] w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] mix-blend-screen" />
-      </div>
+  const slideVariants = {
+    enter: (dir: number) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
+  };
 
-      <div className={clsx(
-        "relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#0f172a]/90 backdrop-blur-xl border border-white/[0.05] shadow-[0_0_80px_-20px_rgba(59,130,246,0.3)] rounded-[24px] overflow-hidden transition-all duration-500 transform",
-        mounted ? "translate-y-0 opacity-100 scale-100" : "translate-y-8 opacity-0 scale-95"
-      )}>
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.05] bg-white/[0.02] relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-white/10 shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-              <Sparkles className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">
-                Enterprise Exam Builder
-              </h2>
-              <p className="text-sm font-medium text-blue-400/80 flex items-center gap-2 mt-0.5">
-                <Database className="w-3.5 h-3.5" /> AGMK Intelligence System
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  const progress = ((step - 1) / 2) * 100;
 
-        {/* Steps Indicator - Apple Style */}
-        <div className="relative px-8 py-6 border-b border-white/[0.05] bg-[#0b1120]/50">
-          <div className="flex justify-between items-center relative z-10">
-            {[
-              { id: 1, label: 'Asosiy', icon: FileText, desc: 'Test ma\'lumotlari' },
-              { id: 2, label: 'Sozlamalar', icon: Settings, desc: 'Qoidalar va xavfsizlik' },
-              { id: 3, label: 'Savollar', icon: Layers, desc: 'Kontent yaratish' },
-            ].map((s) => {
-              const isActive = step === s.id;
-              const isPast = step > s.id;
-              return (
-                <div key={s.id} className="flex flex-col items-center relative w-1/3">
-                  <div className={clsx(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 relative z-10",
-                    isActive ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_0_25px_rgba(59,130,246,0.5)] scale-110" :
-                    isPast ? "bg-white/10 text-blue-400 border border-blue-500/30" : "bg-white/5 text-slate-500"
-                  )}>
-                    {isPast ? <Check className="w-6 h-6" /> : <s.icon className="w-5 h-5" />}
-                  </div>
-                  <div className="text-center mt-4 transition-opacity duration-300">
-                    <p className={clsx("text-sm font-bold tracking-wide", isActive ? "text-white" : isPast ? "text-slate-300" : "text-slate-500")}>
-                      {s.label}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1 hidden sm:block">{s.desc}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {/* Progress Bar Background */}
-          <div className="absolute top-12 left-0 w-full px-[16.66%] z-0">
-            <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700 ease-out"
-                style={{ width: `${((step - 1) / 2) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
+  return createPortal(
+    <AnimatePresence>
+      <div className="cew-overlay">
+        <style dangerouslySetInnerHTML={{ __html: `
+          .cew-overlay {
+            position: fixed; inset: 0; z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 12px;
+            background: rgba(4, 6, 14, 0.88);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+          }
+          .cew-container {
+            width: 100%; max-width: 1280px;
+            height: 98vh;
+            display: flex; flex-direction: column;
+            background: var(--bg-1);
+            border: 1px solid var(--border-2);
+            border-radius: 28px;
+            box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 60px rgba(59,130,246,0.08);
+            overflow: hidden; position: relative;
+            color: var(--text-primary);
+          }
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
-          
-          {step === 1 && (
-            <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-right-8 duration-500 fade-in">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Imtihon nomi</label>
-                <input 
-                  type="text" 
-                  value={exam.title} 
-                  onChange={(e) => setExam({...exam, title: e.target.value})}
-                  className="w-full bg-[#0b1120]/50 border border-white/10 rounded-2xl px-5 py-4 text-white text-lg font-medium focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600 shadow-inner"
-                  placeholder="Masalan: React Advanced Certification"
-                />
+          /* ─── HEADER (3-column: brand | steps | close) ─── */
+          .cew-header {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 24px;
+            padding: 14px 24px;
+            background: var(--bg-2);
+            border-bottom: 1px solid var(--border-1);
+            flex-shrink: 0;
+          }
+          .cew-header-brand { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+          .cew-brand-icon {
+            width: 38px; height: 38px; border-radius: 12px;
+            background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.15));
+            border: 1px solid rgba(59,130,246,0.2);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+          }
+          .cew-brand-title { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
+          .cew-brand-sub { font-size: 10px; color: var(--text-tertiary); font-weight: 500; margin-top: 1px; }
+          .cew-close {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: transparent; border: 1px solid transparent;
+            color: var(--text-tertiary); display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all var(--transition);
+          }
+          .cew-close:hover { background: var(--surface-2); border-color: var(--border-2); color: var(--text-primary); }
+
+          /* ─── INLINE STEPS (inside header) ─── */
+          .cew-steps-inline {
+            display: flex; align-items: center; justify-content: center;
+            gap: 4px; position: relative;
+          }
+          .cew-step-inline {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px; border-radius: 12px;
+            cursor: pointer; transition: background var(--transition);
+            border: 1px solid transparent;
+          }
+          .cew-step-inline.active {
+            background: rgba(59,130,246,0.1);
+            border-color: rgba(59,130,246,0.2);
+          }
+          .cew-step-inline.done { cursor: pointer; }
+          .cew-step-inline.done:hover { background: var(--surface-1); }
+          .cew-step-dot-sm {
+            width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 12px;
+            background: var(--bg-1); border: 1px solid var(--border-2);
+            color: var(--text-muted); transition: all 0.3s;
+          }
+          .cew-step-inline.active .cew-step-dot-sm {
+            background: var(--blue-500); border-color: var(--blue-600); color: #fff;
+            box-shadow: 0 0 16px rgba(59,130,246,0.4);
+          }
+          .cew-step-inline.done .cew-step-dot-sm {
+            background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); color: var(--green-400);
+          }
+          .cew-step-label-sm { font-size: 12px; font-weight: 700; color: var(--text-tertiary); transition: color var(--transition); }
+          .cew-step-inline.active .cew-step-label-sm { color: var(--text-primary); }
+          .cew-step-inline.done .cew-step-label-sm { color: var(--text-secondary); }
+          .cew-step-connector {
+            width: 28px; height: 2px; border-radius: 99px;
+            background: var(--border-2); flex-shrink: 0; transition: background 0.4s;
+          }
+          .cew-step-connector.done { background: var(--green-500); }
+          /* Progress bar now at bottom of header */
+          .cew-header-progress {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            height: 2px; background: transparent;
+          }
+          .cew-header-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--blue-500), var(--violet-500));
+            transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+          }
+
+
+
+          /* ─── BODY ─── */
+          .cew-body {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            background: var(--bg-0);
+          }
+          .cew-body::-webkit-scrollbar { width: 5px; }
+          .cew-body::-webkit-scrollbar-track { background: transparent; }
+          .cew-body::-webkit-scrollbar-thumb { background: var(--border-3); border-radius: 99px; }
+          .cew-body::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+          .cew-page { padding: 32px 40px; min-height: 100%; }
+          .cew-page-header { margin-bottom: 28px; }
+          .cew-page-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
+          .cew-page-subtitle { font-size: 13px; color: var(--text-tertiary); margin-top: 4px; }
+
+          /* ─── FORM ELEMENTS ─── */
+          .cew-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+          .cew-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+          .cew-field { display: flex; flex-direction: column; gap: 8px; }
+          .cew-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-secondary);
+          }
+          .cew-input {
+            background: var(--bg-1); border: 1px solid var(--border-2);
+            border-radius: 12px; padding: 12px 16px;
+            color: var(--text-primary); font-size: 14px; font-weight: 500;
+            outline: none; transition: all var(--transition); width: 100%;
+            font-family: var(--font);
+          }
+          .cew-input::placeholder { color: var(--text-muted); }
+          .cew-input:focus { border-color: var(--blue-500); background: var(--bg-2); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+          .cew-textarea { height: 96px; resize: none; }
+          .cew-select {
+            background: var(--bg-1); border: 1px solid var(--border-2);
+            border-radius: 12px; padding: 12px 40px 12px 16px;
+            color: var(--text-primary); font-size: 14px; font-weight: 500;
+            outline: none; cursor: pointer; transition: all var(--transition);
+            appearance: none; width: 100%; font-family: var(--font);
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+          }
+          .cew-select:focus { border-color: var(--blue-500); }
+
+          /* ─── SECTION CARD ─── */
+          .cew-section-card {
+            background: var(--bg-1); border: 1px solid var(--border-1);
+            border-radius: 18px; padding: 22px 24px; margin-bottom: 20px;
+          }
+          .cew-section-card-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 18px;
+            display: flex; align-items: center; gap: 8px;
+          }
+          .cew-section-card-title-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue-500); }
+
+          /* ─── COLOR PICKER ─── */
+          .cew-colors { display: flex; gap: 10px; flex-wrap: wrap; }
+          .cew-color-btn {
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.2s; position: relative;
+          }
+          .cew-color-btn:hover { transform: scale(1.15); }
+          .cew-color-btn.selected { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.15); }
+          .cew-color-btn.selected::after {
+            content: ''; position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/14px no-repeat;
+          }
+
+          /* ─── METRIC CARDS ─── */
+          .cew-metric-card {
+            background: var(--bg-1); border: 1px solid var(--border-1);
+            border-radius: 18px; padding: 20px;
+            display: flex; flex-direction: column; gap: 14px;
+          }
+          .cew-metric-top { display: flex; align-items: center; gap: 10px; }
+          .cew-metric-icon {
+            width: 36px; height: 36px; border-radius: 11px;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .cew-metric-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+          .cew-metric-input {
+            background: var(--bg-0); border: 1px solid var(--border-2);
+            border-radius: 10px; padding: 10px;
+            color: var(--text-primary); font-size: 26px; font-weight: 800;
+            text-align: center; outline: none; width: 100%;
+            transition: border-color var(--transition); font-family: var(--font);
+          }
+          .cew-metric-input:focus { border-color: var(--blue-500); }
+          .cew-metric-unit { font-size: 11px; color: var(--text-muted); text-align: center; font-weight: 600; }
+
+          /* ─── TOGGLE ─── */
+          .cew-toggle-list { display: flex; flex-direction: column; gap: 0; }
+          .cew-toggle-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-1);
+          }
+          .cew-toggle-item:last-child { border-bottom: none; padding-bottom: 0; }
+          .cew-toggle-item:first-child { padding-top: 0; }
+          .cew-toggle-left { display: flex; align-items: center; gap: 12px; }
+          .cew-toggle-icon {
+            width: 34px; height: 34px; border-radius: 10px;
+            background: var(--bg-0); border: 1px solid var(--border-1);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary);
+          }
+          .cew-toggle-text { }
+          .cew-toggle-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+          .cew-toggle-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+          .cew-switch {
+            width: 46px; height: 26px; border-radius: 99px;
+            background: var(--border-3); position: relative;
+            cursor: pointer; transition: background 0.2s; border: none; flex-shrink: 0;
+          }
+          .cew-switch.on-green { background: var(--green-500); }
+          .cew-switch.on-blue { background: var(--blue-500); }
+          .cew-switch-knob {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #fff; position: absolute; top: 4px; left: 4px;
+            transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+          }
+          .cew-switch.on-green .cew-switch-knob,
+          .cew-switch.on-blue .cew-switch-knob { transform: translateX(20px); }
+
+          /* ─── QUESTIONS ─── */
+          .cew-q-list { display: flex; flex-direction: column; gap: 16px; }
+          .cew-q-card {
+            background: var(--bg-1); border: 1px solid var(--border-1);
+            border-radius: 18px; overflow: hidden;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            position: relative;
+          }
+          .cew-q-card:hover { border-color: var(--border-3); }
+          .cew-q-card-top {
+            display: flex; align-items: center; gap: 14px;
+            padding: 16px 20px; border-bottom: 1px solid var(--border-1);
+            background: var(--bg-2);
+          }
+          .cew-q-num {
+            width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+            background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.1));
+            border: 1px solid rgba(59,130,246,0.15);
+            color: var(--blue-400); font-weight: 800; font-size: 13px;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .cew-q-type-select {
+            background: var(--bg-1); border: 1px solid var(--border-2);
+            border-radius: 9px; padding: 6px 28px 6px 10px;
+            font-size: 11px; font-weight: 700; color: var(--blue-400);
+            outline: none; cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center; background-size: 11px;
+            font-family: var(--font);
+          }
+          .cew-q-del {
+            margin-left: auto; width: 30px; height: 30px; border-radius: 9px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.15);
+            color: var(--red-400); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all var(--transition); opacity: 0;
+          }
+          .cew-q-card:hover .cew-q-del { opacity: 1; }
+          .cew-q-del:hover { background: var(--red-500); border-color: var(--red-500); color: #fff; }
+          .cew-q-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+          .cew-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .cew-opt {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; border-radius: 12px;
+            background: var(--bg-0); border: 1px solid var(--border-2);
+            cursor: pointer; transition: all 0.15s;
+          }
+          .cew-opt.correct { background: rgba(34,197,94,0.07); border-color: rgba(34,197,94,0.3); }
+          .cew-opt-sel {
+            width: 18px; height: 18px; flex-shrink: 0;
+            border: 2px solid var(--border-3);
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+          }
+          .cew-opt-sel.radio { border-radius: 50%; }
+          .cew-opt-sel.checkbox { border-radius: 5px; }
+          .cew-opt-sel.correct { background: var(--green-500); border-color: var(--green-500); color: #fff; }
+          .cew-opt-input {
+            background: transparent; border: none; outline: none;
+            color: var(--text-primary); font-size: 13px; font-weight: 600;
+            flex: 1; font-family: var(--font);
+          }
+          .cew-add-q {
+            width: 100%; padding: 18px; margin-top: 4px;
+            border: 1.5px dashed var(--border-3); border-radius: 18px;
+            background: transparent; color: var(--text-secondary);
+            font-size: 13px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: all var(--transition); font-family: var(--font);
+          }
+          .cew-add-q:hover { border-color: var(--blue-500); color: var(--blue-400); background: rgba(59,130,246,0.04); }
+          .cew-add-q-circle {
+            width: 26px; height: 26px; border-radius: 50%;
+            background: var(--border-3); display: flex; align-items: center; justify-content: center;
+            transition: all var(--transition);
+          }
+          .cew-add-q:hover .cew-add-q-circle { background: var(--blue-500); color: #fff; }
+          .cew-q-count {
+            margin-left: auto;
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.15);
+            border-radius: 20px; padding: 3px 10px;
+            font-size: 11px; font-weight: 700; color: var(--blue-400);
+          }
+
+          /* ─── FOOTER ─── */
+          .cew-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 32px;
+            background: var(--bg-2); border-top: 1px solid var(--border-1);
+            flex-shrink: 0;
+          }
+          .cew-footer-info { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+          .cew-footer-actions { display: flex; align-items: center; gap: 12px; }
+          .cew-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            padding: 10px 20px; border-radius: 12px; font-size: 13px; font-weight: 700;
+            cursor: pointer; border: none; transition: all var(--transition);
+            font-family: var(--font);
+          }
+          .cew-btn-ghost { background: transparent; color: var(--text-secondary); }
+          .cew-btn-ghost:hover { color: var(--text-primary); background: var(--surface-1); }
+          .cew-btn-secondary {
+            background: var(--surface-2); border: 1px solid var(--border-2); color: var(--text-primary);
+          }
+          .cew-btn-secondary:hover { background: var(--surface-3); }
+          .cew-btn-primary {
+            background: var(--blue-500); color: #fff;
+            box-shadow: 0 2px 12px rgba(59,130,246,0.25);
+          }
+          .cew-btn-primary:hover { background: var(--blue-600); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.35); }
+          .cew-btn-save {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: #fff; box-shadow: 0 2px 16px rgba(99,70,250,0.3);
+          }
+          .cew-btn-save:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(99,70,250,0.45); }
+          .cew-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+          /* ─── RESPONSIVE ─── */
+          @media (max-width: 768px) {
+            .cew-grid-2, .cew-grid-3, .cew-options-grid { grid-template-columns: 1fr; }
+            .cew-container { max-width: 100%; height: 96vh; border-radius: 20px; }
+            .cew-page { padding: 20px; }
+            .cew-step-desc { display: none; }
+          }
+        `}} />
+
+        {/* Modal container */}
+        <motion.div
+          initial={{ scale: 0.94, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.94, opacity: 0, y: 20 }}
+          transition={{ type: 'spring', duration: 0.5, bounce: 0.2 }}
+          className="cew-container"
+        >
+
+          {/* ── HEADER + STEPS (bir qatorda) ── */}
+          <div className="cew-header" style={{ position: 'relative' }}>
+            {/* Chap: Brand */}
+            <div className="cew-header-brand">
+              <div className="cew-brand-icon">
+                <Sparkles style={{ color: 'var(--blue-400)', width: 18, height: 18 }} />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Tavsif (Ixtiyoriy)</label>
-                <textarea 
-                  value={exam.description} 
-                  onChange={(e) => setExam({...exam, description: e.target.value})}
-                  className="w-full bg-[#0b1120]/50 border border-white/10 rounded-2xl px-5 py-4 text-white font-medium focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600 shadow-inner h-32 resize-none"
-                  placeholder="Ushbu imtihon kimlar uchun va nimalarni o'z ichiga oladi..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Kategoriya</label>
-                  <input 
-                    type="text" 
-                    value={exam.category} 
-                    onChange={(e) => setExam({...exam, category: e.target.value})}
-                    className="w-full bg-[#0b1120]/50 border border-white/10 rounded-2xl px-5 py-3.5 text-white font-medium focus:ring-2 focus:ring-blue-500/50 outline-none transition-all placeholder:text-slate-600"
-                    placeholder="Masalan: Frontend"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Mavzu Rangi</label>
-                  <div className="flex gap-3 bg-[#0b1120]/50 border border-white/10 rounded-2xl px-5 py-3.5 items-center justify-between">
-                    {['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981'].map(c => (
-                      <button
-                        key={c}
-                        onClick={() => setExam({...exam, color: c})}
-                        className={clsx(
-                          "w-7 h-7 rounded-full transition-all duration-300 relative",
-                          exam.color === c ? "scale-125 shadow-[0_0_15px_currentColor]" : "hover:scale-110 opacity-60 hover:opacity-100"
-                        )}
-                        style={{ backgroundColor: c, color: c }}
-                      >
-                        {exam.color === c && <div className="absolute inset-0 border-2 border-white rounded-full opacity-50" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div>
+                <div className="cew-brand-title">Yangi Imtihon Yaratish</div>
+                <div className="cew-brand-sub">AGMK Enterprise LMS</div>
               </div>
             </div>
-          )}
 
-          {step === 2 && (
-            <div className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-right-8 duration-500 fade-in">
-              {/* Top grid metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* Duration */}
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 hover:bg-white/[0.04] transition-colors group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                      <Target className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <label className="text-sm font-bold text-slate-300">Vaqt (Minut)</label>
-                  </div>
-                  <input 
-                    type="number" 
-                    value={exam.timeLimitMinutes} 
-                    onChange={(e) => setExam({...exam, timeLimitMinutes: Number(e.target.value)})}
-                    className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-4 py-3 text-2xl font-black text-white outline-none text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-                </div>
-                
-                {/* Score */}
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 hover:bg-white/[0.04] transition-colors group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <Activity className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <label className="text-sm font-bold text-slate-300">O'tish Bali (%)</label>
-                  </div>
-                  <input 
-                    type="number" 
-                    value={exam.passingScore} 
-                    onChange={(e) => setExam({...exam, passingScore: Number(e.target.value)})}
-                    className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-4 py-3 text-2xl font-black text-emerald-400 outline-none text-center focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
-                  />
-                </div>
-
-                {/* Attempts */}
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 hover:bg-white/[0.04] transition-colors group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                      <Layers className="w-5 h-5 text-purple-400" />
-                    </div>
-                    <label className="text-sm font-bold text-slate-300">Urinishlar</label>
-                  </div>
-                  <input 
-                    type="number" 
-                    value={exam.maxAttempts} 
-                    onChange={(e) => setExam({...exam, maxAttempts: Number(e.target.value)})}
-                    className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-4 py-3 text-2xl font-black text-purple-400 outline-none text-center focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Security & Access */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Kimlarga ruxsat</label>
-                  <div className="relative">
-                    <select 
-                      value={exam.visibility}
-                      onChange={(e) => setExam({...exam, visibility: e.target.value as any})}
-                      className="w-full appearance-none bg-[#0b1120]/50 border border-white/10 rounded-2xl px-5 py-4 text-white font-medium outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
+            {/* O'rta: Steps */}
+            <div className="cew-steps-inline">
+              {STEPS.map((s, idx) => {
+                const isActive = step === s.id;
+                const isDone = step > s.id;
+                const Icon = s.icon;
+                return (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {idx > 0 && (
+                      <div className={clsx('cew-step-connector', isDone && 'done')} />
+                    )}
+                    <div
+                      className={clsx('cew-step-inline', isActive && 'active', isDone && 'done')}
+                      onClick={() => { if (isDone) { setDirection(s.id < step ? -1 : 1); setStep(s.id); } }}
                     >
-                      <option value="public">Barchaga Ochiq</option>
-                      <option value="department">Faqat Mening Bo'limim</option>
-                      <option value="employees">Tanlangan Xodimlar</option>
-                    </select>
-                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                      <div className="cew-step-dot-sm">
+                        {isDone ? <Check style={{ width: 13, height: 13 }} /> : <Icon style={{ width: 13, height: 13 }} />}
+                      </div>
+                      <span className="cew-step-label-sm">{s.label}</span>
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex flex-col justify-center gap-4 bg-[#0b1120]/50 border border-white/10 rounded-2xl p-5">
-                  <label className="flex items-center justify-between cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                        <Lock className="w-4 h-4 text-slate-300" />
-                      </div>
-                      <span className="text-sm font-semibold text-white">Proctoring (Anti-cheat)</span>
-                    </div>
-                    <div className={clsx(
-                      "w-12 h-6 rounded-full relative transition-colors duration-300",
-                      exam.proctored ? "bg-emerald-500" : "bg-slate-700"
-                    )}>
-                      <input 
-                        type="checkbox" 
-                        className="opacity-0 w-0 h-0 absolute"
-                        checked={exam.proctored} 
-                        onChange={(e) => setExam({...exam, proctored: e.target.checked})}
-                      />
-                      <div className={clsx(
-                        "absolute top-1 bg-white w-4 h-4 rounded-full transition-all duration-300 shadow-md",
-                        exam.proctored ? "left-7" : "left-1"
-                      )} />
-                    </div>
-                  </label>
-
-                  <div className="h-px w-full bg-white/5" />
-
-                  <label className="flex items-center justify-between cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                        <Database className="w-4 h-4 text-slate-300" />
-                      </div>
-                      <span className="text-sm font-semibold text-white">Savollarni aralashtirish</span>
-                    </div>
-                    <div className={clsx(
-                      "w-12 h-6 rounded-full relative transition-colors duration-300",
-                      exam.shuffleQuestions ? "bg-blue-500" : "bg-slate-700"
-                    )}>
-                      <input 
-                        type="checkbox" 
-                        className="opacity-0 w-0 h-0 absolute"
-                        checked={exam.shuffleQuestions} 
-                        onChange={(e) => setExam({...exam, shuffleQuestions: e.target.checked})}
-                      />
-                      <div className={clsx(
-                        "absolute top-1 bg-white w-4 h-4 rounded-full transition-all duration-300 shadow-md",
-                        exam.shuffleQuestions ? "left-7" : "left-1"
-                      )} />
-                    </div>
-                  </label>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          )}
 
-          {step === 3 && (
-            <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-500 fade-in pb-10">
-              {questions.map((q, qIndex) => (
-                <div key={qIndex} className="bg-white/[0.02] border border-white/[0.08] hover:border-white/[0.15] rounded-3xl p-6 md:p-8 relative group transition-all duration-300 shadow-lg">
-                  <button 
-                    onClick={() => removeQuestion(qIndex)}
-                    className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all duration-300"
-                    title="Savolni o'chirish"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                  
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 font-bold text-sm">
-                      {qIndex + 1}
-                    </span>
-                    <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest">
-                      Savol matni
-                    </h3>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <textarea 
-                      value={q.question} 
-                      onChange={(e) => updateQuestion(qIndex, { question: e.target.value })}
-                      className="w-full bg-[#0b1120]/80 border border-white/5 rounded-2xl px-6 py-5 text-white text-lg font-medium outline-none focus:border-blue-500/50 focus:bg-[#0b1120] transition-all placeholder:text-slate-600 shadow-inner resize-none min-h-[100px]"
-                      placeholder="Savolingizni shu yerga yozing..."
-                    />
+            {/* O'ng: Yopish */}
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              onClick={onClose} className="cew-close"
+            >
+              <X style={{ width: 16, height: 16 }} />
+            </motion.button>
 
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 ml-1">Javob Variantlari (To'g'risini belgilang)</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {q.options?.map((opt, oIndex) => {
-                          const isCorrect = q.correctAnswers?.includes(oIndex);
-                          return (
-                            <div key={oIndex} className={clsx(
-                              "flex items-center gap-4 p-2 pl-4 rounded-2xl border transition-all duration-300",
-                              isCorrect ? "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]" : "bg-[#0b1120]/50 border-white/5 hover:border-white/20"
-                            )}>
-                              <div className="relative flex items-center justify-center w-6 h-6">
-                                <input 
-                                  type="radio" 
-                                  name={`correct-${qIndex}`}
-                                  checked={isCorrect}
-                                  onChange={() => updateQuestion(qIndex, { correctAnswers: [oIndex] })}
-                                  className="w-5 h-5 opacity-0 absolute inset-0 cursor-pointer z-10"
-                                />
-                                <div className={clsx(
-                                  "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                  isCorrect ? "border-emerald-500 bg-emerald-500" : "border-slate-600"
-                                )}>
-                                  {isCorrect && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                              </div>
-                              <input 
-                                type="text" 
-                                value={opt} 
-                                onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}
-                                className={clsx(
-                                  "flex-1 bg-transparent border-none py-3 text-sm font-medium outline-none placeholder:text-slate-600",
-                                  isCorrect ? "text-emerald-50" : "text-slate-300"
-                                )}
-                                placeholder={`Variant ${['A', 'B', 'C', 'D'][oIndex] || oIndex + 1}`}
+            {/* Progress bar - header pastki qirrasi */}
+            <div className="cew-header-progress">
+              <div className="cew-header-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+
+          {/* ── BODY ── */}
+          <div className="cew-body">
+            <AnimatePresence initial={false} custom={direction} mode="wait">
+              <motion.div
+                key={step}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: 'tween', duration: 0.22, ease: 'easeInOut' }}
+                className="cew-page"
+              >
+
+                {/* ═══ STEP 1: Asosiy ma'lumot ═══ */}
+                {step === 1 && (
+                  <div>
+                    <div className="cew-page-header">
+                      <div className="cew-page-title">Test haqida asosiy ma'lumot</div>
+                      <div className="cew-page-subtitle">Test nomi, tavsifi va vizual identifikatsiyasini kiriting</div>
+                    </div>
+
+                    <div className="cew-section-card">
+                      <div className="cew-section-card-title">
+                        <AlignLeft style={{ width: 14, height: 14, color: 'var(--blue-400)' }} />
+                        Test identifikatsiyasi
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                        <div className="cew-field">
+                          <label className="cew-label">Imtihon nomi *</label>
+                          <input
+                            type="text"
+                            value={exam.title}
+                            onChange={(e) => setExam({ ...exam, title: e.target.value })}
+                            className="cew-input"
+                            placeholder="Masalan: ISO 9001 Sifat Menejmenti Tizimi"
+                          />
+                        </div>
+                        <div className="cew-field">
+                          <label className="cew-label">Tavsif va Yo'riqnoma</label>
+                          <textarea
+                            value={exam.description}
+                            onChange={(e) => setExam({ ...exam, description: e.target.value })}
+                            className="cew-input cew-textarea"
+                            placeholder="Ushbu imtihonning maqsadi va qoidalari haqida qisqacha ma'lumot bering..."
+                          />
+                        </div>
+                        <div className="cew-grid-2">
+                          <div className="cew-field">
+                            <label className="cew-label">Kategoriya</label>
+                            <select
+                              value={exam.category}
+                              onChange={(e) => setExam({ ...exam, category: e.target.value, customCategory: '' })}
+                              className="cew-select"
+                            >
+                              <option value="">— Kategoriyani tanlang —</option>
+                              {CATEGORIES.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                              <option value="__custom__">+ Qo'lda yozish</option>
+                            </select>
+                            {exam.category === '__custom__' && (
+                              <input
+                                type="text"
+                                value={exam.customCategory}
+                                onChange={e => setExam({ ...exam, customCategory: e.target.value })}
+                                className="cew-input"
+                                placeholder="Kategoriya nomini yozing..."
+                                style={{ marginTop: 8 }}
+                              />
+                            )}
+                          </div>
+                          <div className="cew-field">
+                            <label className="cew-label">Kimlarga ruxsat</label>
+                            <select
+                              value={exam.visibility}
+                              onChange={(e) => setExam({ ...exam, visibility: e.target.value as any })}
+                              className="cew-select"
+                            >
+                              <option value="public">Barchaga Ochiq</option>
+                              <option value="department">Faqat Mening Bo'limim</option>
+                              <option value="employees">Maxsus Belgilangan Xodimlar</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* allowedUsers qidiruv */}
+                        {exam.visibility === 'employees' && (
+                          <div className="cew-field">
+                            <label className="cew-label">Xodimlarni belgilash</label>
+                            <div style={{ position: 'relative' }}>
+                              <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                              <input
+                                type="text"
+                                value={userSearch}
+                                onChange={e => setUserSearch(e.target.value)}
+                                className="cew-input"
+                                placeholder="Xodim ismi yoki email bo'yicha qidirish..."
+                                style={{ paddingLeft: 36 }}
                               />
                             </div>
-                          );
-                        })}
+                            {userSearchLoading && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0' }}>Qidirilmoqda...</div>}
+                            {userResults.length > 0 && (
+                              <div style={{ background: 'var(--bg-1)', border: '1px solid var(--border-2)', borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
+                                {userResults.map((u: any) => {
+                                  const uid = u.id || u._id;
+                                  const selected = exam.allowedUsers?.includes(uid);
+                                  return (
+                                    <div key={uid}
+                                      onClick={() => {
+                                        const next = selected
+                                          ? exam.allowedUsers?.filter(id => id !== uid)
+                                          : [...(exam.allowedUsers || []), uid];
+                                        setExam({ ...exam, allowedUsers: next });
+                                      }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', background: selected ? 'rgba(59,130,246,0.08)' : 'transparent', borderBottom: '1px solid var(--border-1)' }}
+                                    >
+                                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--blue-400)', flexShrink: 0 }}>
+                                        {(u.fullName || u.name || 'X')[0]}
+                                      </div>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600 }}>{u.fullName || u.name}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.email}</div>
+                                      </div>
+                                      {selected && <Check size={14} color="var(--blue-400)" />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {(exam.allowedUsers?.length || 0) > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                                {exam.allowedUsers?.map(uid => (
+                                  <span key={uid} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: 'var(--blue-400)' }}>
+                                    <Users size={10} /> {uid.slice(0, 8)}...
+                                    <button type="button" onClick={() => setExam({ ...exam, allowedUsers: exam.allowedUsers?.filter(id => id !== uid) })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, lineHeight: 1 }}>×</button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="cew-section-card">
+                      <div className="cew-section-card-title">
+                        <Sparkles style={{ width: 14, height: 14, color: 'var(--violet-400)' }} />
+                        Vizual dizayn rangi
+                      </div>
+                      <div className="cew-colors">
+                        {COLORS.map(c => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            title={c.label}
+                            onClick={() => setExam({ ...exam, color: c.hex })}
+                            className={clsx('cew-color-btn', exam.color === c.hex && 'selected')}
+                            style={{ backgroundColor: c.hex }}
+                          />
+                        ))}
+                      </div>
+                      {exam.color && (
+                        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            height: 36, borderRadius: 10, flex: 1, overflow: 'hidden',
+                            background: `linear-gradient(135deg, ${exam.color}22, ${exam.color}11)`,
+                            border: `1px solid ${exam.color}30`,
+                            display: 'flex', alignItems: 'center', paddingLeft: 14,
+                            gap: 8
+                          }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: exam.color }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                              {exam.title || 'Test nomi ko\'rinishi'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Oldindan ko'rish</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ═══ STEP 2: Sozlamalar ═══ */}
+                {step === 2 && (
+                  <div>
+                    <div className="cew-page-header">
+                      <div className="cew-page-title">Test sozlamalari</div>
+                      <div className="cew-page-subtitle">Vaqt chegarasi, o'tish bali va xavfsizlik parametrlarini belgilang</div>
+                    </div>
+
+                    <div className="cew-section-card" style={{ marginBottom: 20 }}>
+                      <div className="cew-section-card-title">
+                        <BarChart2 style={{ width: 14, height: 14, color: 'var(--blue-400)' }} />
+                        Test parametrlari
+                      </div>
+                      <div className="cew-grid-3">
+                        <div className="cew-metric-card">
+                          <div className="cew-metric-top">
+                            <div className="cew-metric-icon" style={{ background: 'rgba(59,130,246,0.12)' }}>
+                              <Clock style={{ width: 18, height: 18, color: 'var(--blue-400)' }} />
+                            </div>
+                            <span className="cew-metric-name">Vaqt limiti</span>
+                          </div>
+                          <input
+                            type="number" value={exam.timeLimitMinutes}
+                            onChange={(e) => setExam({ ...exam, timeLimitMinutes: Number(e.target.value) })}
+                            className="cew-metric-input" style={{ color: 'var(--blue-400)' }}
+                            min={5} max={300}
+                          />
+                          <div className="cew-metric-unit">daqiqa</div>
+                        </div>
+
+                        <div className="cew-metric-card">
+                          <div className="cew-metric-top">
+                            <div className="cew-metric-icon" style={{ background: 'rgba(34,197,94,0.12)' }}>
+                              <Award style={{ width: 18, height: 18, color: 'var(--green-400)' }} />
+                            </div>
+                            <span className="cew-metric-name">O'tish bali</span>
+                          </div>
+                          <input
+                            type="number" value={exam.passingScore}
+                            onChange={(e) => setExam({ ...exam, passingScore: Number(e.target.value) })}
+                            className="cew-metric-input" style={{ color: 'var(--green-400)' }}
+                            min={1} max={100}
+                          />
+                          <div className="cew-metric-unit">foiz (%)</div>
+                        </div>
+
+                        <div className="cew-metric-card">
+                          <div className="cew-metric-top">
+                            <div className="cew-metric-icon" style={{ background: 'rgba(139,92,246,0.12)' }}>
+                              <Zap style={{ width: 18, height: 18, color: 'var(--violet-400)' }} />
+                            </div>
+                            <span className="cew-metric-name">Urinishlar</span>
+                          </div>
+                          <input
+                            type="number" value={exam.maxAttempts}
+                            onChange={(e) => setExam({ ...exam, maxAttempts: Number(e.target.value) })}
+                            className="cew-metric-input" style={{ color: 'var(--violet-400)' }}
+                            min={1} max={10}
+                          />
+                          <div className="cew-metric-unit">marta</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="cew-section-card">
+                      <div className="cew-section-card-title">
+                        <Lock style={{ width: 14, height: 14, color: 'var(--violet-400)' }} />
+                        Xavfsizlik va qoidalar
+                      </div>
+                      <div className="cew-toggle-list">
+                        <div className="cew-toggle-item">
+                          <div className="cew-toggle-left">
+                            <div className="cew-toggle-icon">
+                              <Eye style={{ width: 16, height: 16 }} />
+                            </div>
+                            <div className="cew-toggle-text">
+                              <div className="cew-toggle-label">AI Proctoring (Anti-Cheat)</div>
+                              <div className="cew-toggle-desc">Kamera va ekran monitoringi yoqiladi</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setExam({ ...exam, proctored: !exam.proctored })}
+                            className={clsx('cew-switch', exam.proctored && 'on-green')}
+                          >
+                            <div className="cew-switch-knob" />
+                          </button>
+                        </div>
+
+                        <div className="cew-toggle-item">
+                          <div className="cew-toggle-left">
+                            <div className="cew-toggle-icon">
+                              <Shuffle style={{ width: 16, height: 16 }} />
+                            </div>
+                            <div className="cew-toggle-text">
+                              <div className="cew-toggle-label">Savollarni aralashtirish</div>
+                              <div className="cew-toggle-desc">Har bir urinishda savollar tartiblanadi</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setExam({ ...exam, shuffleQuestions: !exam.shuffleQuestions })}
+                            className={clsx('cew-switch', exam.shuffleQuestions && 'on-blue')}
+                          >
+                            <div className="cew-switch-knob" />
+                          </button>
+                        </div>
+
+                        <div className="cew-toggle-item">
+                          <div className="cew-toggle-left">
+                            <div className="cew-toggle-icon">
+                              <Copy style={{ width: 16, height: 16 }} />
+                            </div>
+                            <div className="cew-toggle-text">
+                              <div className="cew-toggle-label">Nusxa olishni o'chirish</div>
+                              <div className="cew-toggle-desc">Imtihon davomida copy/paste bloklash</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setExam({ ...exam, copyProtection: !exam.copyProtection })}
+                            className={clsx('cew-switch', exam.copyProtection && 'on-green')}
+                          >
+                            <div className="cew-switch-knob" />
+                          </button>
+                        </div>
+
+                        <div className="cew-toggle-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <div className="cew-toggle-left">
+                              <div className="cew-toggle-icon">
+                                <Key style={{ width: 16, height: 16 }} />
+                              </div>
+                              <div className="cew-toggle-text">
+                                <div className="cew-toggle-label">Imtihon paroli</div>
+                                <div className="cew-toggle-desc">Faqat parolni bilganlar kirishi mumkin</div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setExam({ ...exam, password: exam.password ? '' : 'exam123' })}
+                              className={clsx('cew-switch', exam.password && 'on-blue')}
+                            >
+                              <div className="cew-switch-knob" />
+                            </button>
+                          </div>
+                          {exam.password !== undefined && exam.password !== '' && (
+                            <input
+                              type="text"
+                              value={exam.password}
+                              onChange={e => setExam({ ...exam, password: e.target.value })}
+                              className="cew-input"
+                              placeholder="Parolni kiriting..."
+                              style={{ width: '100%' }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="cew-section-card">
+                      <div className="cew-section-card-title">
+                        <Calendar style={{ width: 14, height: 14, color: 'var(--blue-400)' }} />
+                        Boshlash va tugash vaqti
+                      </div>
+                      <div className="cew-grid-2">
+                        <div className="cew-field">
+                          <label className="cew-label">Boshlash sanasi va vaqti</label>
+                          <input
+                            type="datetime-local"
+                            value={exam.startAt || ''}
+                            onChange={e => setExam({ ...exam, startAt: e.target.value })}
+                            className="cew-input"
+                          />
+                        </div>
+                        <div className="cew-field">
+                          <label className="cew-label">Tugash sanasi va vaqti</label>
+                          <input
+                            type="datetime-local"
+                            value={exam.endAt || ''}
+                            onChange={e => setExam({ ...exam, endAt: e.target.value })}
+                            className="cew-input"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="cew-section-card">
+                      <div className="cew-section-card-title">
+                        <Award style={{ width: 14, height: 14, color: 'var(--amber-400)' }} />
+                        Sertifikat amal qilish muddati
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {VALIDITY_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setExam({ ...exam, validityPeriod: opt.value })}
+                            style={{
+                              padding: '8px 18px', borderRadius: 99, border: '1px solid',
+                              borderColor: exam.validityPeriod === opt.value ? 'var(--amber-400)' : 'var(--border-2)',
+                              background: exam.validityPeriod === opt.value ? 'rgba(245,158,11,0.1)' : 'var(--bg-1)',
+                              color: exam.validityPeriod === opt.value ? 'var(--amber-400)' : 'var(--text-secondary)',
+                              fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )}
 
-              <button 
-                onClick={addQuestion}
-                className="w-full py-6 rounded-3xl border-2 border-dashed border-white/10 hover:border-blue-500/50 bg-white/[0.01] hover:bg-blue-500/5 text-slate-400 hover:text-blue-400 font-bold tracking-wide transition-all duration-300 flex items-center justify-center gap-3 group"
-              >
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all">
-                  <Plus className="w-5 h-5" />
-                </div>
-                Yangi Savol Qo'shish
-              </button>
+                {/* ═══ STEP 3: Savollar ═══ */}
+                {step === 3 && (
+                  <div>
+                    <div className="cew-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                      <div>
+                        <div className="cew-page-title">Savollar ro'yxati</div>
+                        <div className="cew-page-subtitle">Savol va to'g'ri javob variantlarini kiriting</div>
+                      </div>
+                      <span className="cew-q-count">
+                        <BookOpen style={{ width: 12, height: 12 }} />
+                        {questions.length} ta savol
+                      </span>
+                    </div>
+
+                    <div className="cew-q-list">
+                      {questions.map((q, qIndex) => (
+                        <motion.div
+                          key={qIndex}
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: qIndex * 0.04 }}
+                          className="cew-q-card"
+                        >
+                          {/* Card top bar */}
+                          <div className="cew-q-card-top">
+                            <div className="cew-q-num">{qIndex + 1}</div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              Savol {qIndex + 1}
+                            </span>
+                            <select
+                              value={q.type || 'single'}
+                              onChange={(e) => {
+                                const newType = e.target.value as any;
+                                let opts = q.options || ['', '', '', ''];
+                                let ans = q.correctAnswers || [0];
+                                if (newType === 'truefalse') { opts = ['Rost', "Yolg'on"]; ans = [0]; }
+                                else if (q.type === 'truefalse') { opts = ['', '', '', '']; ans = [0]; }
+                                updateQuestion(qIndex, { type: newType, options: opts, correctAnswers: ans });
+                              }}
+                              className="cew-q-type-select"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <option value="single">Yagona tanlovli</option>
+                              <option value="multiple">Ko'p tanlovli</option>
+                              <option value="truefalse">Rost / Yolg'on</option>
+                            </select>
+                            <button type="button" onClick={() => removeQuestion(qIndex)} className="cew-q-del" title="O'chirish">
+                              <Trash2 style={{ width: 14, height: 14 }} />
+                            </button>
+                          </div>
+
+                          {/* Card body */}
+                          <div className="cew-q-body">
+                            <textarea
+                              value={q.question}
+                              onChange={(e) => updateQuestion(qIndex, { question: e.target.value })}
+                              className="cew-input cew-textarea"
+                              placeholder="Savol matnini bu yerga yozing..."
+                            />
+                            <div>
+                              <div className="cew-label" style={{ marginBottom: 10 }}>
+                                Variantlar — {q.type === 'multiple' ? "To'g'ri javoblarni belgilang" : "To'g'ri javobni belgilang"}
+                              </div>
+                              <div className="cew-options-grid">
+                                {q.options?.map((opt, oIndex) => {
+                                  const isCorrect = q.correctAnswers?.includes(oIndex);
+                                  const isMultiple = q.type === 'multiple';
+                                  const isTF = q.type === 'truefalse';
+                                  const handleToggle = () => {
+                                    if (isMultiple) {
+                                      const next = isCorrect
+                                        ? q.correctAnswers?.filter(i => i !== oIndex) || []
+                                        : [...(q.correctAnswers || []), oIndex];
+                                      updateQuestion(qIndex, { correctAnswers: next });
+                                    } else {
+                                      updateQuestion(qIndex, { correctAnswers: [oIndex] });
+                                    }
+                                  };
+                                  return (
+                                    <div
+                                      key={oIndex}
+                                      className={clsx('cew-opt', isCorrect && 'correct')}
+                                      onClick={handleToggle}
+                                    >
+                                      <div className={clsx('cew-opt-sel', isMultiple ? 'checkbox' : 'radio', isCorrect && 'correct')}>
+                                        {isCorrect && <Check style={{ width: 10, height: 10 }} />}
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={opt}
+                                        readOnly={isTF}
+                                        onClick={(e) => {
+                                          if (isTF) handleToggle();
+                                          else e.stopPropagation();
+                                        }}
+                                        onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}
+                                        className="cew-opt-input"
+                                        placeholder={isTF ? opt : `Variant ${['A', 'B', 'C', 'D'][oIndex] || oIndex + 1}`}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    <button type="button" onClick={addQuestion} className="cew-add-q" style={{ marginTop: 16 }}>
+                      <div className="cew-add-q-circle">
+                        <Plus style={{ width: 13, height: 13 }} />
+                      </div>
+                      Yangi Savol Qo'shish
+                    </button>
+                  </div>
+                )}
+
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* ── FOOTER ── */}
+          <div className="cew-footer">
+            <div className="cew-footer-info">
+              <Activity style={{ width: 13, height: 13 }} />
+              {step === 1 && 'Bosqich 1 / 3 — Asosiy ma\'lumot'}
+              {step === 2 && 'Bosqich 2 / 3 — Sozlamalar'}
+              {step === 3 && `Bosqich 3 / 3 — ${questions.length} ta savol qo'shilgan`}
             </div>
-          )}
+            <div className="cew-footer-actions">
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={prevStep}
+                disabled={step === 1}
+                className="cew-btn cew-btn-secondary"
+                style={{ visibility: step === 1 ? 'hidden' : 'visible' }}
+              >
+                <ChevronLeft style={{ width: 15, height: 15 }} /> Orqaga
+              </motion.button>
 
-        </div>
+              {step < 3 ? (
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={nextStep}
+                  className="cew-btn cew-btn-primary"
+                >
+                  Keyingisi <ChevronRight style={{ width: 15, height: 15 }} />
+                </motion.button>
+              ) : (
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !exam.title || questions.some(q => !q.question)}
+                  className="cew-btn cew-btn-save"
+                >
+                  <Save style={{ width: 15, height: 15 }} />
+                  {isSubmitting ? 'Saqlanmoqda...' : 'Imtihonni Yaratish'}
+                </motion.button>
+              )}
+            </div>
+          </div>
 
-        {/* Premium Footer */}
-        <div className="px-8 py-5 border-t border-white/[0.05] bg-[#0b1120]/80 backdrop-blur-md flex items-center justify-between relative z-10">
-          <button 
-            onClick={() => setStep(step - 1)}
-            disabled={step === 1}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-0 transition-all duration-300"
-          >
-            <ChevronLeft className="w-5 h-5" /> Orqaga
-          </button>
-          
-          {step < 3 ? (
-            <button 
-              onClick={() => setStep(step + 1)}
-              className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold bg-white text-slate-900 hover:bg-blue-50 hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-            >
-              Keyingisi <ChevronRight className="w-5 h-5" />
-            </button>
-          ) : (
-            <button 
-              onClick={handleSubmit}
-              disabled={isSubmitting || !exam.title || questions.some(q => !q.question)}
-              className="flex items-center gap-3 px-8 py-3 rounded-xl font-black bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:scale-105 transition-all duration-300 shadow-[0_0_30px_rgba(59,130,246,0.5)] disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
-            >
-              <Save className="w-5 h-5" /> 
-              {isSubmitting ? "YARATILMOQDA..." : "IMTIHONNI SAQLASH"}
-            </button>
-          )}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>,
+    document.body
   );
 }

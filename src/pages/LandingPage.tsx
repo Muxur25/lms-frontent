@@ -1008,6 +1008,26 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="pl-section">
+        <div className="pl-shell">
+          <div className="pl-cta" style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.06))', border: '1px solid rgba(59,130,246,0.2)' }}>
+            <div>
+              <h2>{lang === 'uz' ? 'Sertifikatlarni tekshirish' : 'Проверка сертификатов'}</h2>
+              <p>
+                {lang === 'uz' 
+                  ? 'Platformamiz tomonidan berilgan har bir rasmiy sertifikat o‘zining unikal identifikatoriga ega. Sertifikatning haqiqiyligini tekshirish uchun uning ID raqamini kiriting.' 
+                  : 'Каждый официальный сертификат, выданный нашей платформой, имеет свой уникальный идентификатор. Введите ID сертификата, чтобы проверить его подлинность.'}
+              </p>
+            </div>
+            <Link className="pl-btn pl-btn-dark" to="/verify-certificate" style={{ borderColor: 'rgba(59,130,246,0.3)', textDecoration: 'none' }}>
+              <FileCheck2 size={16} />
+              <span>{lang === 'uz' ? 'Sertifikatni tekshirish' : 'Проверить сертификат'}</span>
+              <ChevronRight size={17} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section id="contact" className="pl-section">
         <div className="pl-shell">
           <div className="pl-cta">

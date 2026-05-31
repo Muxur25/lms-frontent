@@ -1,6 +1,8 @@
 import { Calendar as CalendarIcon, Clock, MapPin } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Schedule() {
+  const { t } = useTranslation();
   const events = [
     { time: '09:00', title: 'Kundalik yig\'ilish', type: 'Majlis', location: 'Majlislar zali 2' },
     { time: '11:30', title: 'Sanoat xavfsizligi bo\'yicha attestatsiya', type: 'Imtihon', location: 'Kompyuter xonasi (3-qavat)' },
@@ -14,15 +16,15 @@ export default function Schedule() {
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <CalendarIcon color="var(--green-400)" size={24} />
-            Shaxsiy Jadval
+            {t('schedule.title')}
           </h1>
-          <p className="page-sub" style={{ marginTop: 6 }}>Sizning darslaringiz, imtihonlaringiz va tadbirlaringiz</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{t('schedule.subtitle')}</p>
         </div>
       </div>
 
       <div className="grid grid-12">
         <div className="card">
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>Bugungi tadbirlar (21 May)</h3>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('schedule.todayEvents')} (21 May)</h3>
           
           <div style={{ position: 'relative', borderLeft: '2px solid var(--border-2)', marginLeft: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -53,13 +55,13 @@ export default function Schedule() {
         </div>
 
         <div className="card">
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>Kalendar vizualizatsiyasi</h3>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('schedule.calendarWidget')}</h3>
           <div style={{ 
             background: 'var(--surface-1)', borderRadius: 'var(--radius-xl)', height: 300, 
             border: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', 
             color: 'var(--text-muted)' 
           }}>
-            Mini Kalendar vidjeti bu yerda bo'ladi
+            {t('schedule.calendarPlaceholder')}
           </div>
         </div>
       </div>

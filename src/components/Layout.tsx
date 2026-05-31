@@ -109,7 +109,7 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
               <button
                 className="collapse-btn"
                 onClick={() => setCollapsed(true)}
-                title="Yig'ish"
+                title={t('layout.collapse')}
               >
                 <ChevronLeft size={15} />
               </button>
@@ -131,8 +131,8 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
           <div className="org-selector">
             <div className="org-icon"><Building2 size={14} /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="org-name">AGMK Korporatsiyasi</div>
-              <div className="org-sub">Pro • 1,284 xodim</div>
+              <div className="org-name">{t('layout.orgName')}</div>
+              <div className="org-sub">{t('layout.orgSub')}</div>
             </div>
             <ChevronDown size={13} color="var(--text-muted)" />
           </div>
@@ -175,10 +175,10 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
           <div className="ai-promo">
             <div className="ai-promo-icon"><Sparkles size={14} /></div>
             <div>
-              <div className="ai-promo-title">AI Assistant</div>
-              <div className="ai-promo-sub">Savollaringizni bering</div>
+              <div className="ai-promo-title">{t('layout.aiPromoTitle')}</div>
+              <div className="ai-promo-sub">{t('layout.aiPromoSub')}</div>
             </div>
-            <button className="btn btn-primary btn-sm" style={{ padding: '4px 10px', fontSize: 11 }}>Ochish</button>
+            <button className="btn btn-primary btn-sm" style={{ padding: '4px 10px', fontSize: 11 }}>{t('layout.aiPromoOpen')}</button>
           </div>
         )}
 
@@ -298,7 +298,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
           <button className="icon-btn" onClick={toggleTheme}>
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <span className="tooltip">{theme === 'dark' ? 'Kunduzgi' : 'Tungi'} rejim</span>
+          <span className="tooltip">{theme === 'dark' ? t('layout.lightMode') : t('layout.darkMode')}</span>
         </div>
 
         {/* Notifications */}
@@ -308,7 +308,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
             {unreadCount > 0 && <span className="notif-dot" />}
           </button>
           <span className="tooltip">
-            {unreadCount > 0 ? `${unreadCount} ta yangi bildirishnoma` : "Yangi bildirishnomalar yo'q"}
+            {unreadCount > 0 ? `${unreadCount} ${t('layout.newNotif')}` : t('layout.noNotif')}
           </span>
         </div>
 
@@ -342,9 +342,9 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
               </div>
               <hr className="divider" style={{ margin: '8px 0' }} />
               {[
-                { icon: User, label: 'Profil' },
-                { icon: Settings, label: 'Sozlamalar' },
-                { icon: HelpCircle, label: 'Yordam' },
+                { icon: User, label: t('layout.profile') },
+                { icon: Settings, label: t('nav.settings') },
+                { icon: HelpCircle, label: t('layout.help') },
               ].map((m, i) => (
                 <div key={i} className="pd-item">
                   <m.icon size={14} />
@@ -354,7 +354,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
               <hr className="divider" style={{ margin: '8px 0' }} />
               <div className="pd-item pd-item-danger" onClick={handleLogout}>
                 <LogOut size={14} />
-                <span>Chiqish</span>
+                <span>{t('layout.logout')}</span>
               </div>
             </div>
           )}
@@ -367,15 +367,15 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
           <div className="cmd-palette" onClick={e => e.stopPropagation()}>
             <div className="cmd-input-wrap">
               <Search size={16} color="var(--text-muted)" />
-              <input autoFocus className="cmd-input" placeholder="Qidirish yoki buyruq..." />
-              <button className="cmd-esc" onClick={() => setCmdOpen(false)}>ESC</button>
+              <input autoFocus className="cmd-input" placeholder={t('layout.cmdPlaceholder')} />
+              <button className="cmd-esc" onClick={() => setCmdOpen(false)}>{t('layout.cmdEsc')}</button>
             </div>
             <div className="cmd-results">
               {['Dashboard', 'Kurslar', 'Xodimlar', 'Tahlil', 'Sertifikatlar'].map((r, i) => (
                 <div key={i} className="cmd-result-item" onClick={() => setCmdOpen(false)}>
                   <LayoutDashboard size={14} color="var(--text-tertiary)" />
                   <span>{r}</span>
-                  <span className="cmd-result-type">Sahifa</span>
+                  <span className="cmd-result-type">{t('layout.pageLabel')}</span>
                 </div>
               ))}
             </div>

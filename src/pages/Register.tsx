@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   BadgeCheck,
   Bot,
@@ -32,60 +33,7 @@ type FormState = {
 
 const steps = ['personal', 'security'] as const;
 
-const copy = {
-  uz: {
-    eyebrow: 'Enterprise onboarding',
-    title: 'AGMK LMS ekotizimiga premium xodim onboarding',
-    subtitle:
-      'AI-powered ta’lim platformasiga xavfsiz profil yarating, bo‘limingizni ulang va sertifikatlash jarayonini boshlang.',
-    lang: 'Til',
-    backLogin: 'Login sahifasiga qaytish',
-    next: 'Davom etish',
-    back: 'Orqaga',
-    finish: 'Tugatish va Kirish',
-    progress: 'Onboarding progress',
-    personalTitle: 'Shaxsiy ma’lumotlar',
-    personalText: 'Korporativ identifikatsiya va shaxsiy ma’lumotlaringizni kiriting.',
-    securityTitle: 'Xavfsizlik sozlamalari',
-    securityText: 'Tizimga kirish uchun username va kuchli parol yarating.',
-    fullName: 'To‘liq ism',
-    employeeId: 'Tabel raqami',
-    jshshir: 'JShShIR (14 talik raqam)',
-    email: 'Email (majburiy emas)',
-    username: 'Username',
-    password: 'Parol',
-    confirmPassword: 'Parolni tasdiqlash',
-    errorsRequired: 'Majburiy maydonlarni to‘ldiring.',
-    errorsPassword: 'Parollar mos emas yoki 6 belgidan qisqa.',
-    errorsJshshir: 'JShShIR 14 ta raqamdan iborat bo‘lishi kerak.',
-  },
-  ru: {
-    eyebrow: 'Enterprise onboarding',
-    title: 'Премиальный onboarding сотрудника в экосистему AGMK LMS',
-    subtitle:
-      'Создайте защищенный профиль в AI-powered платформе обучения, подключите подразделение и начните путь сертификации.',
-    lang: 'Язык',
-    backLogin: 'Вернуться к входу',
-    next: 'Продолжить',
-    back: 'Назад',
-    finish: 'Завершить и Войти',
-    progress: 'Прогресс onboarding',
-    personalTitle: 'Личные данные',
-    personalText: 'Введите корпоративную идентификацию и личные данные.',
-    securityTitle: 'Настройки безопасности',
-    securityText: 'Создайте имя пользователя и надежный пароль для входа.',
-    fullName: 'Полное имя',
-    employeeId: 'Табельный номер',
-    jshshir: 'ПИНФЛ (14 цифр)',
-    email: 'Email (необязательно)',
-    username: 'Имя пользователя',
-    password: 'Пароль',
-    confirmPassword: 'Подтверждение пароля',
-    errorsRequired: 'Заполните обязательные поля.',
-    errorsPassword: 'Пароли не совпадают или короче 6 символов.',
-    errorsJshshir: 'ПИНФЛ должен состоять из 14 цифр.',
-  },
-};
+
 
 const initialForm: FormState = {
   fullName: '',
@@ -101,6 +49,7 @@ export default function Register() {
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.login);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { t, i18n } = useTranslation();
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -108,7 +57,8 @@ export default function Register() {
     }
   }, [isAuthenticated, navigate]);
 
-  const [lang, setLang] = useState<Lang>('uz');
+  const [lang, setLang] = useState<Lang>((i18n.language as Lang) || 'uz');
+  const handleLangChange = (l: Lang) => { setLang(l); i18n.changeLanguage(l); };
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
   const [showPassword, setShowPassword] = useState(false);
@@ -116,7 +66,6 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const t = copy[lang];
   const percent = Math.round((step / (steps.length - 1)) * 100);
 
 
@@ -129,11 +78,11 @@ export default function Register() {
   const validateStep = () => {
     if (step === 0) {
       if (!form.fullName.trim() || !form.employeeId.trim() || !form.jshshir.trim()) {
-        setError(t.errorsRequired);
+        setError(t('register.errorsRequired'));
         return false;
       }
       if (form.jshshir.trim().length !== 14 || !/^\d+$/.test(form.jshshir.trim())) {
-        setError(t.errorsJshshir);
+        setError(t('register.errorsJshshir'));
         return false;
       }
       if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -143,15 +92,15 @@ export default function Register() {
     }
     if (step === 1) {
       if (!form.username.trim() || !form.password || !form.confirmPassword) {
-        setError(t.errorsRequired);
+        setError(t('register.errorsRequired'));
         return false;
       }
       if (form.password.length < 6) {
-        setError(t.errorsPassword);
+        setError(t('register.errorsPassword'));
         return false;
       }
       if (form.password !== form.confirmPassword) {
-        setError(t.errorsPassword);
+        setError(t('register.errorsPassword'));
         return false;
       }
     }
@@ -177,7 +126,7 @@ export default function Register() {
         loginAction(response.data.user, response.data.accessToken, response.data.refreshToken);
         navigate('/dashboard');
       } catch (requestError: any) {
-        setError(requestError.message || t.errorsRequired);
+        setError(requestError.message || t('register.errorsRequired'));
       } finally {
         setLoading(false);
       }
@@ -535,9 +484,9 @@ export default function Register() {
                 <div className="ob-brand-sub">ENTERPRISE AI</div>
               </div>
             </div>
-            <div className="ob-lang" aria-label={t.lang}>
+            <div className="ob-lang" aria-label={t('register.lang')}>
               {(['uz', 'ru'] as const).map((item) => (
-                <button key={item} className={lang === item ? 'active' : ''} onClick={() => setLang(item)}>
+                <button key={item} className={lang === item ? 'active' : ''} onClick={() => handleLangChange(item)}>
                   {item.toUpperCase()}
                 </button>
               ))}
@@ -546,14 +495,14 @@ export default function Register() {
 
           <div className="ob-eyebrow">
             <Sparkles size={15} />
-            {t.eyebrow}
+            {t('register.eyebrow')}
           </div>
           <h1 className="ob-title">
-            {t.title.split('AI')[0]}
+            {t('register.title').split('AI')[0]}
             <span>AI</span>
-            {t.title.split('AI').slice(1).join('AI')}
+            {t('register.title').split('AI').slice(1).join('AI')}
           </h1>
-          <p className="ob-lead">{t.subtitle}</p>
+          <p className="ob-lead">{t('register.subtitle')}</p>
 
           <div className="ob-preview">
             <div className="ob-visual-card">
@@ -591,11 +540,11 @@ export default function Register() {
             <div>
               <div className="ob-progress-top">
                 <div>
-                  <div className="ob-progress-label">{t.progress}</div>
+                  <div className="ob-progress-label">{t('register.progress')}</div>
                   <div className="ob-percent">{percent}%</div>
                 </div>
                 <button type="button" className="ob-btn ghost" onClick={() => navigate('/auth/login')}>
-                  {t.backLogin}
+                  {t('register.backLogin')}
                 </button>
               </div>
 
@@ -613,19 +562,19 @@ export default function Register() {
 
               {step === 0 && (
                 <div className="ob-step-card">
-                  <h2>{t.personalTitle}</h2>
-                  <p>{t.personalText}</p>
+                  <h2>{t('register.personalTitle')}</h2>
+                  <p>{t('register.personalText')}</p>
                   <div className="ob-form-grid">
-                    <Field label={t.fullName} icon={<UserRound size={16} />}>
+                    <Field label={t('register.fullName')} icon={<UserRound size={16} />}>
                       <input className="ob-input" value={form.fullName} onChange={(e) => update('fullName', e.target.value)} placeholder="Rustamov Husan" />
                     </Field>
-                    <Field label={t.employeeId} icon={<IdCard size={16} />}>
+                    <Field label={t('register.employeeId')} icon={<IdCard size={16} />}>
                       <input className="ob-input" value={form.employeeId} onChange={(e) => update('employeeId', e.target.value)} placeholder="AGMK-0004" />
                     </Field>
-                    <Field label={t.jshshir} icon={<ShieldCheck size={16} />}>
+                    <Field label={t('register.jshshir')} icon={<ShieldCheck size={16} />}>
                       <input className="ob-input" value={form.jshshir} onChange={(e) => update('jshshir', e.target.value)} placeholder="31212951234567" maxLength={14} />
                     </Field>
-                    <Field label={t.email} icon={<Mail size={16} />}>
+                    <Field label={t('register.email')} icon={<Mail size={16} />}>
                       <input className="ob-input" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="name@agmk.uz" />
                     </Field>
                   </div>
@@ -634,19 +583,19 @@ export default function Register() {
 
               {step === 1 && (
                 <div className="ob-step-card">
-                  <h2>{t.securityTitle}</h2>
-                  <p>{t.securityText}</p>
+                  <h2>{t('register.securityTitle')}</h2>
+                  <p>{t('register.securityText')}</p>
                   <div className="ob-form-grid">
-                    <Field label={t.username} icon={<UserRound size={16} />}>
+                    <Field label={t('register.username')} icon={<UserRound size={16} />}>
                       <input className="ob-input" value={form.username} onChange={(e) => update('username', e.target.value)} placeholder="husan_rustamov" />
                     </Field>
-                    <Field label={t.password} icon={<LockKeyhole size={16} />}>
+                    <Field label={t('register.password')} icon={<LockKeyhole size={16} />}>
                       <div className="ob-input ob-password">
                         <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="••••••••" />
                         <button type="button" className="ob-icon-btn" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                       </div>
                     </Field>
-                    <Field label={t.confirmPassword} icon={<LockKeyhole size={16} />}>
+                    <Field label={t('register.confirmPassword')} icon={<LockKeyhole size={16} />}>
                       <div className="ob-input ob-password">
                         <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={(e) => update('confirmPassword', e.target.value)} placeholder="••••••••" />
                         <button type="button" className="ob-icon-btn" onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
@@ -662,10 +611,10 @@ export default function Register() {
             <div className="ob-actions">
               <button type="button" className="ob-btn ghost" onClick={back} disabled={step === 0}>
                 <ChevronLeft size={17} />
-                {t.back}
+                {t('register.back')}
               </button>
               <button type={step === 1 ? 'submit' : 'button'} className="ob-btn primary" onClick={step === 1 ? undefined : next} disabled={loading}>
-                {loading ? '...' : step === 1 ? t.finish : t.next}
+                {loading ? '...' : step === 1 ? t('register.finish') : t('register.next')}
                 <ChevronRight size={17} />
               </button>
             </div>

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Send, Bot, User, Sparkles, StopCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/api/axios';
 
 export default function AiAssistant() {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState([
-    { id: 1, role: 'ai', text: 'Salom! Men AGMK korporativ AI yordamchisiman. Sizga qanday yordam bera olaman?' }
+    { id: 1, role: 'ai', text: t('ai.greeting') }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ export default function AiAssistant() {
 
     try {
       const response = await apiClient.post('/ai/chat', { prompt: currentInput });
-      const aiReply = response.data?.response || "Kechirasiz, javob olishda xatolik yuz berdi.";
+      const aiReply = response.data?.response || t('ai.apiError');
       setMessages(prev => [...prev, { 
         id: Date.now() + 1, 
         role: 'ai', 
@@ -32,7 +34,7 @@ export default function AiAssistant() {
       setMessages(prev => [...prev, { 
         id: Date.now() + 1, 
         role: 'ai', 
-        text: "Tizimda xatolik yuz berdi. Iltimos keyinroq qayta urinib ko'ring." 
+        text: t('ai.error')
       }]);
     } finally {
       setLoading(false);
@@ -46,9 +48,9 @@ export default function AiAssistant() {
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Sparkles color="var(--violet-400)" size={24} />
-            AI Yordamchi
+            AI {t('ai.title')}
           </h1>
-          <p className="page-sub" style={{ marginTop: 6 }}>O'z savollaringizga tezkor va aniq javob oling.</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{t('ai.subtitle')}</p>
         </div>
       </div>
 
@@ -107,7 +109,7 @@ export default function AiAssistant() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Xabar yozing..."
+              placeholder={t('ai.placeholder')}
               style={{ 
                 width: '100%', background: 'var(--surface-1)', border: '1px solid var(--border-2)',
                 borderRadius: 'var(--radius-xl)', padding: '16px 64px 16px 16px',
@@ -131,7 +133,7 @@ export default function AiAssistant() {
             </button>
           </form>
           <div style={{ textAlign: 'center', marginTop: 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>AI ba'zan noto'g'ri javob berishi mumkin. Muhim ma'lumotlarni tekshiring.</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('ai.disclaimer')}</span>
           </div>
         </div>
       </div>

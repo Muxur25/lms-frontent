@@ -11,6 +11,7 @@ import {
   Trash2, Plus, Edit3, Save, Loader,
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
+import { aiApi } from '@/api/ai.api';
 import { useAuthStore } from '@/store/auth.store';
 import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
 import { PDFViewer } from '@/components/BookReader';
@@ -433,11 +434,12 @@ export default function CoursePage() {
     setUploadingLessons(prev => ({ ...prev, [key]: true }));
     
     const formData = new FormData();
-    formData.append('file', file);
     formData.append('visibility', 'public');
+    formData.append('file', file);
     
     try {
       const res = await apiClient.post('/uploads/file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 0, // Disable timeout for uploads
       });
       // Backend returns relative url like /api/v1/uploads/download/:id
@@ -1164,6 +1166,18 @@ function CourseOverview({
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
   const [editingModId, setEditingModId] = useState<string | number | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<{ title: string; reason: string } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    aiApi.getRecommendations()
+      .then(res => {
+        const first = res?.recommendations?.[0];
+        if (mounted && first) setAiSuggestion({ title: first.title, reason: first.reason });
+      })
+      .catch(() => { /* statik fallback */ });
+    return () => { mounted = false; };
+  }, []);
   const [activeQuizBuilder, setActiveQuizBuilder] = useState<{ modId: string | number; lessonId: string | number; item: LessonItem } | null>(null);
 
   const desc = course.description || '';
@@ -1608,7 +1622,9 @@ function CourseOverview({
               <span style={{ fontWeight: 700, fontSize: 14 }}>AI Tavsiya</span>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
-              Ushbu kursni tugatsangiz, "Node.js va API" kursini boshlashni tavsiya qilamiz — 94% mos keladi.
+              {aiSuggestion
+                ? `${aiSuggestion.reason} — "${aiSuggestion.title}" kursini tavsiya qilamiz.`
+                : 'Ushbu kursni tugatsangiz, "Node.js va API" kursini boshlashni tavsiya qilamiz — 94% mos keladi.'}
             </p>
             <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
               <Sparkles size={13} /> Ko'rish

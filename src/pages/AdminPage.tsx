@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
+import { useSocket } from '@/hooks/useSocket';
 import {
   Users, BookOpen, Award, Shield, Search, Filter,
   TrendingUp, TrendingDown, BarChart3, Settings, Mail, Plus,
@@ -15,7 +16,7 @@ import { useAuthStore } from '@/store/auth.store';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
 
-type Tab = 'overview' | 'users' | 'courses' | 'analytics' | 'settings';
+type Tab = 'overview' | 'users' | 'courses' | 'analytics' | 'settings' | 'monitoring';
 
 const areaData = [
   { name: 'Yan', users: 400 }, { name: 'Fev', users: 300 }, { name: 'Mar', users: 550 },
@@ -213,6 +214,7 @@ export default function AdminPage() {
           { id: 'users', icon: Users, label: 'Foydalanuvchilar' },
           { id: 'courses', icon: BookOpen, label: 'Kurslar & Testlar' },
           { id: 'analytics', icon: BarChart3, label: 'Tahlil' },
+          { id: 'monitoring', icon: Shield, label: 'Monitoring' },
           { id: 'settings', icon: Settings, label: 'Sozlamalar' },
         ].map(tab => (
           <button
@@ -660,6 +662,175 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* MONITORING TAB */}
+        {activeTab === 'monitoring' && <ExamMonitoringPanel />}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── Exam Monitoring Panel ───────────────────────────────────────────────────
+const RISK_COLORS: Record<string, string> = {
+  NORMAL: '#22c55e', WARNING: '#f59e0b', CRITICAL: '#ef4444', TERMINATED: '#7f1d1d',
+};
+const RISK_LABELS: Record<string, string> = {
+  NORMAL: 'XAVFSIZ', WARNING: 'OGOHLANTIRISH', CRITICAL: 'KRITIK', TERMINATED: 'YAKUNLANDI',
+};
+
+interface SessionData {
+  attemptId: string;
+  userId: string;
+  testId: string;
+  startedAt: string;
+  riskScore: number;
+  violationCount: number;
+  securityStatus: string;
+  userName?: string;
+  examTitle?: string;
+  recentViolation?: string;
+}
+
+function ExamMonitoringPanel() {
+  const socket = useSocket();
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [events, setEvents] = useState<Array<{ time: string; msg: string; type: string }>>([]);
+
+  const loadSessions = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/exams/violations/admin/active-sessions');
+      const data = res.data?.data ?? res.data ?? [];
+      setSessions(Array.isArray(data) ? data : []);
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    loadSessions();
+    const t = setInterval(loadSessions, 15000);
+    return () => clearInterval(t);
+  }, [loadSessions]);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('exam.violation', (data: any) => {
+      setSessions(prev => prev.map(s =>
+        s.attemptId === data.attemptId
+          ? { ...s, riskScore: data.riskScore, violationCount: data.violationCount, securityStatus: data.securityStatus, recentViolation: data.type }
+          : s
+      ));
+      setEvents(prev => [{
+        time: new Date().toLocaleTimeString('uz', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        msg: `${data.type} — Attempt: ${data.attemptId.slice(0, 8)}`,
+        type: 'violation',
+      }, ...prev].slice(0, 50));
+    });
+    socket.on('exam.auto_submitted', (data: any) => {
+      setSessions(prev => prev.filter(s => s.attemptId !== data.attemptId));
+      setEvents(prev => [{
+        time: new Date().toLocaleTimeString('uz', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        msg: `AUTO_SUBMIT — ${data.attemptId.slice(0, 8)} (${data.reason})`,
+        type: 'auto_submit',
+      }, ...prev].slice(0, 50));
+    });
+    return () => {
+      socket.off('exam.violation');
+      socket.off('exam.auto_submitted');
+    };
+  }, [socket]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Shield size={20} color="#ef4444" /> Imtihon Monitoring
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            Real-time anti-cheat monitoring — {sessions.length} ta faol sessiya
+          </p>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={loadSessions}>
+          <CheckCircle size={13} /> Yangilash
+        </button>
+      </div>
+
+      <div className="r-grid-75">
+        {/* Sessions table */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-1)', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={14} color="var(--blue-400)" /> Faol sessiyalar
+          </div>
+          {sessions.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              Hozirda faol imtihon sessiyalari yo'q
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-2)', borderBottom: '1px solid var(--border-1)' }}>
+                    {['Foydalanuvchi', 'Imtihon', 'Boshlangan', 'Risk', 'Buzilishlar', 'Holat', 'So\'nggi'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map(s => (
+                    <tr key={s.attemptId} style={{ borderBottom: '1px solid var(--border-1)', transition: 'background 0.2s' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>{s.userName || s.userId.slice(0, 8)}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{s.examTitle || s.testId.slice(0, 8)}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>
+                        {s.startedAt ? new Date(s.startedAt).toLocaleTimeString('uz', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ height: 4, width: 60, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${s.riskScore}%`, background: s.riskScore > 70 ? '#ef4444' : s.riskScore > 40 ? '#f59e0b' : '#22c55e', borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontWeight: 700, color: s.riskScore > 70 ? '#ef4444' : s.riskScore > 40 ? '#f59e0b' : '#22c55e', fontSize: 11 }}>{s.riskScore}%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                        <span style={{ fontWeight: 800, color: s.violationCount > 0 ? '#ef4444' : 'var(--text-muted)' }}>{s.violationCount}</span>
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ padding: '3px 8px', borderRadius: 99, fontSize: 10, fontWeight: 800, background: `${RISK_COLORS[s.securityStatus] || '#22c55e'}18`, color: RISK_COLORS[s.securityStatus] || '#22c55e', border: `1px solid ${RISK_COLORS[s.securityStatus] || '#22c55e'}30` }}>
+                          {RISK_LABELS[s.securityStatus] || s.securityStatus}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: 11 }}>
+                        {s.recentViolation || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Live events feed */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-1)', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={14} color="#f59e0b" /> Jonli hodisalar
+            {events.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>{events.length} ta</span>}
+          </div>
+          <div style={{ maxHeight: 400, overflowY: 'auto', padding: '8px 0' }}>
+            {events.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                Hodisalar kutilmoqda...
+              </div>
+            ) : events.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 16px', borderBottom: '1px solid var(--border-1)', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 2 }}>{e.time}</span>
+                <span style={{ fontSize: 12, color: e.type === 'auto_submit' ? '#ef4444' : '#f59e0b', fontWeight: 600 }}>
+                  {e.type === 'auto_submit' ? '⛔' : '⚠️'} {e.msg}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

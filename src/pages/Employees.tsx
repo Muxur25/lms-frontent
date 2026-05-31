@@ -76,8 +76,8 @@ export default function Employees() {
       <div style={{ textAlign: 'center', padding: '60px 20px' }} className="fade-in">
         <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{error}</h3>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Ma'lumotlarni yuklashda xatolik yuz berdi. Tizim bilan ulanishni tekshiring.</p>
-        <button className="btn btn-primary" onClick={() => { setLoading(true); setError(null); window.location.reload(); }}>Qayta yuklash</button>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>{t('employees.loadError', "Ma'lumotlarni yuklashda xatolik yuz berdi. Tizim bilan ulanishni tekshiring.")}</p>
+        <button className="btn btn-primary" onClick={() => { setLoading(true); setError(null); window.location.reload(); }}>{t('common.refresh')}</button>
       </div>
     );
   }
@@ -91,7 +91,7 @@ export default function Employees() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-secondary btn-sm"><Mail size={14} /> {t('employees.invite')}</button>
-          <button className="btn btn-primary btn-sm"><Plus size={14} /> Qo'shish</button>
+          <button className="btn btn-primary btn-sm"><Plus size={14} /> {t('common.create')}</button>
         </div>
       </div>
 
@@ -111,7 +111,7 @@ export default function Employees() {
             <thead>
               <tr>
                 <th style={{ width: 40, paddingLeft: 20 }}><input type="checkbox" style={{ accentColor: 'var(--blue-500)' }} /></th>
-                <th>Xodim</th>
+                <th>{t('employees.employee', 'Xodim')}</th>
                 <th>{t('employees.department')}</th>
                 <th>{t('employees.position')}</th>
                 <th>{t('employees.courses')}</th>
@@ -144,7 +144,7 @@ export default function Employees() {
                     <td style={{ color: 'var(--text-secondary)' }}>{isRu ? emp.positionRu || emp.position : emp.position}</td>
                     <td>
                       <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.courses ?? emp.coursesCount ?? 0}</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> ta</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> {t('employees.coursesUnit', 'ta')}</span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

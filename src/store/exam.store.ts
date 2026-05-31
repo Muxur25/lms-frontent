@@ -12,7 +12,7 @@ interface ExamState {
   // Actions
   loadExams: () => Promise<void>;
   loadHistory: () => Promise<void>;
-  startExam: (testId: string) => Promise<void>;
+  startExam: (testId: string, password?: string) => Promise<void>;
   saveAnswerLocally: (questionId: string, selectedAnswers: number[]) => void;
   syncAnswers: () => Promise<void>;
   submitExam: () => Promise<void>;
@@ -47,15 +47,10 @@ export const useExamStore = create<ExamState>((set, get) => ({
       console.error('Failed to load attempt history', error);
     }
   },
-
-  startExam: async (testId: string) => {
+  startExam: async (testId: string, password?: string) => {
     set({ isLoading: true, error: null });
     try {
-      // First check if there's an active one
-      let attempt = await examsApi.getActiveAttempt(testId).catch(() => null);
-      if (!attempt) {
-        attempt = await examsApi.startAttempt(testId);
-      }
+      const attempt = await examsApi.startAttempt(testId, password);
       set({ activeAttempt: attempt, isLoading: false });
     } catch (error: any) {
       set({ error: error.response?.data?.message || error.message, isLoading: false });
@@ -95,7 +90,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const result = await examsApi.submitAttempt(activeAttempt.id, activeAttempt.answers);
+      const result = await examsApi.submitAttempt(activeAttempt.id);
       set({ activeAttempt: result, isLoading: false }); // will be marked as 'submitted'
     } catch (error: any) {
       set({ error: error.message, isLoading: false });

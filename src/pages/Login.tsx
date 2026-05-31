@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
   BadgeCheck,
@@ -24,71 +25,20 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/auth.store';
+import { DeviceLimitModal } from '../components/auth/DeviceLimitModal';
 
 
 type Lang = 'uz' | 'ru';
 type LoginMode = 'username' | 'employee';
 type ThemeMode = 'dark' | 'light';
 
-const copy = {
-  uz: {
-    eyebrow: 'Enterprise AI LMS',
-    headline: 'Xavfsiz korporativ ta’lim markaziga kirish',
-    subline:
-      'AI yordamchi, real-vaqt analytics, imtihonlar va sertifikatlash tizimiga yagona enterprise login orqali ulaning.',
-    username: 'Username',
-    employee: 'Tabel raqam',
-    usernameLabel: 'Username',
-    employeeLabel: 'Tabel raqami',
-    password: 'Maxfiy parol',
-    remember: 'Meni eslab qolish',
-    forgot: 'Parolni tiklash',
-    submit: 'Tizimga kirish',
-    loading: 'Tekshirilmoqda...',
-    sso: 'SSO orqali kirish',
-    activeDirectory: 'Active Directory tayyor',
-    biometric: 'Biometrik kirish tayyor',
-    device: 'Ishonchli qurilma sessiyasi',
-    secure: '256-bit himoyalangan sessiya',
-    validationCredential: 'Login maydonini to‘ldiring.',
-    validationPassword: 'Parol kamida 4 ta belgidan iborat bo‘lishi kerak.',
-    error: 'Login yoki parol noto‘g‘ri. Qayta urinib ko‘ring.',
-    panelTitle: 'AI monitoring faol',
-    panelText: 'Platforma sessiya xavfsizligi, qurilma holati va kirish risklarini real vaqtda kuzatadi.',
-    quote: 'Har bir xodim uchun ta’lim, imtihon va sertifikat jarayoni bitta himoyalangan tizimda.',
-  },
-  ru: {
-    eyebrow: 'Enterprise AI LMS',
-    headline: 'Безопасный вход в корпоративный центр обучения',
-    subline:
-      'Подключайтесь к ИИ-ассистенту, аналитике, экзаменам и сертификации через единый enterprise login.',
-    username: 'Username',
-    employee: 'Табельный номер',
-    usernameLabel: 'Имя пользователя (username)',
-    employeeLabel: 'Табельный номер',
-    password: 'Пароль',
-    remember: 'Запомнить меня',
-    forgot: 'Восстановить пароль',
-    submit: 'Войти в систему',
-    loading: 'Проверка...',
-    sso: 'Войти через SSO',
-    activeDirectory: 'Active Directory готов',
-    biometric: 'Биометрия готова',
-    device: 'Доверенная сессия устройства',
-    secure: '256-бит защищенная сессия',
-    validationCredential: 'Заполните поле логина.',
-    validationPassword: 'Пароль должен быть не короче 4 символов.',
-    error: 'Неверный логин или пароль. Попробуйте еще раз.',
-    panelTitle: 'AI мониторинг активен',
-    panelText: 'Платформа отслеживает безопасность сессии, устройство и риски входа в реальном времени.',
-    quote: 'Обучение, экзамены и сертификаты каждого сотрудника в одной защищенной системе.',
-  },
-};
-
 export default function Login() {
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.login);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const maxDevicesReached = useAuthStore((state) => state.maxDevicesReached);
+  const pendingDevices = useAuthStore((state) => state.pendingDevices);
+  const setMaxDevices = useAuthStore((state) => state.setMaxDevices);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -96,7 +46,8 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate]);
 
-  const [lang, setLang] = useState<Lang>('uz');
+  const { t, i18n } = useTranslation();
+  const [lang, setLang] = useState<Lang>((i18n.language as Lang) || 'uz');
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [mode, setMode] = useState<LoginMode>('username');
   const [credential, setCredential] = useState('');
@@ -106,7 +57,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const t = copy[lang];
+  const handleLangChange = (l: Lang) => { setLang(l); i18n.changeLanguage(l); };
 
   const credentialPlaceholder = useMemo(
     () => (mode === 'username' ? 'husan_rustamov' : 'AGMK-0004'),
@@ -114,17 +65,17 @@ export default function Login() {
   );
 
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent, removeSessionId?: string) => {
+    if (e) e.preventDefault();
     setError('');
 
     if (!credential.trim()) {
-      setError(t.validationCredential);
+      setError(t('login.validationCredential'));
       return;
     }
 
     if (password.trim().length < 4) {
-      setError(t.validationPassword);
+      setError(t('login.validationPassword'));
       return;
     }
 
@@ -137,17 +88,23 @@ export default function Login() {
           password,
           remember,
           loginMode: mode,
+          removeSessionId,
         })
         .catch((requestError) => {
           throw requestError;
         });
+
+      if (response.data?.maxDevicesReached || response.maxDevicesReached) {
+        setMaxDevices(true, response.data?.devices || response.devices || []);
+        return;
+      }
 
       if (response.success || response.data) {
         loginAction(response.data.user, response.data.accessToken, response.data.refreshToken);
         navigate('/dashboard');
       }
     } catch {
-      setError(t.error);
+      setError(t('login.error'));
     } finally {
       setLoading(false);
     }
@@ -741,14 +698,14 @@ export default function Login() {
 
           <div className="auth-eyebrow">
             <Sparkles size={15} />
-            {t.eyebrow}
+            {t('login.eyebrow')}
           </div>
           <h1 className="auth-title">
-            {t.headline.split('AI')[0]}
+            {t('login.headline').split('AI')[0]}
             <span>AI</span>
-            {t.headline.split('AI').slice(1).join('AI')}
+            {t('login.headline').split('AI').slice(1).join('AI')}
           </h1>
-          <p className="auth-lead">{t.subline}</p>
+          <p className="auth-lead">{t('login.subline')}</p>
 
           <div className="auth-visual">
             <div className="auth-panel">
@@ -756,10 +713,10 @@ export default function Login() {
                 <div>
                   <div className="auth-chip">
                     <ShieldCheck size={14} />
-                    {t.secure}
+                    {t('login.secure')}
                   </div>
-                  <h2>{t.panelTitle}</h2>
-                  <p>{t.panelText}</p>
+                  <h2>{t('login.panelTitle')}</h2>
+                  <p>{t('login.panelText')}</p>
                 </div>
                 <Bot color="var(--auth-cyan)" size={28} />
               </div>
@@ -773,13 +730,13 @@ export default function Login() {
             <div className="auth-mini-stack">
               <div className="auth-mini">
                 <Laptop size={24} />
-                <strong>{t.device}</strong>
+                <strong>{t('login.device')}</strong>
                 <span>Windows 11 • Tashkent • Protected browser</span>
               </div>
               <div className="auth-mini">
                 <BadgeCheck size={24} />
                 <strong>Compliance ready</strong>
-                <span>{t.quote}</span>
+                <span>{t('login.quote')}</span>
               </div>
             </div>
           </div>
@@ -794,7 +751,7 @@ export default function Login() {
                     key={item}
                     type="button"
                     className={lang === item ? 'active' : ''}
-                    onClick={() => setLang(item)}
+                    onClick={() => handleLangChange(item)}
                   >
                     <Globe2 size={13} />
                     {item.toUpperCase()}
@@ -822,8 +779,8 @@ export default function Login() {
             </div>
 
             <div className="auth-card-head">
-              <h1>{t.submit}</h1>
-              <p>{t.subline}</p>
+              <h1>{t('login.submit')}</h1>
+              <p>{t('login.subline')}</p>
             </div>
 
             <div className="auth-mode" role="tablist" aria-label="Login method">
@@ -833,7 +790,7 @@ export default function Login() {
                 onClick={() => setMode('username')}
               >
                 <UserRound size={15} />
-                {t.username}
+                {t('login.username')}
               </button>
               <button
                 type="button"
@@ -841,13 +798,13 @@ export default function Login() {
                 onClick={() => setMode('employee')}
               >
                 <IdCard size={15} />
-                {t.employee}
+                {t('login.employee')}
               </button>
             </div>
 
             <form className="auth-form" onSubmit={handleLogin}>
               <div className="auth-field">
-                <label htmlFor="credential">{mode === 'username' ? t.usernameLabel : t.employeeLabel}</label>
+                <label htmlFor="credential">{mode === 'username' ? t('login.usernameLabel') : t('login.employeeLabel')}</label>
                 <div className="auth-input-wrap">
                   {mode === 'username' ? <UserRound size={18} /> : <IdCard size={18} />}
                   <input
@@ -864,9 +821,9 @@ export default function Login() {
 
               <div className="auth-field">
                 <label htmlFor="password">
-                  {t.password}
+                  {t('login.password')}
                   <a className="auth-link" href="/auth/forgot-password">
-                    {t.forgot}
+                    {t('login.forgot')}
                   </a>
                 </label>
                 <div className="auth-input-wrap">
@@ -898,7 +855,7 @@ export default function Login() {
                     checked={remember}
                     onChange={(event) => setRemember(event.target.checked)}
                   />
-                  {t.remember}
+                  {t('login.remember')}
                 </label>
               </div>
 
@@ -908,11 +865,11 @@ export default function Login() {
                 {loading ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    {t.loading}
+                    {t('login.loading')}
                   </>
                 ) : (
                   <>
-                    {t.submit}
+                    {t('login.submit')}
                     <ArrowRight size={18} />
                   </>
                 )}
@@ -923,7 +880,7 @@ export default function Login() {
               <div className="auth-sso">
                 <button type="button">
                   <Building2 size={17} />
-                  {t.sso}
+                  {t('login.sso')}
                   <ChevronRight size={16} />
                 </button>
               </div>
@@ -932,15 +889,15 @@ export default function Login() {
             <div className="auth-security-list">
               <div className="auth-security-item">
                 <CheckCircle2 size={15} />
-                {t.activeDirectory}
+                {t('login.activeDirectory')}
               </div>
               <div className="auth-security-item">
                 <Fingerprint size={15} />
-                {t.biometric}
+                {t('login.biometric')}
               </div>
               <div className="auth-security-item">
                 <KeyRound size={15} />
-                {t.secure}
+                {t('login.secure')}
               </div>
             </div>
 
@@ -948,6 +905,16 @@ export default function Login() {
           </div>
         </section>
       </div>
+
+      <DeviceLimitModal
+        isOpen={maxDevicesReached}
+        devices={pendingDevices}
+        onDeviceRemoved={(sessionId) => {
+          setMaxDevices(false);
+          handleLogin(undefined, sessionId);
+        }}
+        onCancel={() => setMaxDevices(false)}
+      />
     </main>
   );
 }

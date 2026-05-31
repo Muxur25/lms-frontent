@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { 
   Settings as SettingsIcon, User, Shield, BellRing, 
   MonitorSmartphone, Laptop, Globe, CheckCircle2, X 
@@ -10,128 +10,12 @@ import { getInitials } from '../shared/lib/auth-user';
 
 type TabType = 'profile' | 'security' | 'notifications' | 'system' | 'sessions';
 
-const translations = {
-  uz: {
-    title: "Sozlamalar",
-    subTitle: "Profil, xavfsizlik va tizim parametrlarini boshqarish",
-    tabProfile: "Profil ma'lumotlari",
-    tabSecurity: "Xavfsizlik va Parol",
-    tabNotifications: "Xabarnomalar",
-    tabSystem: "Tizim sozlamalari",
-    tabSessions: "Qurilmalar va Sessiyalar",
-    profileTitle: "Profil sozlamalari",
-    securityTitle: "Xavfsizlik sozlamalari",
-    notificationsTitle: "Xabarnomalar sozlamalari",
-    systemTitle: "Tizim sozlamalari",
-    sessionsTitle: "Faol sessiyalar",
-    firstName: "Ism",
-    lastName: "Familiya",
-    email: "Korporativ Email",
-    position: "Lavozim",
-    department: "Bo'lim",
-    cancel: "Bekor qilish",
-    save: "Saqlash",
-    avatarUpdate: "Suratni yangilash",
-    avatarDesc: "Tavsiya etilgan o'lcham: 256x256, Format: JPG, PNG",
-    emailNote: "Email manzilni faqat kadrlar bo'limi orqali o'zgartirish mumkin.",
-    currentPassword: "Joriy parol",
-    newPassword: "Yangi parol",
-    confirmPassword: "Yangi parolni tasdiqlash",
-    passwordsMismatch: "Yangi parollar mos kelmadi",
-    passwordShort: "Parol kamida 6 ta belgidan iborat bo'lishi kerak",
-    passwordSuccess: "Parol muvaffaqiyatli yangilandi",
-    profileSuccess: "Profil ma'lumotlari muvaffaqiyatli saqlandi",
-    emailNotifs: "Email orqali xabarnomalar",
-    emailNotifsDesc: "Muhim yangiliklar, darslar va sertifikatlar haqida email xabarlari",
-    pushNotifs: "Push xabarnomalar",
-    pushNotifsDesc: "Brauzer va mobil ilova orqali tezkor bildirishnomalar",
-    weeklyDigests: "Haftalik o'quv hisobotlari",
-    weeklyDigestsDesc: "Sizning va bo'limingizning haftalik o'zlashtirish tahlili",
-    examReminders: "Imtihon eslatmalari",
-    examRemindersDesc: "Yaqinlashayotgan testlar va deadline eslatmalari",
-    notifSuccess: "Xabarnoma sozlamalari saqlandi",
-    themeLabel: "Interfeys rejimi (Mavzu)",
-    themeDark: "To'q rejim (Obisidian)",
-    themeLight: "Yorug' rejim (Pearl)",
-    themeSystem: "Tizim sozlamasi bo'yicha",
-    langLabel: "Tizim tili",
-    langUz: "O'zbekcha (Lotin)",
-    langRu: "Русский (Кириллица)",
-    systemSuccess: "Tizim sozlamalari muvaffaqiyatli saqlandi",
-    activeDevice: "Hozir faol qurilma",
-    revokeSession: "Sessiyani tugatish",
-    revokeAll: "Barcha boshqa sessiyalarni tugatish",
-    sessionRevoked: "Sessiya muvaffaqiyatli yakunlandi",
-    sessionRevokedAll: "Barcha boshqa sessiyalar yakunlandi",
-    browser: "Brauzer",
-    os: "Operatsion tizim",
-    ipAddress: "IP Manzil",
-  },
-  ru: {
-    title: "Настройки",
-    subTitle: "Управление профилем, безопасностью и системными параметрами",
-    tabProfile: "Данные профиля",
-    tabSecurity: "Безопасность и пароль",
-    tabNotifications: "Уведомления",
-    tabSystem: "Системные настройки",
-    tabSessions: "Устройства и сессии",
-    profileTitle: "Настройки профиля",
-    securityTitle: "Настройки безопасности",
-    notificationsTitle: "Настройки уведомлений",
-    systemTitle: "Системные настройки",
-    sessionsTitle: "Активные сессии",
-    firstName: "Имя",
-    lastName: "Фамилия",
-    email: "Корпоративный Email",
-    position: "Должность",
-    department: "Отдел",
-    cancel: "Отмена",
-    save: "Сохранить",
-    avatarUpdate: "Обновить фото",
-    avatarDesc: "Рекомендуемый размер: 256x256, Формат: JPG, PNG",
-    emailNote: "Email адрес можно изменить только через отдел кадров.",
-    currentPassword: "Текущий пароль",
-    newPassword: "Новый пароль",
-    confirmPassword: "Подтверждение нового пароля",
-    passwordsMismatch: "Новые пароли не совпадают",
-    passwordShort: "Пароль должен быть не менее 6 символов",
-    passwordSuccess: "Пароль успешно обновлен",
-    profileSuccess: "Данные профиля успешно сохранены",
-    emailNotifs: "Уведомления по email",
-    emailNotifsDesc: "Сообщения о важных новостях, уроках и сертификатах на почту",
-    pushNotifs: "Push-уведомления",
-    pushNotifsDesc: "Мгновенные уведомления в браузере и мобильном приложении",
-    weeklyDigests: "Еженедельные отчеты об обучении",
-    weeklyDigestsDesc: "Анализ вашей успеваемости и успеваемости вашего отдела за неделю",
-    examReminders: "Напоминания об экзаменах",
-    examRemindersDesc: "Напоминания о приближающихся тестах и дедлайнах",
-    notifSuccess: "Настройки уведомлений сохранены",
-    themeLabel: "Режим интерфейса (Тема)",
-    themeDark: "Темный режим (Обсидиан)",
-    themeLight: "Светлый режим (Перламутр)",
-    themeSystem: "Как в системе",
-    langLabel: "Язык системы",
-    langUz: "O'zbekcha (Lotin)",
-    langRu: "Русский (Кириллица)",
-    systemSuccess: "Системные настройки успешно сохранены",
-    activeDevice: "Активно сейчас",
-    revokeSession: "Завершить сессию",
-    revokeAll: "Завершить все остальные сессии",
-    sessionRevoked: "Сессия успешно завершена",
-    sessionRevokedAll: "Все остальные сессии завершены",
-    browser: "Браузер",
-    os: "Операционная система",
-    ipAddress: "IP Адрес",
-  }
-};
+
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore();
   const { theme, setTheme, language, setLanguage } = useUIStore();
-  const { i18n } = useTranslation();
-  
-  const isRu = i18n.language === 'ru' || language === 'ru';
-  const t = isRu ? translations.ru : translations.uz;
+  const { t, i18n } = useTranslation();
 
   // Active Tab State
   const [activeTab, setActiveTab] = useState<TabType>('profile');
@@ -200,18 +84,18 @@ export default function Settings() {
       fullName: `${firstName} ${lastName}`.trim(),
       position
     });
-    showToast(t.profileSuccess, 'success');
+    showToast(t('settings.profileSuccess'), 'success');
   };
 
   // Submit Security Changes
   const handleSecuritySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
-      showToast(t.passwordShort, 'error');
+      showToast(t('settings.passwordShort'), 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast(t.passwordsMismatch, 'error');
+      showToast(t('settings.passwordsMismatch'), 'error');
       return;
     }
     
@@ -219,13 +103,13 @@ export default function Settings() {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    showToast(t.passwordSuccess, 'success');
+    showToast(t('settings.passwordSuccess'), 'success');
   };
 
   // Submit Notifications Changes
   const handleNotificationsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    showToast(t.notifSuccess, 'success');
+    showToast(t('settings.notifSuccess'), 'success');
   };
 
   // Submit System Changes
@@ -234,19 +118,19 @@ export default function Settings() {
     setTheme(localTheme);
     setLanguage(localLang);
     i18n.changeLanguage(localLang);
-    showToast(t.systemSuccess, 'success');
+    showToast(t('settings.systemSuccess'), 'success');
   };
 
   // Terminate Single Session
   const handleRevokeSession = (id: string) => {
     setSessions(prev => prev.filter(s => s.id !== id));
-    showToast(t.sessionRevoked, 'success');
+    showToast(t('settings.sessionRevoked'), 'success');
   };
 
   // Terminate All Other Sessions
   const handleRevokeAllOther = () => {
     setSessions(prev => prev.filter(s => s.current));
-    showToast(t.sessionRevokedAll, 'success');
+    showToast(t('settings.sessionRevokedAll'), 'success');
   };
 
   const initials = getInitials(firstName, lastName, `${firstName} ${lastName}`);
@@ -276,9 +160,9 @@ export default function Settings() {
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <SettingsIcon color="var(--text-secondary)" size={24} />
-            {t.title}
+            {t('settings.title')}
           </h1>
-          <p className="page-sub" style={{ marginTop: 6 }}>{t.subTitle}</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{t('settings.subTitle')}</p>
         </div>
       </div>
 
@@ -286,11 +170,11 @@ export default function Settings() {
         {/* Navigation Sidebar Tabs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { id: 'profile', icon: User, label: t.tabProfile },
-            { id: 'security', icon: Shield, label: t.tabSecurity },
-            { id: 'notifications', icon: BellRing, label: t.tabNotifications },
-            { id: 'system', icon: Globe, label: t.tabSystem },
-            { id: 'sessions', icon: MonitorSmartphone, label: t.tabSessions }
+            { id: 'profile', icon: User, label: t('settings.tabProfile') },
+            { id: 'security', icon: Shield, label: t('settings.tabSecurity') },
+            { id: 'notifications', icon: BellRing, label: t('settings.tabNotifications') },
+            { id: 'system', icon: Globe, label: t('settings.tabSystem') },
+            { id: 'sessions', icon: MonitorSmartphone, label: t('settings.tabSessions') }
           ].map((item) => (
             <button 
               key={item.id} 
@@ -318,7 +202,7 @@ export default function Settings() {
           {/* PROFILE TAB */}
           {activeTab === 'profile' && (
             <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t.profileTitle}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('settings.profileTitle')}</h3>
               
               <div style={{ display: 'flex', gap: 24, marginBottom: 32, alignItems: 'center', paddingBottom: 32, borderBottom: '1px solid var(--border-1)' }}>
                 <div style={{ 
@@ -329,43 +213,43 @@ export default function Settings() {
                   {initials}
                 </div>
                 <div>
-                  <button className="btn btn-secondary" style={{ marginBottom: 8 }} type="button">{t.avatarUpdate}</button>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{t.avatarDesc}</p>
+                  <button className="btn btn-secondary" style={{ marginBottom: 8 }} type="button">{t('settings.avatarUpdate')}</button>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{t('settings.avatarDesc')}</p>
                 </div>
               </div>
 
               <form onSubmit={handleProfileSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <div className="grid grid-2">
                   <div className="input-group">
-                    <label className="input-label">{t.firstName}</label>
+                    <label className="input-label">{t('settings.firstName')}</label>
                     <input type="text" className="input" value={firstName} onChange={e => setFirstName(e.target.value)} required />
                   </div>
                   <div className="input-group">
-                    <label className="input-label">{t.lastName}</label>
+                    <label className="input-label">{t('settings.lastName')}</label>
                     <input type="text" className="input" value={lastName} onChange={e => setLastName(e.target.value)} required />
                   </div>
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{t.email}</label>
+                  <label className="input-label">{t('settings.email')}</label>
                   <input type="email" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.email || 'admin@agmk.uz'} disabled />
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{t.emailNote}</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{t('settings.emailNote')}</p>
                 </div>
 
                 <div className="grid grid-2">
                   <div className="input-group">
-                    <label className="input-label">{t.position}</label>
+                    <label className="input-label">{t('settings.position')}</label>
                     <input type="text" className="input" value={position} onChange={e => setPosition(e.target.value)} />
                   </div>
                   <div className="input-group">
-                    <label className="input-label">{t.department}</label>
+                    <label className="input-label">{t('settings.department')}</label>
                     <input type="text" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.department || 'AGMK Korporatsiyasi'} disabled />
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => { setFirstName(user?.firstName || ''); setLastName(user?.lastName || ''); setPosition(user?.position || ''); }}>{t.cancel}</button>
-                  <button type="submit" className="btn btn-primary">{t.save}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setFirstName(user?.firstName || ''); setLastName(user?.lastName || ''); setPosition(user?.position || ''); }}>{t('settings.cancel')}</button>
+                  <button type="submit" className="btn btn-primary">{t('settings.save')}</button>
                 </div>
               </form>
             </div>
@@ -374,27 +258,27 @@ export default function Settings() {
           {/* SECURITY TAB */}
           {activeTab === 'security' && (
             <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t.securityTitle}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('settings.securityTitle')}</h3>
               
               <form onSubmit={handleSecuritySubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <div className="input-group">
-                  <label className="input-label">{t.currentPassword}</label>
+                  <label className="input-label">{t('settings.currentPassword')}</label>
                   <input type="password" className="input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
                 </div>
                 <div className="grid grid-2">
                   <div className="input-group">
-                    <label className="input-label">{t.newPassword}</label>
+                    <label className="input-label">{t('settings.newPassword')}</label>
                     <input type="password" className="input" value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
                   </div>
                   <div className="input-group">
-                    <label className="input-label">{t.confirmPassword}</label>
+                    <label className="input-label">{t('settings.confirmPassword')}</label>
                     <input type="password" className="input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}>{t.cancel}</button>
-                  <button type="submit" className="btn btn-primary">{t.save}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}>{t('settings.cancel')}</button>
+                  <button type="submit" className="btn btn-primary">{t('settings.save')}</button>
                 </div>
               </form>
             </div>
@@ -403,14 +287,14 @@ export default function Settings() {
           {/* NOTIFICATIONS TAB */}
           {activeTab === 'notifications' && (
             <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t.notificationsTitle}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('settings.notificationsTitle')}</h3>
               
               <form onSubmit={handleNotificationsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {[
-                  { id: 'email', label: t.emailNotifs, desc: t.emailNotifsDesc, val: emailNotifs, setVal: setEmailNotifs },
-                  { id: 'push', label: t.pushNotifs, desc: t.pushNotifsDesc, val: pushNotifs, setVal: setPushNotifs },
-                  { id: 'weekly', label: t.weeklyDigests, desc: t.weeklyDigestsDesc, val: weeklyDigests, setVal: setWeeklyDigests },
-                  { id: 'exams', label: t.examReminders, desc: t.examRemindersDesc, val: examReminders, setVal: setExamReminders }
+                  { id: 'email', label: t('settings.emailNotifs'), desc: t('settings.emailNotifsDesc'), val: emailNotifs, setVal: setEmailNotifs },
+                  { id: 'push', label: t('settings.pushNotifs'), desc: t('settings.pushNotifsDesc'), val: pushNotifs, setVal: setPushNotifs },
+                  { id: 'weekly', label: t('settings.weeklyDigests'), desc: t('settings.weeklyDigestsDesc'), val: weeklyDigests, setVal: setWeeklyDigests },
+                  { id: 'exams', label: t('settings.examReminders'), desc: t('settings.examRemindersDesc'), val: examReminders, setVal: setExamReminders }
                 ].map((item) => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid var(--border-1)' }}>
                     <div style={{ paddingRight: 16 }}>
@@ -427,7 +311,7 @@ export default function Settings() {
                 ))}
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-                  <button type="submit" className="btn btn-primary">{t.save}</button>
+                  <button type="submit" className="btn btn-primary">{t('settings.save')}</button>
                 </div>
               </form>
             </div>
@@ -436,17 +320,17 @@ export default function Settings() {
           {/* SYSTEM TAB */}
           {activeTab === 'system' && (
             <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t.systemTitle}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('settings.systemTitle')}</h3>
               
               <form onSubmit={handleSystemSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 {/* Theme selection */}
                 <div className="input-group">
-                  <label className="input-label" style={{ marginBottom: 12 }}>{t.themeLabel}</label>
+                  <label className="input-label" style={{ marginBottom: 12 }}>{t('settings.themeLabel')}</label>
                   <div style={{ display: 'flex', gap: 12 }}>
                     {[
-                      { id: 'dark', label: t.themeDark, color: '#0d1117', border: '#1f2937' },
-                      { id: 'light', label: t.themeLight, color: '#f8fafc', border: '#e2e8f0' },
-                      { id: 'system', label: t.themeSystem, color: 'linear-gradient(135deg,#0d1117 50%,#f8fafc 50%)', border: '#cbd5e1' }
+                      { id: 'dark', label: t('settings.themeDark'), color: '#0d1117', border: '#1f2937' },
+                      { id: 'light', label: t('settings.themeLight'), color: '#f8fafc', border: '#e2e8f0' },
+                      { id: 'system', label: t('settings.themeSystem'), color: 'linear-gradient(135deg,#0d1117 50%,#f8fafc 50%)', border: '#cbd5e1' }
                     ].map((mode) => (
                       <button 
                         key={mode.id} 
@@ -477,11 +361,11 @@ export default function Settings() {
 
                 {/* Language selection */}
                 <div className="input-group">
-                  <label className="input-label" style={{ marginBottom: 10 }}>{t.langLabel}</label>
+                  <label className="input-label" style={{ marginBottom: 10 }}>{t('settings.langLabel')}</label>
                   <div style={{ display: 'flex', gap: 12 }}>
                     {[
-                      { id: 'uz', label: t.langUz },
-                      { id: 'ru', label: t.langRu }
+                      { id: 'uz', label: t('settings.langUz') },
+                      { id: 'ru', label: t('settings.langRu') }
                     ].map((langItem) => (
                       <button 
                         key={langItem.id} 
@@ -502,8 +386,8 @@ export default function Settings() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => { setLocalTheme(theme); setLocalLang(language); }}>{t.cancel}</button>
-                  <button type="submit" className="btn btn-primary">{t.save}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setLocalTheme(theme); setLocalLang(language); }}>{t('settings.cancel')}</button>
+                  <button type="submit" className="btn btn-primary">{t('settings.save')}</button>
                 </div>
               </form>
             </div>
@@ -513,10 +397,10 @@ export default function Settings() {
           {activeTab === 'sessions' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{t.sessionsTitle}</h3>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{t('settings.sessionsTitle')}</h3>
                 {sessions.length > 1 && (
                   <button className="btn btn-sm btn-secondary" onClick={handleRevokeAllOther} style={{ color: 'var(--red-400)', borderColor: 'rgba(239,68,68,0.2)' }}>
-                    {t.revokeAll}
+                    {t('settings.revokeAll')}
                   </button>
                 )}
               </div>
@@ -542,13 +426,13 @@ export default function Settings() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{sess.browser} — {sess.os}</span>
                         {sess.current ? (
-                          <span className="badge badge-green" style={{ fontSize: 9, padding: '1px 6px' }}>{t.activeDevice}</span>
+                          <span className="badge badge-green" style={{ fontSize: 9, padding: '1px 6px' }}>{t('settings.activeDevice')}</span>
                         ) : (
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sess.activeAt}</span>
                         )}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                        {t.ipAddress}: <span style={{ fontFamily: 'var(--font-mono)' }}>{sess.ip}</span>
+                        {t('settings.ipAddress')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{sess.ip}</span>
                       </div>
                     </div>
 
@@ -558,7 +442,7 @@ export default function Settings() {
                         className="btn btn-sm btn-secondary"
                         style={{ padding: '6px 12px', fontSize: 11, height: 'fit-content' }}
                       >
-                        {t.revokeSession}
+                        {t('settings.revokeSession')}
                       </button>
                     )}
                   </div>

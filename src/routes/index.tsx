@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import AppLayout from '@/layouts/AppLayout';
 import AuthLayout from '@/layouts/AuthLayout';
 import { ProtectedRoute } from '@/features/auth/ui/ProtectedRoute';
@@ -10,6 +11,7 @@ import { Placeholder } from '@/components/Placeholder';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Courses = lazy(() => import('@/pages/Courses'));
 const CoursePage = lazy(() => import('@/pages/CoursePage'));
+const MyLearning = lazy(() => import('@/pages/MyLearning'));
 const ExamPage = lazy(() => import('@/pages/ExamPage'));
 const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
@@ -24,6 +26,7 @@ const Settings = lazy(() => import('@/pages/Settings'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
+const VerifyCertificate = lazy(() => import('@/pages/VerifyCertificate'));
 
 // Suspense Loader component
 const PageLoader = () => (
@@ -32,12 +35,29 @@ const PageLoader = () => (
   </div>
 );
 
+const NotFound = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="p-8 text-center text-[var(--text-tertiary)] flex flex-col items-center justify-center min-h-[400px]">
+      <div className="text-4xl mb-4">🧭</div>
+      <h2 className="text-xl font-bold mb-2">{t('layout.notFound')}</h2>
+      <p>{t('layout.notFoundSub')}</p>
+    </div>
+  );
+};
+
 export const router = createBrowserRouter([
   // Landing Page at exact root
   {
     path: '/',
     errorElement: <ErrorBoundary />,
     element: <Suspense fallback={<PageLoader />}><LandingPage /></Suspense>,
+  },
+  // Public Certificate Verification Page
+  {
+    path: '/verify-certificate',
+    errorElement: <ErrorBoundary />,
+    element: <Suspense fallback={<PageLoader />}><VerifyCertificate /></Suspense>,
   },
   // Main App wrapped in AppLayout and ProtectedRoute
   {
@@ -58,7 +78,7 @@ export const router = createBrowserRouter([
       },
       { 
         path: 'mylearning', 
-        element: <Suspense fallback={<PageLoader />}><CoursePage /></Suspense> 
+        element: <Suspense fallback={<PageLoader />}><MyLearning /></Suspense> 
       },
       { 
         path: 'assessments', 
@@ -95,11 +115,7 @@ export const router = createBrowserRouter([
       { path: 'notifications', element: <Suspense fallback={<PageLoader />}><Notifications /></Suspense> },
       { path: 'settings', element: <Suspense fallback={<PageLoader />}><Settings /></Suspense> },
       // Catch all 404 inside layout
-      { path: '*', element: <div className="p-8 text-center text-[var(--text-tertiary)] flex flex-col items-center justify-center min-h-[400px]">
-        <div className="text-4xl mb-4">🧭</div>
-        <h2 className="text-xl font-bold mb-2">Sahifa topilmadi</h2>
-        <p>Siz qidirayotgan manzil mavjud emas.</p>
-      </div> }
+      { path: '*', element: <NotFound /> }
     ]
   },
   // Auth routes isolated from the main layout

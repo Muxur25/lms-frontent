@@ -122,11 +122,11 @@ export default function Courses() {
     
     // Validation
     const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = isRu ? "Введите название курса" : "Kurs nomi kiritilishi shart";
-    if (!formData.description.trim()) newErrors.description = isRu ? "Введите описание курса" : "Kurs tavsifi kiritilishi shart";
-    if (!formData.instructor.trim()) newErrors.instructor = isRu ? "Укажите имя преподавателя" : "O'qituvchi nomi kiritilishi shart";
-    if (formData.lessons <= 0) newErrors.lessons = isRu ? "Количество уроков должно быть больше 0" : "Darslar soni 0 dan katta bo'lishi shart";
-    if (!formData.duration.trim()) newErrors.duration = isRu ? "Укажите длительность" : "Davomiyligi kiritilishi shart";
+    if (!formData.title.trim()) newErrors.title = t('courses_page.errTitle');
+    if (!formData.description.trim()) newErrors.description = t('courses_page.errDescription');
+    if (!formData.instructor.trim()) newErrors.instructor = t('courses_page.errInstructor');
+    if (formData.lessons <= 0) newErrors.lessons = t('courses_page.errLessons');
+    if (!formData.duration.trim()) newErrors.duration = t('courses_page.errDuration');
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -309,7 +309,7 @@ export default function Courses() {
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{course.instructor}</span>
                 </div>
                 <Link to={`/courses/${course.id}`} className="btn btn-primary btn-sm" style={{ padding: '6px 12px' }}>
-                  <Play size={12} /> {isRu ? 'Смотреть' : "Ko'rish"}
+                  <Play size={12} /> {t('courses_page.watch')}
                 </Link>
               </div>
             </div>
@@ -364,10 +364,10 @@ export default function Courses() {
 
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Plus size={20} color="var(--blue-400)" />
-              {isRu ? 'Создать новый курс' : 'Yangi kurs yaratish'}
+              {t('courses_page.createTitle')}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              {isRu ? 'Заполните информацию о новом учебном курсе для платформы.' : 'Platforma uchun yangi o\'quv kursi ma\'lumotlarini to\'ldiring.'}
+              {t('courses_page.createSubtitle')}
             </p>
 
             <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 10, padding: 3, border: '1px solid var(--border-1)', width: 'fit-content', marginBottom: 20 }}>
@@ -414,9 +414,9 @@ export default function Courses() {
                 {errors.description && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.description}</span>}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+              <div className="form-grid-2" style={{ gap: 16 }}>
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Категория *' : 'Kategoriya *'}</label>
+                  <label className="input-label">{t('courses_page.categoryLabel')}</label>
                   <select 
                     className="input"
                     value={CATEGORIES.find(c => c.uz === formData.cat)?.id || 'IT'}
@@ -429,7 +429,7 @@ export default function Courses() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Уровень *' : 'Daraja *'}</label>
+                  <label className="input-label">{t('courses_page.levelLabel')}</label>
                   <select 
                     className="input"
                     value={LEVELS.find(l => l.uz === formData.level)?.id || 'Beginner'}
@@ -442,7 +442,7 @@ export default function Courses() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Количество уроков *' : 'Darslar soni *'}</label>
+                  <label className="input-label">{t('courses_page.lessonsLabel')}</label>
                   <input 
                     type="number"
                     className="input"
@@ -454,10 +454,10 @@ export default function Courses() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Длительность *' : 'Davomiyligi *'}</label>
+                  <label className="input-label">{t('courses_page.durationLabel')}</label>
                   <input 
                     className="input"
-                    placeholder={isRu ? 'Например: 12 часов' : 'Masalan: 12 soat'}
+                    placeholder={t('courses_page.durationPlaceholder')}
                     value={formData.duration}
                     onChange={e => setFormData(prev => ({ ...prev, duration: e.target.value }))}
                   />
@@ -465,7 +465,7 @@ export default function Courses() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Преподаватель *' : 'O\'qituvchi / Instruktor *'}</label>
+                  <label className="input-label">{t('courses_page.instructorLabel')}</label>
                   <input 
                     className="input"
                     placeholder="Masalan: B. Rahimov"
@@ -476,20 +476,20 @@ export default function Courses() {
                 </div>
 
                 <div className="input-group">
-                  <label className="input-label">{isRu ? 'Статус *' : 'Статус *'}</label>
+                  <label className="input-label">{t('courses_page.statusLabel')}</label>
                   <select 
                     className="input"
                     value={formData.status}
                     onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
                   >
-                    <option value="draft">{isRu ? 'Черновик (Draft)' : 'Qoralama (Draft)'}</option>
-                    <option value="published">{isRu ? 'Опубликован (Published)' : 'Faol (Published)'}</option>
+                    <option value="draft">{t('courses_page.statusDraft')}</option>
+                    <option value="published">{t('courses_page.statusPublished')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="input-group">
-                <label className="input-label">{isRu ? 'Цвет темы курса' : 'Kurs mavzusi rangi'}</label>
+                <label className="input-label">{t('courses_page.colorLabel')}</label>
                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                   {COLOR_PRESETS.map(preset => (
                     <button
@@ -525,14 +525,14 @@ export default function Courses() {
                   onClick={() => setIsModalOpen(false)}
                   disabled={submitting}
                 >
-                  {isRu ? 'Отмена' : 'Bekor qilish'}
+                  {t('common.cancel')}
                 </button>
                 <button 
                   type="submit" 
                   className="btn btn-primary"
                   disabled={submitting}
                 >
-                  {submitting ? (isRu ? 'Создается...' : 'Yaratilmoqda...') : (isRu ? 'Создать курс' : 'Kursni yaratish')}
+                  {submitting ? t('courses_page.creating') : t('courses_page.createBtn')}
                 </button>
               </div>
             </form>

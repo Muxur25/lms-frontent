@@ -116,7 +116,7 @@ export default function Analytics() {
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
         <AlertCircle size={40} color="var(--red-400)" style={{ marginBottom: 12 }} />
         <div style={{ fontSize: 16, fontWeight: 600 }}>{error}</div>
-        <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>Qayta urinish</button>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>{t('common.refresh')}</button>
       </div>
     );
   }
@@ -135,10 +135,10 @@ export default function Analytics() {
       <div className="page-header fade-in">
         <div>
           <div className="page-title">{t('nav.analytics')}</div>
-          <div className="page-sub">2026 yil — To'liq tahlil</div>
+          <div className="page-sub">2026 {t('analytics.year', 'yil')} — {t('analytics.fullAnalysis', "To'liq tahlil")}</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          {['Bu oy', 'Bu yil', 'Barchasi'].map((l, i) => (
+          {[t('common.thisMonth'), t('common.thisYear', 'Bu yil'), t('common.all')].map((l, i) => (
             <button key={i} className={`btn btn-sm ${i === 0 ? 'btn-primary' : 'btn-secondary'}`}>{l}</button>
           ))}
         </div>
@@ -158,7 +158,7 @@ export default function Analytics() {
             </div>
             <div className={`stat-change ${k.up ? 'up' : 'down'}`}>
               {k.up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-              {k.change} o'tgan oyga nisbatan
+              {k.change} {t('dash.vsLastMonth')}
             </div>
           </div>
         ))}
@@ -166,8 +166,8 @@ export default function Analytics() {
 
       <div className="grid grid-12 fade-in fade-in-2" style={{ marginBottom: 24 }}>
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>O'quvchilar o'sishi</div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 18 }}>Oylik dinamika</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{t('analytics.userGrowth', "O'quvchilar o'sishi")}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 18 }}>{t('analytics.monthlyDynamic', 'Oylik dinamika')}</div>
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <LineChart data={monthlyData}>
@@ -175,16 +175,16 @@ export default function Analytics() {
                 <XAxis dataKey="m" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="users" name="Foydalanuvchilar" stroke="var(--blue-500)" strokeWidth={2.5} dot={{ fill: 'var(--blue-500)', r: 4 }} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="completions" name="Yakunlandi" stroke="var(--green-500)" strokeWidth={2.5} dot={{ fill: 'var(--green-500)', r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="users" name={t('analytics.users', 'Foydalanuvchilar')} stroke="var(--blue-500)" strokeWidth={2.5} dot={{ fill: 'var(--blue-500)', r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="completions" name={t('analytics.completed', 'Yakunlandi')} stroke="var(--green-500)" strokeWidth={2.5} dot={{ fill: 'var(--green-500)', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>KPI Radar</div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>Umumiy ko'rsatkichlar</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{t('analytics.kpiRadar', 'KPI Radar')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>{t('analytics.generalIndicators', "Umumiy ko'rsatkichlar")}</div>
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <RadarChart data={radarData}>
@@ -200,8 +200,8 @@ export default function Analytics() {
       </div>
 
       <div className="card fade-in fade-in-3">
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Bo'limlar tahlili</div>
-        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20 }}>Ro'yxatga olindi va yakunlandi</div>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{t('analytics.deptAnalysis', "Bo'limlar tahlili")}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20 }}>{t('analytics.enrolledCompleted', "Ro'yxatga olindi va yakunlandi")}</div>
         <div style={{ height: 260 }}>
           <ResponsiveContainer>
             <BarChart data={deptData} barSize={20} barGap={4}>
@@ -209,8 +209,8 @@ export default function Analytics() {
               <XAxis dataKey="dept" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="enrolled" name="Ro'yxatga olindi" fill="var(--blue-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
-              <Bar dataKey="completed" name="Yakunlandi" fill="var(--green-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
+              <Bar dataKey="enrolled" name={t('analytics.enrolled', "Ro'yxatga olindi")} fill="var(--blue-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
+              <Bar dataKey="completed" name={t('analytics.completed', 'Yakunlandi')} fill="var(--green-500)" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, FileText, Download, Eye, Search, Plus, X, Upload, Loader2, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
@@ -903,7 +903,7 @@ export default function Library() {
                 <label className="input-label">{isRu ? 'Описание документа' : 'Hujjat tavsifi'}</label>
                 <textarea className="input" rows={2} style={{ resize: 'none' }} placeholder={isRu ? 'Описание...' : 'Tavsif...'} value={bookFormData.description} onChange={e => setBookFormData(prev => ({ ...prev, description: e.target.value }))} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">{isRu ? 'Раздел *' : 'Bo\'lim *'}</label>
                   <select className="input" value={bookFormData.category} onChange={e => setBookFormData(prev => ({ ...prev, category: e.target.value }))}>
@@ -952,7 +952,7 @@ export default function Library() {
                 {bookErrors.url && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{bookErrors.url}</span>}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">{isRu ? 'Размер файла' : 'Fayl hajmi'}</label>
                   <input type="text" className="input" placeholder="Masalan: 2.4 MB" value={bookFormData.size} onChange={e => setBookFormData(prev => ({ ...prev, size: e.target.value }))} />
@@ -1001,7 +1001,7 @@ export default function Library() {
                 <label className="input-label">{isRu ? 'Описание документа' : 'Hujjat tavsifi'}</label>
                 <textarea className="input" rows={2} style={{ resize: 'none' }} placeholder="Tavsif" value={editBookFormData.description} onChange={e => setEditBookFormData(prev => ({ ...prev, description: e.target.value }))} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">{isRu ? 'Раздел *' : 'Bo\'lim *'}</label>
                   <select className="input" value={editBookFormData.category} onChange={e => setEditBookFormData(prev => ({ ...prev, category: e.target.value }))}>
@@ -1050,7 +1050,7 @@ export default function Library() {
                 {editBookErrors.url && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{editBookErrors.url}</span>}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-grid-2">
                 <div className="input-group">
                   <label className="input-label">{isRu ? 'Размер файла' : 'Fayl hajmi'}</label>
                   <input type="text" className="input" placeholder="Hajmi" value={editBookFormData.size} onChange={e => setEditBookFormData(prev => ({ ...prev, size: e.target.value }))} />

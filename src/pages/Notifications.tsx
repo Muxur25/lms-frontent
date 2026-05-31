@@ -1,7 +1,9 @@
 import { Bell, CheckCircle2, AlertTriangle, Info, ShieldAlert } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '@/store/notification.store';
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const notifications = useNotificationStore((state) => state.notifications);
   const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
   const markAsRead = useNotificationStore((state) => state.markAsRead);
@@ -23,11 +25,11 @@ export default function Notifications() {
             <Bell color="var(--amber-400)" size={24} />
             Bildirishnomalar
           </h1>
-          <p className="page-sub" style={{ marginTop: 6 }}>Tizimdagi barcha yangiliklar va xabarnomalar</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{t('notifications.subtitle')}</p>
         </div>
         {notifications.some(n => !n.read) && (
           <button className="btn btn-secondary" onClick={markAllAsRead}>
-            Barchasini o'qildi deb belgilash
+            {t('notifications.markAllRead')}
           </button>
         )}
       </div>
@@ -62,7 +64,7 @@ export default function Notifications() {
         ))}
         {notifications.length === 0 && (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 14 }}>
-            Hech qanday bildirishnoma yo'q
+            {t('notifications.empty')}
           </div>
         )}
       </div>
