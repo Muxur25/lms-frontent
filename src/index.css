@@ -602,7 +602,26 @@ select.input option {
   .grid-4, .grid-2 { grid-template-columns: 1fr; }
 }
 
-/* ─── Responsive utility grids (inline grid o'rniga) ─── */
+/* ─── Exam Immersive Mode — sidebar/topbar yashirish ─── */
+body.exam-immersive-mode .sidebar,
+body.exam-immersive-mode .topbar,
+body.exam-immersive-mode .bottom-nav {
+  display: none !important;
+}
+body.exam-immersive-mode .main-area {
+  margin-left: 0 !important;
+  padding-top: 0 !important;
+}
+body.exam-immersive-mode .page-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 100vh;
+  overflow: hidden;
+}
+body.exam-immersive-mode .exam-immersive-layout {
+  height: 100vh !important;
+  margin: 0 !important;
+}
 .r-grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .r-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .r-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Award, Download, CheckCircle, Clock, AlertCircle,
@@ -39,10 +39,21 @@ export default function Certifications() {
   }, [loadExams, loadHistory, exams.length]);
 
   // Find passed attempts
-  const passedAttempts = history.filter(h => h.status === 'submitted' && h.passed);
+  const passedAttemptsRaw = history.filter(h => h.status === 'submitted' && h.passed);
+
+  // Bitta imtihon uchun eng yuqori balli sertifikatni olish
+  const uniquePassedAttempts = Array.from(
+    passedAttemptsRaw.reduce((map, attempt) => {
+      const existing = map.get(attempt.testId);
+      if (!existing || attempt.score > existing.score) {
+        map.set(attempt.testId, attempt);
+      }
+      return map;
+    }, new Map<string, any>()).values()
+  );
 
   // Map to certificates
-  const realCerts = passedAttempts.map(attempt => {
+  const realCerts = uniquePassedAttempts.map(attempt => {
     const exam = exams.find(e => e.id === attempt.testId);
     const title = exam ? exam.title : 'Imtihon';
     const titleRu = exam ? (exam.titleRu || exam.title) : 'Экзамен';
@@ -113,7 +124,7 @@ export default function Certifications() {
       label: 'Speed Learner', 
       desc: isRu ? '3 сертификата за 30 дней' : '30 kunda 3 sertifikat', 
       color: '#3b82f6', 
-      unlocked: passedAttempts.filter(h => {
+      unlocked: passedAttemptsRaw.filter(h => {
         const d = new Date(h.submittedAt || h.startedAt);
         return (Date.now() - d.getTime()) <= 30 * 86400000;
       }).length >= 3 || (!isDemoActive && displayCerts.length >= 3)

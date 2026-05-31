@@ -179,7 +179,15 @@ export default function ExamPage() {
     return () => { mounted = false; };
   }, []);
 
-  // copyProtection: imtihon davomida copy/paste bloklash
+  // Exam view da sidebar/topbar ni yashirish
+  useEffect(() => {
+    if (view === 'exam') {
+      document.body.classList.add('exam-immersive-mode');
+    } else {
+      document.body.classList.remove('exam-immersive-mode');
+    }
+    return () => document.body.classList.remove('exam-immersive-mode');
+  }, [view]);
   useEffect(() => {
     if (view !== 'exam' || !selectedExam?.copyProtection) return;
     const block = (e: Event) => e.preventDefault();
@@ -204,6 +212,21 @@ export default function ExamPage() {
       setShowViolationWarning(true);
     },
     onAutoSubmit: () => {
+      // Backend allaqachon attempt ni submitted qilgan — faqat view o'zgartirish
+      setResult({
+        score: 0,
+        passing: selectedExam?.passingScore || selectedExam?.passing || 70,
+        total: questions.length,
+        correct: 0,
+        wrong: 0,
+        skipped: questions.length,
+        topics: [],
+        attemptId: activeAttempt?.id || '',
+        examTitle: selectedExam?.title || 'Imtihon',
+        examTitleRu: selectedExam?.titleRu || selectedExam?.title || 'Imtihon',
+        submittedAt: new Date().toISOString(),
+        autoTerminated: true,
+      });
       setView('result');
     },
   });
@@ -371,6 +394,12 @@ export default function ExamPage() {
       useExamStore.setState({ activeAttempt: null });
       loadHistory();
     } catch (err: any) {
+      // Agar attempt allaqachon submitted bo'lsa (auto-submit) — result sahifasiga o'tish
+      const status = err.response?.status;
+      if (status === 404 || status === 400) {
+        setView('result');
+        return;
+      }
       alert(`Imtihonni topshirishda xatolik: ${err.message || err}`);
     } finally {
       setIsSubmitting(false);
@@ -401,7 +430,9 @@ export default function ExamPage() {
   const uniquePassedExams = new Set(history.filter(h => h.passed).map(h => h.testId)).size;
 
   // ── Result View ──────────────────────────────────
-  if (view === 'result') return <ResultScreen score={result} onBack={() => setView('dashboard')} />;
+  if (view === 'result') return result
+    ? <ResultScreen score={result} onBack={() => setView('dashboard')} />
+    : null;
 
   // ── Exam View ────────────────────────────────────
   if (view === 'exam') return (
@@ -412,21 +443,29 @@ export default function ExamPage() {
       {/* ─── Violation Warning Modal ─── */}
       {showViolationWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-2)', border: `2px solid ${violationCount >= 3 ? '#ef4444' : violationCount === 2 ? '#f59e0b' : '#f59e0b'}`, borderRadius: 20, padding: '32px 36px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 0 60px rgba(239,68,68,0.3)' }}>
+          <div style={{ background: 'var(--bg-2)', border: `2px solid ${violationCount >= 3 ? '#ef4444' : '#f59e0b'}`, borderRadius: 20, padding: '32px 36px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 0 60px rgba(239,68,68,0.3)' }}>
             <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <Shield size={24} color="#ef4444" />
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#ef4444', marginBottom: 8 }}>
-              {violationCount >= 3 ? '⛔ Imtihon yakunlandi!' : '⚠️ Xavfsizlik buzilishi!'}
+              {violationCount >= 3 ? '⛔ Imtihon yakunlandi!' : '⚠️ ' + {
+                FULLSCREEN_EXIT: "To'liq ekrandan chiqdingiz",
+                TAB_SWITCH: 'Boshqa oynaga o\'tdingiz',
+                WINDOW_BLUR: 'Imtihon oynasini tark etdingiz',
+                F12_ATTEMPT: 'F12 tugmasi bosildi',
+                DEVTOOLS_ATTEMPT: 'Dasturchi vositalari ochildi',
+                VIEW_SOURCE_ATTEMPT: 'Sahifa kodi ko\'rildi',
+                RIGHT_CLICK_ATTEMPT: 'O\'ng tugma bosildi',
+              }[lastViolationType] || 'Qoida buzildi'}
             </div>
             <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
               {violationCount >= 3
                 ? 'Siz imtihon xavfsizligi qoidalarini 3 marta buzgansiz. Imtihon avtomatik yakunlandi.'
                 : violationCount === 2
                 ? 'Yana 1 ta qoidabuzarlik imtihonni avtomatik yakunlaydi.'
-                : 'Siz imtihon xavfsizligi qoidalarini buzgansiz.'}
-              <br />
-              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Buzilish turi: {lastViolationType}</span>
+                : lastViolationType === 'FULLSCREEN_EXIT'
+                ? 'Imtihon to\'liq ekran rejimida o\'tkazilishi shart. "Tushundim" tugmasini bosing — to\'liq ekranga qaytasiz.'
+                : 'Imtihon davomida boshqa oyna yoki dasturga o\'tish taqiqlanadi.'}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
               {[1, 2, 3].map(i => (
@@ -437,7 +476,15 @@ export default function ExamPage() {
               Qolgan ogohlantirishlar: {Math.max(0, 3 - violationCount)}
             </div>
             {violationCount < 3 && (
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#ef4444,#dc2626)' }} onClick={() => setShowViolationWarning(false)}>
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#ef4444,#dc2626)' }} onClick={() => {
+                setShowViolationWarning(false);
+                // Fullscreen ga qaytish
+                const el = document.documentElement;
+                if (!document.fullscreenElement) {
+                  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+                  else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
+                }
+              }}>
                 Tushundim, davom etaman
               </button>
             )}
@@ -1133,7 +1180,7 @@ export default function ExamPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
                     <button
                       className="btn btn-primary btn-sm"
-                      onClick={() => { setSelectedExam(exam); setView('start'); }}
+                      onClick={() => { setSelectedExam(exam); setExamPassword(''); setView('start'); }}
                       style={{ borderRadius: 12, whiteSpace: 'nowrap' }}
                     >
                       Boshlash <ChevronRight size={12} />
