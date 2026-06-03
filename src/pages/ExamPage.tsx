@@ -138,7 +138,7 @@ export default function ExamPage() {
 
   const handleEditExamClick = async (exam: any) => {
     const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
-    if (isStarted) {
+    if (isStarted && user?.role !== 'super_admin') {
       toast.error("Imtihon boshlangan! Uni tahrirlash taqiqlanadi.", { position: 'top-center' });
       return;
     }
@@ -157,7 +157,7 @@ export default function ExamPage() {
 
   const handleDeleteExamClick = (exam: any) => {
     const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
-    if (isStarted) {
+    if (isStarted && user?.role !== 'super_admin') {
       toast.error("Imtihon boshlangan! Uni o'chirish taqiqlanadi.", { position: 'top-center' });
       return;
     }
@@ -1181,7 +1181,7 @@ export default function ExamPage() {
             </div>
           ) : (
             exams.map((exam, idx) => {
-              const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
+              const isStarted = ((exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt))) && user?.role !== 'super_admin';
               return (
                 <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s` }}>
                   {/* Difficulty band */}
