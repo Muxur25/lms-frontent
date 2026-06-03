@@ -198,7 +198,15 @@ export default function ExamPage() {
     return roadmap.length > 0 ? roadmap : MOCK_CERT_ROADMAP;
   }, [exams, history]);
 
-  const questions = selectedExam?.questions || [];
+  const questions = useMemo(() => {
+    const rawQuestions = Array.isArray(selectedExam?.questions) ? selectedExam.questions : [];
+    return rawQuestions.map((q: any) => ({
+      ...q,
+      text: q?.text ?? q?.question ?? '',
+      options: Array.isArray(q?.options) ? q.options : [],
+    }));
+  }, [selectedExam?.questions]);
+  const currentQuestion = questions[current] || null;
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
   const answered = Object.values(answers).filter(val => val && val.length > 0).length;
@@ -209,6 +217,15 @@ export default function ExamPage() {
     loadExams();
     loadHistory();
   }, [loadExams, loadHistory]);
+
+  useEffect(() => {
+    if (view !== 'exam') return;
+    if (questions.length === 0) {
+      setCurrent(0);
+      return;
+    }
+    setCurrent(c => Math.min(Math.max(c, 0), questions.length - 1));
+  }, [questions.length, view]);
 
   // AI topic analysis: real yoki mock
   useEffect(() => {
@@ -475,6 +492,23 @@ export default function ExamPage() {
     : null;
 
   // ── Exam View ────────────────────────────────────
+  if (view === 'exam' && !currentQuestion) return (
+    <div className="exam-immersive-layout" style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: 'min(460px, 100%)', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 16, padding: 28, textAlign: 'center' }}>
+        <AlertCircle size={34} color="var(--amber-400)" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>
+          Savollar topilmadi
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+          {selectedExam?.title || 'Ushbu imtihon'} uchun savollar yuklanmagan yoki hali mavjud emas.
+        </div>
+        <button className="btn btn-secondary" onClick={() => setView('dashboard')} style={{ justifyContent: 'center' }}>
+          Dashboardga qaytish
+        </button>
+      </div>
+    </div>
+  );
+
   if (view === 'exam') return (
     <div className="exam-immersive-layout">
       {/* Ambient */}
@@ -631,13 +665,13 @@ export default function ExamPage() {
 
           <div className="exam-question-premium">
             <p style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.75, marginBottom: 28, color: 'var(--text-primary)' }}>
-              {questions[current].text}
+              {currentQuestion.text}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {questions[current].options.map((opt: string, i: number) => {
+              {currentQuestion.options.map((opt: string, i: number) => {
                 const isSelected = answers[current]?.includes(i) || false;
                 const letters = ['A', 'B', 'C', 'D'];
-                const isMultiple = questions[current]?.type === 'multiple';
+                const isMultiple = currentQuestion.type === 'multiple';
                 return (
                   <button
                     key={i}
