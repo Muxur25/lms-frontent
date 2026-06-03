@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import type { TestQuestion, Exam } from '@/api/exams.api';
 
 interface CreateExamWizardProps {
+  examToEdit?: Exam | null;
   onClose: () => void;
   onSuccess: (exam: Exam) => void;
 }
@@ -49,7 +50,7 @@ const STEPS = [
   { id: 3, label: 'Savollar', icon: Layers, desc: 'Savollar va javoblar' },
 ];
 
-export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) {
+export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamWizardProps) {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,6 +96,43 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
     const t = setTimeout(() => searchUsers(userSearch), 300);
     return () => clearTimeout(t);
   }, [userSearch]);
+
+  useEffect(() => {
+    if (examToEdit) {
+      const isCustomCategory = examToEdit.category && !CATEGORIES.includes(examToEdit.category);
+      setExam({
+        title: examToEdit.title || '',
+        description: examToEdit.description || '',
+        category: isCustomCategory ? '__custom__' : (examToEdit.category || ''),
+        customCategory: isCustomCategory ? examToEdit.category : '',
+        timeLimitMinutes: examToEdit.timeLimitMinutes || 60,
+        passingScore: examToEdit.passingScore || 70,
+        maxAttempts: examToEdit.maxAttempts || 3,
+        shuffleQuestions: examToEdit.shuffleQuestions || false,
+        proctored: examToEdit.proctored || false,
+        visibility: examToEdit.visibility || 'public',
+        color: examToEdit.color || '#3b82f6',
+        copyProtection: (examToEdit as any).copyProtection || false,
+        validityPeriod: (examToEdit as any).validityPeriod || 'year_1',
+        allowedUsers: (examToEdit as any).allowedUsers || [],
+        startAt: (examToEdit as any).startAt ? new Date((examToEdit as any).startAt).toISOString().split('T')[0] : '',
+        endAt: (examToEdit as any).endAt ? new Date((examToEdit as any).endAt).toISOString().split('T')[0] : '',
+        password: (examToEdit as any).password || '',
+      });
+
+      if ((examToEdit as any).questions && (examToEdit as any).questions.length > 0) {
+        setQuestions((examToEdit as any).questions.map((q: any) => ({
+          type: q.type || 'single',
+          question: q.text || q.question || '',
+          options: q.options || ['', '', '', ''],
+          correctAnswers: q.correctAnswers || [0],
+          difficulty: q.difficulty || 'medium',
+          points: q.points || 1,
+          order: q.order || 0,
+        })));
+      }
+    }
+  }, [examToEdit]);
 
   const [questions, setQuestions] = useState<Partial<TestQuestion>[]>([
     {
@@ -157,13 +195,21 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
         questions,
       };
       delete (payload as any).customCategory;
-      const created = await examsApi.create(payload as any);
-      toast.success('Imtihon muvaffaqiyatli yaratildi! 🎉', { position: 'bottom-right' });
-      onSuccess(created);
+      
+      let result;
+      if (examToEdit) {
+        result = await examsApi.update(examToEdit.id, payload as any);
+        toast.success('Imtihon muvaffaqiyatli yangilandi! 🎉', { position: 'bottom-right' });
+      } else {
+        result = await examsApi.create(payload as any);
+        toast.success('Imtihon muvaffaqiyatli yaratildi! 🎉', { position: 'bottom-right' });
+      }
+      onSuccess(result);
     } catch (err: any) {
       console.error(err);
       const msg = err.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg[0] : msg || 'Imtihon yaratishda xatolik yuz berdi', { position: 'bottom-right' });
+      const errorMsg = Array.isArray(msg) ? msg[0] : msg || (examToEdit ? 'Imtihonni yangilashda xatolik yuz berdi' : 'Imtihon yaratishda xatolik yuz berdi');
+      toast.error(errorMsg, { position: 'bottom-right' });
     } finally {
       setIsSubmitting(false);
     }
@@ -550,7 +596,7 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
                 <Sparkles style={{ color: 'var(--blue-400)', width: 18, height: 18 }} />
               </div>
               <div>
-                <div className="cew-brand-title">Yangi Imtihon Yaratish</div>
+                <div className="cew-brand-title">{examToEdit ? 'Imtihonni Tahrirlash' : 'Yangi Imtihon Yaratish'}</div>
                 <div className="cew-brand-sub">AGMK Enterprise LMS</div>
               </div>
             </div>
@@ -1148,7 +1194,7 @@ export function CreateExamWizard({ onClose, onSuccess }: CreateExamWizardProps) 
                   className="cew-btn cew-btn-save"
                 >
                   <Save style={{ width: 15, height: 15 }} />
-                  {isSubmitting ? 'Saqlanmoqda...' : 'Imtihonni Yaratish'}
+                  {isSubmitting ? 'Saqlanmoqda...' : examToEdit ? 'Imtihonni Saqlash' : 'Imtihonni Yaratish'}
                 </motion.button>
               )}
             </div>

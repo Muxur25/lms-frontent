@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { clsx } from 'clsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -6,7 +6,7 @@ import {
   ChevronRight, BarChart3, Sparkles, Download, AlertCircle,
   TrendingUp, Star, X, Zap, Brain, Target, Activity,
   ArrowRight, Play, RotateCcw, Eye, Lock, Flame, Trophy,
-  ChevronUp, ChevronDown, Radio, Cpu, Plus, Loader2,
+  ChevronUp, ChevronDown, Radio, Cpu, Plus, Loader2, Trash2, Edit3,
 } from 'lucide-react';
 import { useExamStore } from '@/store/exam.store';
 import { useAuthStore } from '@/store/auth.store';
@@ -15,6 +15,8 @@ import { useAntiCheat } from '@/hooks/useAntiCheat';
 import { CreateExamWizard } from '@/components/exam/CreateExamWizard';
 import { examsApi } from '@/api/exams.api';
 import { aiApi } from '@/api/ai.api';
+import toast from 'react-hot-toast';
+import { customConfirm } from '@/shared/lib/toast-utils';
 
 type View = 'dashboard' | 'start' | 'exam' | 'result';
 
@@ -112,6 +114,7 @@ export default function ExamPage() {
   const socket = useSocket();
   
   const [showWizard, setShowWizard] = useState(false);
+  const [examToEdit, setExamToEdit] = useState<any | null>(null);
   const canCreate = user?.role && ['super_admin', 'admin', 'trainer'].includes(user.role);
 
   const [view, setView] = useState<View>('dashboard');
@@ -132,6 +135,43 @@ export default function ExamPage() {
   const [securityStatus, setSecurityStatus] = useState('NORMAL');
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [lastViolationType, setLastViolationType] = useState('');
+
+  const handleEditExamClick = async (exam: any) => {
+    const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
+    if (isStarted) {
+      toast.error("Imtihon boshlangan! Uni tahrirlash taqiqlanadi.", { position: 'top-center' });
+      return;
+    }
+    
+    try {
+      toast.loading("Yuklanmoqda...", { id: 'edit-load' });
+      const fullExam = await examsApi.getById(exam.id);
+      toast.dismiss('edit-load');
+      setExamToEdit(fullExam);
+      setShowWizard(true);
+    } catch (err: any) {
+      toast.dismiss('edit-load');
+      toast.error("Ma'lumotlarni yuklashda xatolik yuz berdi.");
+    }
+  };
+
+  const handleDeleteExamClick = (exam: any) => {
+    const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
+    if (isStarted) {
+      toast.error("Imtihon boshlangan! Uni o'chirish taqiqlanadi.", { position: 'top-center' });
+      return;
+    }
+
+    customConfirm(`"${exam.title}" imtihonini o'chirmoqchimisiz?`, async () => {
+      try {
+        await examsApi.delete(exam.id);
+        toast.success("Imtihon muvaffaqiyatli o'chirildi! 🗑️", { position: 'bottom-right' });
+        loadExams();
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Imtihonni o'chirishda xatolik yuz berdi");
+      }
+    });
+  };
 
   // certRoadmap: passed imtihonlar = done, qolganlari = upcoming (birinchisi active)
   const certRoadmap = useMemo<Array<{ title: string; done: boolean; date: string; active?: boolean }>>(() => {
@@ -400,7 +440,7 @@ export default function ExamPage() {
         setView('result');
         return;
       }
-      alert(`Imtihonni topshirishda xatolik: ${err.message || err}`);
+      toast.error(`Imtihonni topshirishda xatolik: ${err.message || err}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1002,9 +1042,11 @@ export default function ExamPage() {
       {/* ─── Create Exam Wizard Modal (portal-level) ─── */}
       {showWizard && (
         <CreateExamWizard
-          onClose={() => setShowWizard(false)}
+          examToEdit={examToEdit}
+          onClose={() => { setShowWizard(false); setExamToEdit(null); }}
           onSuccess={() => {
             setShowWizard(false);
+            setExamToEdit(null);
             loadExams();
           }}
         />
@@ -1138,60 +1180,103 @@ export default function ExamPage() {
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Yangi imtihonlar qo'shilganda shu yerda ko'rinadi</div>
             </div>
           ) : (
-            exams.map((exam, idx) => (
-              <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s` }}>
-                {/* Difficulty band */}
-                <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: `linear-gradient(180deg, ${exam.color || '#3b82f6'}, transparent)`, borderRadius: '20px 0 0 20px' }} />
+            exams.map((exam, idx) => {
+              const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
+              return (
+                <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s` }}>
+                  {/* Difficulty band */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: `linear-gradient(180deg, ${exam.color || '#3b82f6'}, transparent)`, borderRadius: '20px 0 0 20px' }} />
 
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                  <div style={{ width: 52, height: 52, borderRadius: 14, background: `${exam.color || '#3b82f6'}15`, border: `1px solid ${exam.color || '#3b82f6'}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <FileText size={22} color={exam.color || '#3b82f6'} />
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>{exam.title}</div>
-                      <span className="badge badge-blue" style={{ fontSize: 10 }}>Rasmiy</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flexWrap: 'wrap' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Clock size={10} /> {exam.timeLimitMinutes || 60} min
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <FileText size={10} /> {exam.questionsCount || exam.questions?.length || 0} savol
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Target size={10} /> O'tish: {exam.passingScore || 70}%
-                      </span>
-                      {exam.deadline && <span style={{ color: 'var(--amber-400)' }}>Muddat: {exam.deadline}</span>}
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `${exam.color || '#3b82f6'}15`, border: `1px solid ${exam.color || '#3b82f6'}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <FileText size={22} color={exam.color || '#3b82f6'} />
                     </div>
 
-                    {/* AI Readiness for this exam */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ flex: 1, height: 4, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${readiness}%`, background: `linear-gradient(90deg, ${exam.color || '#3b82f6'}, rgba(139,92,246,0.8))`, borderRadius: 99 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>{exam.title}</div>
+                        <span className="badge badge-blue" style={{ fontSize: 10 }}>Rasmiy</span>
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: exam.color || '#3b82f6', whiteSpace: 'nowrap' }}>
-                        {readiness}% tayyor
-                      </span>
-                    </div>
-                  </div>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Clock size={10} /> {exam.timeLimitMinutes || 60} min
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <FileText size={10} /> {exam.questionsCount || exam.questions?.length || 0} savol
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Target size={10} /> O'tish: {exam.passingScore || 70}%
+                        </span>
+                        {exam.deadline && <span style={{ color: 'var(--amber-400)' }}>Muddat: {exam.deadline}</span>}
+                      </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => { setSelectedExam(exam); setExamPassword(''); setView('start'); }}
-                      style={{ borderRadius: 12, whiteSpace: 'nowrap' }}
-                    >
-                      Boshlash <ChevronRight size={12} />
-                    </button>
-                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      <Eye size={11} /> Ko'rish
-                    </button>
+                      {/* AI Readiness for this exam */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ flex: 1, height: 4, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${readiness}%`, background: `linear-gradient(90deg, ${exam.color || '#3b82f6'}, rgba(139,92,246,0.8))`, borderRadius: 99 }} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: exam.color || '#3b82f6', whiteSpace: 'nowrap' }}>
+                          {readiness}% tayyor
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => { setSelectedExam(exam); setExamPassword(''); setView('start'); }}
+                        style={{ borderRadius: 12, whiteSpace: 'nowrap' }}
+                      >
+                        Boshlash <ChevronRight size={12} />
+                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          <Eye size={11} /> Ko'rish
+                        </button>
+                        {canCreate && (
+                          <>
+                            <button
+                              className="btn btn-ghost btn-sm btn-icon"
+                              style={{ 
+                                padding: '4px 6px',
+                                borderRadius: 8,
+                                opacity: isStarted ? 0.35 : 1,
+                                cursor: 'pointer',
+                                height: 26,
+                                width: 26,
+                                minHeight: 'auto',
+                                minWidth: 'auto',
+                              }}
+                              onClick={() => handleEditExamClick(exam)}
+                              title={isStarted ? "Test boshlangan, tahrirlash mumkin emas" : "Tahrirlash"}
+                            >
+                              <Edit3 size={13} style={{ color: isStarted ? 'var(--text-muted)' : 'var(--blue-400)' }} />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm btn-icon"
+                              style={{ 
+                                padding: '4px 6px',
+                                borderRadius: 8,
+                                opacity: isStarted ? 0.35 : 1,
+                                cursor: 'pointer',
+                                height: 26,
+                                width: 26,
+                                minHeight: 'auto',
+                                minWidth: 'auto',
+                              }}
+                              onClick={() => handleDeleteExamClick(exam)}
+                              title={isStarted ? "Test boshlangan, o'chirish mumkin emas" : "O'chirish"}
+                            >
+                              <Trash2 size={13} style={{ color: isStarted ? 'var(--text-muted)' : 'var(--red-400)' }} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
 
           {/* Certification Roadmap */}

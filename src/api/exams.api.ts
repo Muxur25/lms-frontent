@@ -33,6 +33,8 @@ export interface Exam {
   attempts: number;
   questionsCount: number;
   questions?: any[]; // legacy
+  startAt?: string;
+  endAt?: string;
   createdAt: string;
 }
 
