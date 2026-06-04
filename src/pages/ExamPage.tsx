@@ -20,6 +20,15 @@ import { customConfirm } from '@/shared/lib/toast-utils';
 
 type View = 'dashboard' | 'start' | 'exam' | 'result';
 
+const formatExamDateTime = (value: string) =>
+  new Date(value).toLocaleString('uz-UZ', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
 const MOCK_AI_TOPICS = [
   { t: 'TypeScript Generics', p: 65, c: '#f59e0b', status: 'weak' },
   { t: 'React Performance', p: 72, c: '#f59e0b', status: 'moderate' },
@@ -204,6 +213,7 @@ export default function ExamPage() {
       ...q,
       text: q?.text ?? q?.question ?? '',
       options: Array.isArray(q?.options) ? q.options : [],
+      type: q?.type || 'single',
     }));
   }, [selectedExam?.questions]);
   const currentQuestion = questions[current] || null;
@@ -345,7 +355,7 @@ export default function ExamPage() {
 
     // startAt tekshiruvi — frontend da ham ko'rsatish
     if (exam.startAt && new Date() < new Date(exam.startAt)) {
-      setStartError(`Imtihon ${new Date(exam.startAt).toLocaleString('uz')} da boshlanadi`);
+      setStartError(`Imtihon ${formatExamDateTime(exam.startAt)} da boshlanadi`);
       return;
     }
     if (exam.endAt && new Date() > new Date(exam.endAt)) {
@@ -354,7 +364,10 @@ export default function ExamPage() {
     }
 
     try {
-      setSelectedExam(exam);
+      const fullExam = Array.isArray(exam.questions) && exam.questions.length > 0
+        ? exam
+        : await examsApi.getById(exam.id);
+      setSelectedExam(fullExam || exam);
       await startExam(exam.id, exam.hasPassword ? examPassword : undefined);
       setCurrent(0);
       setFlagged(new Set());
@@ -664,32 +677,45 @@ export default function ExamPage() {
           </div>
 
           <div className="exam-question-premium">
-            <p style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.75, marginBottom: 28, color: 'var(--text-primary)' }}>
-              {currentQuestion.text}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {currentQuestion.options.map((opt: string, i: number) => {
-                const isSelected = answers[current]?.includes(i) || false;
-                const letters = ['A', 'B', 'C', 'D'];
-                const isMultiple = currentQuestion.type === 'multiple';
-                return (
-                  <button
-                    key={i}
-                    className={clsx('exam-option-premium', isSelected && 'selected')}
-                    onClick={() => handleSelectOption(current, i)}
-                  >
-                    <div 
-                      className={clsx('exam-option-letter', isSelected && 'selected')}
-                      style={{ borderRadius: isMultiple ? '6px' : '50%' }}
-                    >
-                      {letters[i] || i + 1}
-                    </div>
-                    <span style={{ fontSize: 14.5, lineHeight: 1.5 }}>{opt}</span>
-                    {isSelected && <CheckCircle size={16} style={{ marginLeft: 'auto', color: 'var(--blue-400)', flexShrink: 0 }} />}
-                  </button>
-                );
-              })}
-            </div>
+            {!currentQuestion ? (
+              <div style={{ display: 'grid', gap: 14, justifyItems: 'center', padding: '28px 16px', textAlign: 'center' }}>
+                <AlertCircle size={34} color="var(--amber-400)" />
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>Savollar topilmadi</div>
+                <p style={{ maxWidth: 460, color: 'var(--text-secondary)', fontSize: 14 }}>
+                  Bu imtihon uchun savollar yuklanmadi yoki imtihon ma'lumotlari to'liq emas.
+                </p>
+                <button className="btn btn-secondary" onClick={() => setView('dashboard')}>Imtihonlar ro'yxatiga qaytish</button>
+              </div>
+            ) : (
+              <>
+                <p style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.75, marginBottom: 28, color: 'var(--text-primary)' }}>
+                  {currentQuestion.text}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {currentQuestion.options.map((opt: string, i: number) => {
+                    const isSelected = answers[current]?.includes(i) || false;
+                    const letters = ['A', 'B', 'C', 'D'];
+                    const isMultiple = currentQuestion.type === 'multiple';
+                    return (
+                      <button
+                        key={i}
+                        className={clsx('exam-option-premium', isSelected && 'selected')}
+                        onClick={() => handleSelectOption(current, i)}
+                      >
+                        <div 
+                          className={clsx('exam-option-letter', isSelected && 'selected')}
+                          style={{ borderRadius: isMultiple ? '6px' : '50%' }}
+                        >
+                          {letters[i] || i + 1}
+                        </div>
+                        <span style={{ fontSize: 14.5, lineHeight: 1.5 }}>{opt}</span>
+                        {isSelected && <CheckCircle size={16} style={{ marginLeft: 'auto', color: 'var(--blue-400)', flexShrink: 0 }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, gap: 12 }}>
@@ -908,7 +934,7 @@ export default function ExamPage() {
             {/* startAt countdown */}
             {selectedExam?.startAt && new Date() < new Date(selectedExam.startAt) && (
               <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, textAlign: 'center', fontSize: 13, color: 'var(--amber-400)', fontWeight: 600, width: '100%' }}>
-                ⏳ Imtihon {new Date(selectedExam.startAt).toLocaleString('uz')} da boshlanadi
+                ⏳ Imtihon {formatExamDateTime(selectedExam.startAt)} da boshlanadi
               </div>
             )}
             {/* Orqaga + Boshlash */}

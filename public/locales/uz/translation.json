@@ -232,7 +232,61 @@
     "title": "Bildirishnomalar",
     "subtitle": "Tizimdagi barcha yangiliklar va xabarnomalar",
     "markAllRead": "Barchasini o'qildi deb belgilash",
-    "empty": "Hech qanday bildirishnoma yo'q"
+    "empty": "Hech qanday bildirishnoma yo'q",
+    "compose": "Yaratish",
+    "search": "Bildirishnomalarni qidirish...",
+    "sortNewest": "Avval yangilari",
+    "sortOldest": "Avval eskilari",
+    "loadError": "Bildirishnomalarni yuklashda xatolik yuz berdi.",
+    "mandatory": "Majburiy",
+    "sections": {
+      "all": "Barchasi",
+      "unread": "O'qilmagan",
+      "courses": "Kurslar",
+      "exams": "Imtihonlar",
+      "webinars": "Vebinarlar",
+      "certificates": "Sertifikatlar",
+      "security": "Xavfsizlik",
+      "announcements": "E'lonlar",
+      "ai": "AI"
+    },
+    "stats": {
+      "sent": "Yuborilgan",
+      "readRate": "O'qilish darajasi",
+      "unread": "O'qilmagan",
+      "critical": "Kritik"
+    },
+    "form": {
+      "titleUz": "Sarlavha UZ",
+      "titleRu": "Sarlavha RU",
+      "messageUz": "Xabar UZ",
+      "messageRu": "Xabar RU",
+      "targetRoles": "Rollar: admin,trainer",
+      "targetDepartments": "Bo'limlar",
+      "send": "Bildirishnoma yuborish"
+    },
+    "types": {
+      "course": "Kurs",
+      "exam": "Imtihon",
+      "webinar": "Vebinar",
+      "certificate": "Sertifikat",
+      "security": "Xavfsizlik",
+      "ai": "AI",
+      "announcement": "E'lon",
+      "system": "Tizim"
+    },
+    "priorities": {
+      "low": "Past",
+      "normal": "Oddiy",
+      "high": "Yuqori",
+      "critical": "Kritik"
+    },
+    "actions": {
+      "markRead": "O'qildi deb belgilash",
+      "open": "Bog'langan sahifani ochish",
+      "archive": "Arxivlash",
+      "delete": "O'chirish"
+    }
   },
   "webinars": {
     "title": "Jonli Vebinarlar",

@@ -7,8 +7,26 @@ import { useAuthStore } from '../store/auth.store';
 import { useUIStore } from '../store/useUIStore';
 import { useTranslation } from 'react-i18next';
 import { getInitials } from '../shared/lib/auth-user';
+import { api } from '../services/api';
 
 type TabType = 'profile' | 'security' | 'notifications' | 'system' | 'sessions';
+
+type DeviceInfo = {
+  id: string;
+  browser?: string | null;
+  operatingSystem?: string | null;
+  deviceType?: string | null;
+  ipAddress?: string | null;
+  lastActivity?: string | null;
+};
+
+type SessionInfo = {
+  id: string;
+  current?: boolean;
+  lastActivity?: string | null;
+  expiresAt?: string | null;
+  device?: DeviceInfo | null;
+};
 
 
 
@@ -43,12 +61,9 @@ export default function Settings() {
   const [localTheme, setLocalTheme] = useState(theme);
   const [localLang, setLocalLang] = useState(language);
 
-  // Sessions State
-  const [sessions, setSessions] = useState([
-    { id: '1', current: true, browser: 'Chrome', os: 'Windows 11', ip: '192.168.10.114', activeAt: 'Faol hozir' },
-    { id: '2', current: false, browser: 'Safari', os: 'iOS 17.4', ip: '83.221.144.12', activeAt: '2 soat oldin' },
-    { id: '3', current: false, browser: 'Firefox', os: 'macOS Sonoma', ip: '213.206.56.90', activeAt: '3 kun oldin' }
-  ]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
 
   // Sync state if user changes
   useEffect(() => {
@@ -73,6 +88,48 @@ export default function Settings() {
     setTimeout(() => {
       setToast(null);
     }, 3000);
+  };
+
+  const loadSessions = async () => {
+    setSessionsLoading(true);
+    setSessionsError('');
+
+    try {
+      const response: any = await api.get('/security/sessions');
+      const payload = response?.data ?? response;
+      setSessions(Array.isArray(payload) ? payload : []);
+    } catch {
+      setSessionsError('Sessiyalarni yuklashda xatolik yuz berdi.');
+      showToast('Sessiyalarni yuklashda xatolik yuz berdi.', 'error');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'sessions') {
+      loadSessions();
+    }
+  }, [activeTab]);
+
+  const formatSessionDate = (value?: string | null) => {
+    if (!value) return 'Noma\'lum';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Noma\'lum';
+
+    return new Intl.DateTimeFormat(i18n.language === 'ru' ? 'ru-RU' : 'uz-UZ', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
+  const getSessionIcon = (deviceType?: string | null) => {
+    const normalized = (deviceType || '').toLowerCase();
+    return normalized.includes('mobile') || normalized.includes('tablet')
+      ? <MonitorSmartphone size={20} />
+      : <Laptop size={20} />;
   };
 
   // Submit Profile Changes
@@ -122,18 +179,29 @@ export default function Settings() {
   };
 
   // Terminate Single Session
-  const handleRevokeSession = (id: string) => {
-    setSessions(prev => prev.filter(s => s.id !== id));
-    showToast(t('settings.sessionRevoked'), 'success');
+  const handleRevokeSession = async (id: string) => {
+    try {
+      await api.delete(`/security/sessions/${id}`);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      showToast(t('settings.sessionRevoked'), 'success');
+    } catch {
+      showToast('Sessiyani tugatib bo\'lmadi.', 'error');
+    }
   };
 
   // Terminate All Other Sessions
-  const handleRevokeAllOther = () => {
-    setSessions(prev => prev.filter(s => s.current));
-    showToast(t('settings.sessionRevokedAll'), 'success');
+  const handleRevokeAllOther = async () => {
+    try {
+      await api.delete('/security/sessions');
+      setSessions(prev => prev.filter(s => s.current));
+      showToast(t('settings.sessionRevokedAll'), 'success');
+    } catch {
+      showToast('Boshqa sessiyalarni tugatib bo\'lmadi.', 'error');
+    }
   };
 
   const initials = getInitials(firstName, lastName, `${firstName} ${lastName}`);
+  const otherSessions = sessions.filter((sess) => !sess.current);
 
   return (
     <div className="fade-in">
@@ -396,57 +464,96 @@ export default function Settings() {
           {/* SESSIONS TAB */}
           {activeTab === 'sessions' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{t('settings.sessionsTitle')}</h3>
-                {sessions.length > 1 && (
-                  <button className="btn btn-sm btn-secondary" onClick={handleRevokeAllOther} style={{ color: 'var(--red-400)', borderColor: 'rgba(239,68,68,0.2)' }}>
-                    {t('settings.revokeAll')}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+                <div>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{t('settings.sessionsTitle')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+                    Login qilingan qurilmalarni nazorat qiling va keraksiz sessiyalarni chiqarib yuboring.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm btn-secondary" onClick={loadSessions} disabled={sessionsLoading}>
+                    {sessionsLoading ? 'Yuklanmoqda...' : 'Yangilash'}
                   </button>
-                )}
+                  {otherSessions.length > 0 && (
+                    <button className="btn btn-sm btn-secondary" onClick={handleRevokeAllOther} style={{ color: 'var(--red-400)', borderColor: 'rgba(239,68,68,0.2)' }}>
+                      {t('settings.revokeAll')}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {sessions.map((sess) => (
-                  <div 
-                    key={sess.id} 
-                    style={{ 
-                      display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', 
-                      background: 'var(--bg-2)', border: '1px solid var(--border-1)',
-                      borderRadius: 'var(--radius-xl)', position: 'relative'
-                    }}
-                  >
-                    <div style={{ 
-                      width: 42, height: 42, borderRadius: 10, background: 'var(--surface-1)', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'
-                    }}>
-                      <Laptop size={20} />
-                    </div>
-                    
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{sess.browser} — {sess.os}</span>
-                        {sess.current ? (
-                          <span className="badge badge-green" style={{ fontSize: 9, padding: '1px 6px' }}>{t('settings.activeDevice')}</span>
-                        ) : (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sess.activeAt}</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                        {t('settings.ipAddress')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{sess.ip}</span>
-                      </div>
-                    </div>
-
-                    {!sess.current && (
-                      <button 
-                        onClick={() => handleRevokeSession(sess.id)}
-                        className="btn btn-sm btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: 11, height: 'fit-content' }}
-                      >
-                        {t('settings.revokeSession')}
-                      </button>
-                    )}
+                {sessionsLoading && sessions.length === 0 && (
+                  <div style={{ padding: 24, border: '1px dashed var(--border-2)', borderRadius: 'var(--radius-xl)', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    Sessiyalar yuklanmoqda...
                   </div>
-                ))}
+                )}
+
+                {!sessionsLoading && sessionsError && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, border: '1px solid rgba(239,68,68,0.18)', background: 'rgba(239,68,68,0.08)', borderRadius: 'var(--radius-xl)', color: 'var(--red-400)' }}>
+                    <X size={18} />
+                    {sessionsError}
+                  </div>
+                )}
+
+                {!sessionsLoading && !sessionsError && sessions.length === 0 && (
+                  <div style={{ padding: 24, border: '1px dashed var(--border-2)', borderRadius: 'var(--radius-xl)', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    Faol sessiyalar topilmadi.
+                  </div>
+                )}
+
+                {sessions.map((sess) => {
+                  const device = sess.device;
+                  const browser = device?.browser || 'Unknown Browser';
+                  const os = device?.operatingSystem || 'Unknown OS';
+                  const ip = device?.ipAddress || 'Noma\'lum';
+                  const activeAt = formatSessionDate(device?.lastActivity || sess.lastActivity);
+
+                  return (
+                    <div 
+                      key={sess.id} 
+                      style={{ 
+                        display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', 
+                        background: sess.current ? 'linear-gradient(135deg, rgba(34,197,94,0.08), var(--bg-2))' : 'var(--bg-2)',
+                        border: sess.current ? '1px solid rgba(34,197,94,0.22)' : '1px solid var(--border-1)',
+                        borderRadius: 'var(--radius-xl)', position: 'relative'
+                      }}
+                    >
+                      <div style={{ 
+                        width: 42, height: 42, borderRadius: 10, background: 'var(--surface-1)', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: sess.current ? 'var(--green-400)' : 'var(--text-secondary)'
+                      }}>
+                        {getSessionIcon(device?.deviceType)}
+                      </div>
+                      
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{browser} - {os}</span>
+                          {sess.current ? (
+                            <span className="badge badge-green" style={{ fontSize: 9, padding: '1px 6px' }}>{t('settings.activeDevice')}</span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{activeAt}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                          <span>{t('settings.ipAddress')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{ip}</span></span>
+                          <span>Oxirgi faollik: {activeAt}</span>
+                        </div>
+                      </div>
+
+                      {!sess.current && (
+                        <button 
+                          onClick={() => handleRevokeSession(sess.id)}
+                          className="btn btn-sm btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: 11, height: 'fit-content', color: 'var(--red-400)' }}
+                        >
+                          {t('settings.revokeSession')}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

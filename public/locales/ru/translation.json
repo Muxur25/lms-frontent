@@ -232,7 +232,61 @@
     "title": "Уведомления",
     "subtitle": "Все новости и уведомления системы",
     "markAllRead": "Отметить все как прочитанные",
-    "empty": "Нет уведомлений"
+    "empty": "Нет уведомлений",
+    "compose": "Создать",
+    "search": "Поиск уведомлений...",
+    "sortNewest": "Сначала новые",
+    "sortOldest": "Сначала старые",
+    "loadError": "Ошибка загрузки уведомлений.",
+    "mandatory": "Обязательно",
+    "sections": {
+      "all": "Все",
+      "unread": "Непрочитанные",
+      "courses": "Курсы",
+      "exams": "Экзамены",
+      "webinars": "Вебинары",
+      "certificates": "Сертификаты",
+      "security": "Безопасность",
+      "announcements": "Объявления",
+      "ai": "AI"
+    },
+    "stats": {
+      "sent": "Отправлено",
+      "readRate": "Прочитано",
+      "unread": "Непрочитанные",
+      "critical": "Критические"
+    },
+    "form": {
+      "titleUz": "Заголовок UZ",
+      "titleRu": "Заголовок RU",
+      "messageUz": "Сообщение UZ",
+      "messageRu": "Сообщение RU",
+      "targetRoles": "Роли: admin,trainer",
+      "targetDepartments": "Отделы",
+      "send": "Отправить уведомление"
+    },
+    "types": {
+      "course": "Курс",
+      "exam": "Экзамен",
+      "webinar": "Вебинар",
+      "certificate": "Сертификат",
+      "security": "Безопасность",
+      "ai": "AI",
+      "announcement": "Объявление",
+      "system": "Система"
+    },
+    "priorities": {
+      "low": "Низкий",
+      "normal": "Обычный",
+      "high": "Высокий",
+      "critical": "Критический"
+    },
+    "actions": {
+      "markRead": "Отметить как прочитанное",
+      "open": "Открыть связанную страницу",
+      "archive": "Архивировать",
+      "delete": "Удалить"
+    }
   },
   "webinars": {
     "title": "Живые Вебинары",

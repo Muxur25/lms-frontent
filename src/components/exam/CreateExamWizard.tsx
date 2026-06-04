@@ -50,6 +50,26 @@ const STEPS = [
   { id: 3, label: 'Savollar', icon: Layers, desc: 'Savollar va javoblar' },
 ];
 
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+
+const toDatetimeLocalValue = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-') + `T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+};
+
+const toApiDateTime = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
 export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamWizardProps) {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(0);
@@ -115,8 +135,8 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
         copyProtection: (examToEdit as any).copyProtection || false,
         validityPeriod: (examToEdit as any).validityPeriod || 'year_1',
         allowedUsers: (examToEdit as any).allowedUsers || [],
-        startAt: (examToEdit as any).startAt ? new Date((examToEdit as any).startAt).toISOString().split('T')[0] : '',
-        endAt: (examToEdit as any).endAt ? new Date((examToEdit as any).endAt).toISOString().split('T')[0] : '',
+        startAt: toDatetimeLocalValue((examToEdit as any).startAt),
+        endAt: toDatetimeLocalValue((examToEdit as any).endAt),
         password: (examToEdit as any).password || '',
       });
 
@@ -192,6 +212,8 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
       const payload = {
         ...exam,
         category: exam.customCategory?.trim() || exam.category,
+        startAt: toApiDateTime(exam.startAt),
+        endAt: toApiDateTime(exam.endAt),
         questions,
       };
       delete (payload as any).customCategory;
