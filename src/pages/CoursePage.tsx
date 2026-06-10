@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -9,6 +9,7 @@ import {
   FileText, Download, MessageSquare, Bookmark,
   X, Send, ZoomIn, ZoomOut,
   Trash2, Plus, Edit3, Save, Loader,
+  Pause, Volume2, VolumeX, Maximize, RotateCcw, RotateCw, Lock,
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
 import { aiApi } from '@/api/ai.api';
@@ -108,6 +109,231 @@ function getYoutubeEmbedUrl(url?: string) {
 }
 
 /* ── Component ─────────────────────────────────── */
+function formatVideoTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const rounded = Math.floor(seconds);
+  const h = Math.floor(rounded / 3600);
+  const m = Math.floor((rounded % 3600) / 60);
+  const s = rounded % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+const getAiGreeting = (isRu: boolean) => (
+  isRu
+    ? 'Здравствуйте! Можете задать вопрос по текущему уроку.'
+    : 'Salom! Dars haqida savolingiz bo\'lsa so\'rashingiz mumkin.'
+);
+
+function CourseVideoPlayer({
+  src,
+  title,
+  seekEnabled,
+  onError,
+  onEnded,
+}: {
+  src: string;
+  title?: string;
+  seekEnabled: boolean;
+  onError: () => void;
+  onEnded: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const controlsTimerRef = useRef<number | null>(null);
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [watchedOnce, setWatchedOnce] = useState(seekEnabled);
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const canSeek = seekEnabled || watchedOnce;
+
+  useEffect(() => {
+    setWatchedOnce(seekEnabled);
+    setCurrentTime(0);
+    setDuration(0);
+    setPlaying(true);
+    setControlsVisible(false);
+  }, [src, seekEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+    };
+  }, []);
+
+  const revealControls = () => {
+    setControlsVisible(true);
+    if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = window.setTimeout(() => {
+      setControlsVisible(false);
+    }, 5000);
+  };
+
+  const blurControl = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+  };
+
+  const togglePlay = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      await video.play().catch(() => setPlaying(false));
+    } else {
+      video.pause();
+    }
+  };
+
+  const seekBy = (delta: number) => {
+    if (!canSeek) return;
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = Math.min(Math.max(video.currentTime + delta, 0), duration || video.duration || 0);
+  };
+
+  const seekToPercent = (value: number) => {
+    if (!canSeek) return;
+    const video = videoRef.current;
+    const total = duration || video?.duration || 0;
+    if (!video || !total) return;
+    video.currentTime = (value / 100) * total;
+  };
+
+  const changeVolume = (value: number) => {
+    const video = videoRef.current;
+    const next = Math.min(Math.max(value, 0), 1);
+    setVolume(next);
+    setMuted(next === 0);
+    if (video) {
+      video.volume = next;
+      video.muted = next === 0;
+    }
+  };
+
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const next = !video.muted;
+    video.muted = next;
+    setMuted(next);
+  };
+
+  const cycleSpeed = () => {
+    const speeds = [1, 1.25, 1.5, 2, 0.75];
+    const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
+    setSpeed(next);
+    if (videoRef.current) videoRef.current.playbackRate = next;
+  };
+
+  const toggleFullscreen = async () => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
+    } else {
+      await shell.requestFullscreen().catch(() => undefined);
+    }
+    revealControls();
+  };
+
+  const progress = duration ? (currentTime / duration) * 100 : 0;
+  const handleEnded = () => {
+    setWatchedOnce(true);
+    onEnded();
+  };
+
+  return (
+    <div
+      className={clsx('course-video-player', controlsVisible && 'controls-visible')}
+      ref={shellRef}
+      onMouseMove={revealControls}
+      onMouseLeave={() => setControlsVisible(false)}
+      onTouchStart={revealControls}
+    >
+      <video
+        ref={videoRef}
+        key={src}
+        src={src}
+        autoPlay
+        playsInline
+        preload="metadata"
+        onClick={togglePlay}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime || 0)}
+        onVolumeChange={(event) => {
+          setMuted(event.currentTarget.muted);
+          setVolume(event.currentTarget.volume);
+        }}
+        onError={onError}
+        onEnded={handleEnded}
+        className="course-video-element"
+      />
+
+      <div className="course-video-title">{title}</div>
+      <div className="course-video-center">
+        <button type="button" className="course-video-round" onClick={(event) => { blurControl(event); seekBy(-10); }} disabled={!canSeek} title={canSeek ? '-10s' : 'Video tugagandan keyin ochiladi'}>
+          <RotateCcw size={20} />
+        </button>
+        <button type="button" className="course-video-play" onClick={(event) => { blurControl(event); void togglePlay(); }} title={playing ? 'Pause' : 'Play'}>
+          {playing ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
+        </button>
+        <button type="button" className="course-video-round" onClick={(event) => { blurControl(event); seekBy(10); }} disabled={!canSeek} title={canSeek ? '+10s' : 'Video tugagandan keyin ochiladi'}>
+          <RotateCw size={20} />
+        </button>
+      </div>
+
+      <div className="course-video-controls">
+        <input
+          className="course-video-progress"
+          type="range"
+          min="0"
+          max="100"
+          step="0.1"
+          value={progress}
+          disabled={!canSeek}
+          onChange={(event) => seekToPercent(Number(event.target.value))}
+          style={{ ['--progress' as string]: `${progress}%` }}
+          aria-label="Video progress"
+        />
+        <div className="course-video-control-row">
+          <div className="course-video-left-controls">
+            <button type="button" className="course-video-icon" onClick={(event) => { blurControl(event); void togglePlay(); }}>
+              {playing ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+            <button type="button" className="course-video-icon" onClick={(event) => { blurControl(event); toggleMute(); }}>
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+            <input
+              className="course-video-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={muted ? 0 : volume}
+              onChange={(event) => changeVolume(Number(event.target.value))}
+              aria-label="Volume"
+            />
+            <span className="course-video-time">
+              {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
+            </span>
+          </div>
+          <div className="course-video-right-controls">
+            <button type="button" className="course-video-speed" onClick={(event) => { blurControl(event); cycleSpeed(); }}>{speed}x</button>
+            <button type="button" className="course-video-icon" onClick={(event) => { blurControl(event); void toggleFullscreen(); }}>
+              <Maximize size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function isPdfUrl(url?: string) {
   return /\.pdf($|[?#])/i.test(url || '');
 }
@@ -243,6 +469,8 @@ export default function CoursePage() {
   const { i18n } = useTranslation();
   const { courseId } = useParams<{ courseId: string }>();
   const user = useAuthStore(s => s.user);
+  const isRu = i18n.language === 'ru';
+  const aiEndRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'overview' | 'player'>('overview');
@@ -255,7 +483,7 @@ export default function CoursePage() {
 
   // AI & Discussion State
   const [aiMessages, setAiMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
-    { role: 'ai', text: 'Salom! Dars haqida savolingiz bo\'lsa so\'rashingiz mumkin.' }
+    { role: 'ai', text: getAiGreeting(isRu) }
   ]);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -263,6 +491,8 @@ export default function CoursePage() {
   const [discussionInput, setDiscussionInput] = useState('');
   const [discussionImageUrl, setDiscussionImageUrl] = useState('');
   const [discussionLoading, setDiscussionLoading] = useState(false);
+  const [noteInput, setNoteInput] = useState('');
+  const [lessonNotes, setLessonNotes] = useState<Array<{ id: string; text: string; createdAt: string }>>([]);
 
   // Course modules state — driven from backend
   const [courseModules, setCourseModules] = useState<Module[]>([]);
@@ -277,8 +507,14 @@ export default function CoursePage() {
   const [materialUploading, setMaterialUploading] = useState(false);
   const [uploadingLessons, setUploadingLessons] = useState<Record<string, boolean>>({});
 
-  const isRu = i18n.language === 'ru';
   const canEdit = user && EDITOR_ROLES.includes(user.role as string);
+
+  useEffect(() => {
+    setAiMessages((messages) => {
+      if (messages.length !== 1 || messages[0].role !== 'ai') return messages;
+      return [{ role: 'ai', text: getAiGreeting(isRu) }];
+    });
+  }, [isRu]);
 
   useEffect(() => {
     let isMounted = true;
@@ -326,6 +562,10 @@ export default function CoursePage() {
             }));
           }
           setCourseModules(mods);
+          if (!currentLessonId) {
+            const firstLesson = mods.flatMap((m) => m.items).find((i: any) => i.current) || mods.flatMap((m) => m.items)[0];
+            if (firstLesson) setCurrentLessonId(firstLesson.id);
+          }
         } else if (isMounted) {
           setCourse(null);
           setCourseModules([]);
@@ -467,10 +707,13 @@ export default function CoursePage() {
     }
   };
 
-  const handleLessonComplete = async (lessonId: string | number) => {
+  const handleLessonComplete = async (lessonId: string | number, score?: number) => {
     if (!course?.id) return;
     try {
-      await apiClient.post(`/courses/${course.id}/progress`, { lessonId });
+      await apiClient.post(`/courses/${course.id}/progress`, {
+        lessonId,
+        ...(typeof score === 'number' ? { score } : {}),
+      });
       setCourseModules(prev => prev.map(m => {
         let changed = false;
         const newItems = m.items.map(i => {
@@ -514,11 +757,107 @@ export default function CoursePage() {
   }, [currentLessonId]);
 
   useEffect(() => {
+    if (activeTab !== 'ai') return;
+    const scrollToAiBottom = () => {
+      aiEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    };
+    requestAnimationFrame(scrollToAiBottom);
+    const timer = window.setTimeout(scrollToAiBottom, 80);
+    return () => window.clearTimeout(timer);
+  }, [aiMessages, aiLoading, activeTab]);
+
+  useEffect(() => {
     document.body.classList.toggle('focus-mode-active', view === 'player');
     return () => {
       document.body.classList.remove('focus-mode-active');
     };
   }, [view]);
+
+  useEffect(() => {
+    if (!course?.id || !currentLessonId) {
+      setLessonNotes([]);
+      return;
+    }
+    const key = `course_notes:${course.id}:${currentLessonId}`;
+    try {
+      setLessonNotes(JSON.parse(localStorage.getItem(key) || '[]'));
+    } catch {
+      setLessonNotes([]);
+    }
+  }, [course?.id, currentLessonId]);
+
+  const getActiveLessonTitle = () => {
+    const active = courseModules.flatMap((m) => m.items).find((item) => item.id === currentLessonId);
+    return (isRu && active?.titleRu) || active?.title || course?.title || (isRu ? 'урок' : 'dars');
+  };
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const uzMonths = [
+      'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
+      'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr',
+    ];
+    const ruMonths = [
+      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+    ];
+    const months = isRu ? ruMonths : uzMonths;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+
+    return `${day} ${month} ${year}, ${hour}:${minute}`;
+  };
+
+  const getDiscussionAuthor = (item: any) => {
+    const fullName = item.user?.fullName || [item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ');
+    return fullName || user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
+  };
+
+  const getInitials = (name: string) => name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U';
+
+  const buildAiPrompt = (text: string) => {
+    const lessonTitle = getActiveLessonTitle();
+    if (isRu) {
+      return [
+        `Тема урока: ${lessonTitle}`,
+        `Запрос пользователя: ${text}`,
+        'Отвечай на русском языке. Дай точный и практичный ответ только по этой теме урока. Если пользователь просит мини-тест, составь 5 вопросов с вариантами ответов и ключом правильных ответов. Если просит краткое резюме, оформи ответ короткими пунктами. Если просит объяснить урок, объясни простым языком с понятными примерами.',
+      ].join('\n');
+    }
+
+    return [
+      `Mavzu: ${lessonTitle}`,
+      `Foydalanuvchi so'rovi: ${text}`,
+      "Faqat shu mavzuga oid, aniq va amaliy javob ber. Agar mini-test so'ralsa, 5 ta savol va javob kalitini tuz. Agar xulosa so'ralsa, qisqa punktlar bilan yoz. Agar tushuntirish so'ralsa, sodda izoh va misollar bilan tushuntir.",
+    ].join('\n');
+  };
+
+  const handleSaveNote = () => {
+    const text = noteInput.trim();
+    if (!text || !course?.id || !currentLessonId) return;
+    const next = [{ id: nextId(), text, createdAt: new Date().toISOString() }, ...lessonNotes];
+    setLessonNotes(next);
+    setNoteInput('');
+    localStorage.setItem(`course_notes:${course.id}:${currentLessonId}`, JSON.stringify(next));
+  };
+
+  const handleDeleteNote = (id: string) => {
+    if (!course?.id || !currentLessonId) return;
+    const next = lessonNotes.filter((note) => note.id !== id);
+    setLessonNotes(next);
+    localStorage.setItem(`course_notes:${course.id}:${currentLessonId}`, JSON.stringify(next));
+  };
 
   const handleAiSend = async (promptOverride?: string) => {
     const text = (promptOverride ?? aiInput).trim();
@@ -527,11 +866,11 @@ export default function CoursePage() {
     setAiMessages(p => [...p, { role: 'user', text }]);
     setAiLoading(true);
     try {
-      const res = await apiClient.post('/ai/chat', { prompt: text });
-      const answer = res.data?.response || res.data?.data?.response || 'Xatolik yuz berdi.';
+      const res = await apiClient.post('/ai/chat', { prompt: buildAiPrompt(text) });
+      const answer = res.data?.response || res.data?.data?.response || (isRu ? 'Произошла ошибка.' : 'Xatolik yuz berdi.');
       setAiMessages(p => [...p, { role: 'ai', text: answer }]);
     } catch (err) {
-      setAiMessages(p => [...p, { role: 'ai', text: 'Kechirasiz, xatolik yuz berdi.' }]);
+      setAiMessages(p => [...p, { role: 'ai', text: isRu ? 'Извините, произошла ошибка.' : 'Kechirasiz, xatolik yuz berdi.' }]);
     } finally {
       setAiLoading(false);
     }
@@ -596,7 +935,9 @@ export default function CoursePage() {
           name: file.name,
           url,
           size: sizeMb,
-          type: ext
+          type: ext,
+          lessonTitle: getActiveLessonTitle(),
+          uploadedAt: new Date().toISOString(),
         };
         
         const updatedCourse = {
@@ -659,6 +1000,20 @@ export default function CoursePage() {
   const currentLesson = currentLessonId 
     ? allLessons.find(i => i.id === currentLessonId) 
     : allLessons.find(i => (i as any).current) || allLessons[0];
+  const isLessonUnlocked = (lessonId: string | number) => {
+    const targetIndex = allLessons.findIndex(item => item.id === lessonId);
+    if (targetIndex <= 0) return true;
+    const target = allLessons[targetIndex];
+    if (target?.type === 'assignment') return true;
+    return allLessons
+      .slice(0, targetIndex)
+      .filter(item => item.type !== 'assignment')
+      .every(item => item.done);
+  };
+  const selectLesson = (lesson: LessonItem) => {
+    if (!isLessonUnlocked(lesson.id)) return;
+    setCurrentLessonId(lesson.id);
+  };
   const currentMediaUrl = normalizeMediaUrl(currentLesson?.videoUrl);
   const youtubeEmbedUrl = getYoutubeEmbedUrl(currentMediaUrl);
   const playerText = isRu
@@ -802,16 +1157,12 @@ export default function CoursePage() {
                         style={{ width: '100%', height: '100%', border: 0, zIndex: 2, background: '#000' }}
                       />
                     ) : (
-                      <video
-                        key={currentMediaUrl}
+                      <CourseVideoPlayer
                         src={currentMediaUrl}
-                        controls
-                        autoPlay
-                        playsInline
-                        preload="metadata"
+                        title={currentLesson?.title || 'Video dars'}
+                        seekEnabled={!!currentLesson?.done}
                         onError={() => setVideoError(true)}
                         onEnded={() => currentLesson && handleLessonComplete(currentLesson.id)}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', zIndex: 2 }}
                       />
                     )}
                     {/* Blurred background for cinematic effect */}
@@ -819,21 +1170,20 @@ export default function CoursePage() {
                     
                     {/* Cinematic Overlays */}
                     <div className="video-overlay-cinematic" />
-                    <div className="cinematic-controls">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                         <div style={{ display: 'flex', gap: 12 }}>
-                           <button className="btn btn-primary btn-sm" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}>
-                             <Sparkles size={14} /> {playerText.aiSummary}
-                           </button>
-                           <button className="btn btn-secondary btn-sm" style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}>
-                             <Bookmark size={14} /> {playerText.bookmark}
-                           </button>
-                         </div>
-                         <div style={{ background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: '1px solid rgba(255,255,255,0.1)' }}>
-                           1x
-                         </div>
+                    {youtubeEmbedUrl && (
+                      <div className="cinematic-controls">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                           <div style={{ display: 'flex', gap: 12 }}>
+                             <button className="btn btn-primary btn-sm" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}>
+                               <Sparkles size={14} /> {playerText.aiSummary}
+                             </button>
+                             <button className="btn btn-secondary btn-sm" style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}>
+                               <Bookmark size={14} /> {playerText.bookmark}
+                             </button>
+                           </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 ) : (
                   <div className="video-screen" style={{ zIndex: 2 }}>
@@ -850,14 +1200,17 @@ export default function CoursePage() {
                 )}
               </div>
             ) : currentLesson?.type === 'quiz' ? (
-              <div style={{ flex: 1, background: 'var(--bg-1)', overflowY: 'auto' }}>
+              <div className="learning-quiz-shell">
                 {currentLesson.quizData ? (
                   <QuizPlayer 
                     key={currentLesson.id}
-                    quizData={currentLesson.quizData} 
+                    quizData={{
+                      ...currentLesson.quizData,
+                      passingScore: Math.max(75, currentLesson.quizData.passingScore || 0),
+                    }}
                     isRu={isRu}
-                    onComplete={(_, passed) => {
-                      if (passed) handleLessonComplete(currentLesson.id);
+                    onComplete={(score, passed) => {
+                      if (passed && score >= 75) handleLessonComplete(currentLesson.id, score);
                     }} 
                   />
                 ) : (
@@ -902,33 +1255,33 @@ export default function CoursePage() {
               
               <div className="learning-panel-body">
                 {activeTab === 'ai' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 8 }}>
+                  <div className="course-ai-panel">
+                    <div className="course-panel-heading">
+                      <div>
+                        <span>{playerText.ai}</span>
+                        <p>{isRu ? 'Ответы привязаны к текущей теме' : `Javoblar "${getActiveLessonTitle()}" mavzusiga bog'lanadi`}</p>
+                      </div>
+                      <Sparkles size={18} />
+                    </div>
+                    <div className="course-ai-messages">
                       {aiMessages.map((m, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 12, alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                        <div key={i} className={clsx('course-ai-message', m.role === 'user' && 'user')}>
                           {m.role === 'ai' && (
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'var(--shadow-blue)' }}>
+                            <div className="course-ai-avatar">
                               <Sparkles size={12} color="#fff" />
                             </div>
                           )}
-                          <div style={{
-                            background: m.role === 'user' ? 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))' : 'var(--surface-1)',
-                            border: `1px solid ${m.role === 'user' ? 'rgba(59,130,246,0.3)' : 'var(--border-1)'}`,
-                            padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.6,
-                            color: m.role === 'user' ? 'var(--blue-400)' : 'var(--text-primary)',
-                            borderTopRightRadius: m.role === 'user' ? 4 : 12,
-                            borderTopLeftRadius: m.role === 'ai' ? 4 : 12,
-                          }}>
+                          <div className="course-ai-bubble">
                             {m.text}
                           </div>
                         </div>
                       ))}
                       {aiLoading && (
-                        <div style={{ display: 'flex', gap: 12, alignSelf: 'flex-start' }}>
-                           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="course-ai-message">
+                           <div className="course-ai-avatar">
                               <Sparkles size={12} color="#fff" />
                            </div>
-                           <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border-1)', padding: '10px 14px', borderRadius: 12, borderTopLeftRadius: 4 }}>
+                           <div className="course-ai-bubble">
                              <div className="ai-typing-indicator">
                                <div className="ai-dot" />
                                <div className="ai-dot" />
@@ -939,17 +1292,17 @@ export default function CoursePage() {
                       )}
                     </div>
                     
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 8, overflowX: 'auto' }} className="hide-scrollbar">
+                    <div className="course-ai-composer">
+                      <div className="course-ai-prompts hide-scrollbar">
                         {playerText.aiPrompts.map(prompt => (
-                           <button key={prompt} className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '4px 10px', borderRadius: 99, whiteSpace: 'nowrap' }} onClick={() => handleAiSend(prompt)}>
+                           <button key={prompt} className="course-ai-chip" onClick={() => handleAiSend(prompt)}>
                              {prompt}
                            </button>
                         ))}
                       </div>
-                      <div style={{ display: 'flex', gap: 8, background: 'var(--surface-1)', border: '1px solid var(--border-1)', padding: 6, borderRadius: 12 }}>
+                      <div className="course-ai-input-row">
                         <input
-                          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 13, padding: '0 10px' }}
+                          className="course-ai-input"
                           placeholder={playerText.askAi}
                           value={aiInput}
                           onChange={e => setAiInput(e.target.value)}
@@ -960,39 +1313,45 @@ export default function CoursePage() {
                         </button>
                       </div>
                     </div>
+                    <div ref={aiEndRef} className="course-ai-scroll-anchor" />
                   </div>
                 )}
                 
                 {activeTab === 'materials' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {editMode && (
-                      <div style={{ marginBottom: 12 }}>
-                        <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                          {materialUploading ? <Loader size={14} className="spin" /> : <Plus size={14} />} 
-                          {playerText.uploadFile}
-                          <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
-                        </label>
-                      </div>
+                  <div className="course-material-panel">
+                    {canEdit && (
+                      <label className="course-material-upload">
+                        <span className="course-material-upload-icon">
+                          {materialUploading ? <Loader size={20} className="spin" /> : <Plus size={20} />}
+                        </span>
+                        <span>
+                          <strong>{playerText.uploadFile}</strong>
+                          <small>PDF, DOCX, PPTX, ZIP va boshqa materiallar</small>
+                        </span>
+                        <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
+                      </label>
                     )}
                     
-                    {(!course?.materials || course.materials.length === 0) && !editMode ? (
-                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0', fontSize: 13.5 }}>
-                        {playerText.noMaterials}
+                    {(!course?.materials || course.materials.length === 0) ? (
+                      <div className="course-empty-panel">
+                        <FileText size={34} />
+                        <span>{playerText.noMaterials}</span>
                       </div>
                     ) : (
                       (course?.materials || []).map((m: any, i: number) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 14 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div key={i} className="course-material-card">
+                          <div className="course-material-icon">
                             <FileText size={18} color="#3b82f6" />
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.name}</div>
+                            {m.lessonTitle && <small style={{ display: 'block', marginTop: 3, color: 'var(--blue-400)', fontSize: 11 }}>{m.lessonTitle}</small>}
                             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{m.type} • {m.size}</div>
                           </div>
                           <button className="btn btn-ghost btn-sm btn-icon" onClick={() => window.open(normalizeMediaUrl(m.url), '_blank')} title={playerText.download}>
                             <Download size={15} />
                           </button>
-                          {editMode && (
+                          {canEdit && (
                             <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--red-400)' }} onClick={() => handleDeleteMaterial(i)}>
                               <Trash2 size={15} />
                             </button>
@@ -1004,44 +1363,78 @@ export default function CoursePage() {
                 )}
                 
                 {activeTab === 'notes' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
-                      {/* Placeholder for notes */}
-                      <div style={{ padding: 16, borderLeft: '2px solid var(--blue-500)', background: 'var(--surface-1)', borderRadius: '0 8px 8px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                        {playerText.notesReady}
+                  <div className="course-notes-panel">
+                    <div className="course-panel-heading">
+                      <div>
+                        <span>{playerText.notes}</span>
+                        <p>{getActiveLessonTitle()}</p>
                       </div>
+                      <Bookmark size={18} />
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="input" placeholder={playerText.addNote} style={{ flex: 1, fontSize: 13 }} />
-                      <button className="btn btn-primary btn-sm"><Bookmark size={14} /> {playerText.save}</button>
+                    <div className="course-note-composer">
+                      <textarea
+                        className="course-note-input"
+                        placeholder={playerText.addNote}
+                        value={noteInput}
+                        onChange={(event) => setNoteInput(event.target.value)}
+                        onKeyDown={(event) => {
+                          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') handleSaveNote();
+                        }}
+                      />
+                      <button className="btn btn-primary btn-sm" onClick={handleSaveNote} disabled={!noteInput.trim()}>
+                        <Bookmark size={14} /> {playerText.save}
+                      </button>
                     </div>
+                    {lessonNotes.length === 0 ? (
+                      <div className="course-empty-panel">
+                        <Bookmark size={34} />
+                        <span>{playerText.notesReady}</span>
+                      </div>
+                    ) : (
+                      <div className="course-note-grid">
+                        {lessonNotes.map((note) => (
+                          <article key={note.id} className="course-note-card">
+                            <button type="button" className="course-note-delete" onClick={() => handleDeleteNote(note.id)}>
+                              <X size={13} />
+                            </button>
+                            <p>{note.text}</p>
+                            <time>{formatDateTime(note.createdAt)}</time>
+                          </article>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {activeTab === 'discussion' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ background: 'var(--surface-1)', padding: 16, borderRadius: 16, border: '1px solid var(--border-1)' }}>
+                  <div className="course-discussion-panel">
+                    <div className="course-panel-heading">
+                      <div>
+                        <span>{playerText.discussion}</span>
+                        <p>{isRu ? 'Вопросы и комментарии по текущему уроку' : `${getActiveLessonTitle()} bo'yicha fikr va savollar`}</p>
+                      </div>
+                      <MessageSquare size={18} />
+                    </div>
+                    <div className="course-discussion-composer">
                       <textarea
-                        className="input"
+                        className="course-discussion-input"
                         placeholder={playerText.discussionPlaceholder}
                         value={discussionInput}
                         onChange={e => setDiscussionInput(e.target.value)}
                         rows={2}
-                        style={{ resize: 'none', marginBottom: 12, fontSize: 13.5 }}
                       />
                       {discussionImageUrl && (
-                        <div style={{ marginBottom: 12, position: 'relative', display: 'inline-block' }}>
-                          <img src={discussionImageUrl} alt="Upload" style={{ maxHeight: 110, borderRadius: 10 }} />
+                        <div className="course-discussion-preview">
+                          <img src={normalizeMediaUrl(discussionImageUrl)} alt="Upload" />
                           <button 
                             className="btn btn-ghost btn-sm btn-icon" 
-                            style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff' }}
                             onClick={() => setDiscussionImageUrl('')}
                           >
                             <X size={13} />
                           </button>
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                      <div className="course-discussion-actions">
                         <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <FileText size={15} /> {playerText.photo}
                           <input type="file" style={{ display: 'none' }} accept="image/*" onChange={handleDiscussionImageUpload} />
@@ -1052,29 +1445,36 @@ export default function CoursePage() {
                       </div>
                     </div>
 
-                    {discussions.map((c, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 14, padding: 16, background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 16 }}>
-                        <div className="avatar" style={{ width: 36, height: 36, fontSize: 12, background: 'rgba(59,130,246,0.15)', color: '#3b82f6', minWidth: 36, fontWeight: 700 }}>
-                          {c.user?.firstName ? c.user.firstName[0] : 'U'}
+                    {discussions.length === 0 && (
+                      <div className="course-empty-panel">
+                        <MessageSquare size={34} />
+                        <span>{isRu ? 'Пока нет комментариев' : 'Hozircha izohlar yo‘q'}</span>
+                      </div>
+                    )}
+
+                    {discussions.map((c, i) => {
+                      const author = getDiscussionAuthor(c);
+                      return (
+                      <div key={i} className="course-discussion-card">
+                        <div className="course-discussion-avatar">
+                          {getInitials(author)}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{c.user?.firstName} {c.user?.lastName}</span>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {new Date(c.createdAt).toLocaleDateString()}
-                            </span>
+                        <div className="course-discussion-content">
+                          <div className="course-discussion-meta">
+                            <strong>{author}</strong>
+                            <time>{formatDateTime(c.createdAt)}</time>
                           </div>
-                          <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                          <div className="course-discussion-text">
                             {c.message}
                           </div>
                           {c.imageUrl && (
-                            <div style={{ marginTop: 10 }}>
-                              <img src={c.imageUrl} alt="attached" style={{ maxWidth: 240, borderRadius: 10, border: '1px solid var(--border-1)' }} />
+                            <div className="course-discussion-image">
+                              <img src={normalizeMediaUrl(c.imageUrl)} alt="attached" />
                             </div>
                           )}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
               </div>
@@ -1113,11 +1513,20 @@ export default function CoursePage() {
                   {mod.items.map((item, i) => {
                     const isCurrent = currentLesson?.id === item.id;
                     const isLast = i === mod.items.length - 1 && modIdx === courseModules.length - 1;
+                    const unlocked = isLessonUnlocked(item.id);
                     return (
                       <div 
                         key={item.id} 
-                        style={{ display: 'flex', gap: 16, padding: '12px 0', position: 'relative', cursor: 'pointer', opacity: item.done || isCurrent ? 1 : 0.6 }}
-                        onClick={() => setCurrentLessonId(item.id)}
+                        title={!unlocked ? 'Oldingi darsni tugating' : undefined}
+                        style={{
+                          display: 'flex',
+                          gap: 16,
+                          padding: '12px 0',
+                          position: 'relative',
+                          cursor: unlocked ? 'pointer' : 'not-allowed',
+                          opacity: item.done || isCurrent ? 1 : unlocked ? 0.7 : 0.42,
+                        }}
+                        onClick={() => selectLesson(item)}
                       >
                         {!isLast && <div className={clsx('timeline-connector', item.done && 'active')} />}
                         
@@ -1130,7 +1539,7 @@ export default function CoursePage() {
                           position: 'relative', zIndex: 1,
                           boxShadow: isCurrent ? '0 0 15px rgba(139,92,246,0.4)' : 'none'
                         }}>
-                          {item.done && !isCurrent ? <CheckCircle size={16} /> : item.type === 'quiz' ? <FileText size={14} /> : item.type === 'assignment' ? <Award size={14} /> : <Play size={14} />}
+                          {!unlocked ? <Lock size={14} /> : item.done && !isCurrent ? <CheckCircle size={16} /> : item.type === 'quiz' ? <FileText size={14} /> : item.type === 'assignment' ? <Award size={14} /> : <Play size={14} />}
                         </div>
                         
                         <div style={{ flex: 1, paddingTop: 6 }}>
@@ -1138,7 +1547,7 @@ export default function CoursePage() {
                             {item.title}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                            {item.dur}
+                            {!unlocked ? 'Oldingi darsni tugating' : item.dur}
                           </div>
                         </div>
                       </div>
@@ -1444,17 +1853,10 @@ function CourseOverview({
 
                             {item.type === 'assignment' && (
                               <>
-                                <input
-                                  className="input"
-                                  style={{ flex: 1, minWidth: 180, fontSize: 12, padding: '6px 10px', height: 34 }}
-                                  placeholder="Topshiriq fayli URL (Google Drive, Dropbox...)..."
-                                  value={item.videoUrl || ''}
-                                  onChange={e => onUpdateLesson(mod.id, item.id, 'videoUrl', e.target.value)}
-                                />
                                 <label
                                   style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '6px 14px', borderRadius: 8, height: 34,
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '8px 14px', borderRadius: 8, minHeight: 36,
                                     background: uploadingLessons[`${mod.id}-${item.id}`] ? 'var(--text-muted)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
                                     color: '#fff', fontSize: 12, fontWeight: 600,
                                     cursor: uploadingLessons[`${mod.id}-${item.id}`] ? 'not-allowed' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
@@ -1473,11 +1875,20 @@ function CourseOverview({
                                   <input
                                     type="file"
                                     style={{ display: 'none' }}
-                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.png,.jpg,.jpeg"
                                     onChange={e => handleLessonUpload(mod.id, item.id, e)}
                                     disabled={uploadingLessons[`${mod.id}-${item.id}`]}
                                   />
                                 </label>
+                                {item.videoUrl ? (
+                                  <span style={{ fontSize: 11, color: 'var(--green-400)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <CheckCircle size={11} /> Serverga yuklangan
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    Topshiriq faqat fayl yuklash orqali biriktiriladi
+                                  </span>
+                                )}
                               </>
                             )}
 
