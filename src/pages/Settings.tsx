@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Settings as SettingsIcon, User, Shield, BellRing, 
   MonitorSmartphone, Laptop, Globe, CheckCircle2, X 
@@ -133,19 +133,29 @@ export default function Settings() {
   };
 
   // Submit Profile Changes
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({
-      firstName,
-      lastName,
-      fullName: `${firstName} ${lastName}`.trim(),
-      position
-    });
-    showToast(t('settings.profileSuccess'), 'success');
+    try {
+      const res = await api.patch('/users/me', {
+        firstName,
+        lastName,
+        position
+      });
+      const updatedData = res.data?.user || res.data;
+      updateUser({
+        firstName: updatedData.firstName || firstName,
+        lastName: updatedData.lastName || lastName,
+        fullName: updatedData.fullName || `${firstName} ${lastName}`.trim(),
+        position: updatedData.position || position
+      });
+      showToast(t('settings.profileSuccess'), 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Xatolik yuz berdi', 'error');
+    }
   };
 
   // Submit Security Changes
-  const handleSecuritySubmit = (e: React.FormEvent) => {
+  const handleSecuritySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
       showToast(t('settings.passwordShort'), 'error');
@@ -156,11 +166,18 @@ export default function Settings() {
       return;
     }
     
-    // Simulate API update
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    showToast(t('settings.passwordSuccess'), 'success');
+    try {
+      await api.patch('/users/me/password', {
+        currentPassword,
+        newPassword
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast(t('settings.passwordSuccess'), 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Xatolik yuz berdi', 'error');
+    }
   };
 
   // Submit Notifications Changes

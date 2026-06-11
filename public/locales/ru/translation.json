@@ -7,6 +7,7 @@
     "analytics": "Аналитика",
     "assessments": "Тесты",
     "certifications": "Сертификаты",
+    "leaderboard": "Рейтинг",
     "schedule": "Расписание",
     "settings": "Настройки",
     "ai": "AI Ассистент",
@@ -16,7 +17,8 @@
     "admin": "Администрация",
     "main": "ГЛАВНОЕ",
     "tools": "ИНСТРУМЕНТЫ",
-    "system": "СИСТЕМА"
+    "system": "СИСТЕМА",
+    "executive": "Executive BI"
   },
   "layout": {
     "orgName": "Корпорация АГМК",
@@ -210,7 +212,106 @@
     "enrolledCompleted": "Зарегистрировано и завершено",
     "users": "Пользователи",
     "completed": "Завершено",
-    "enrolled": "Зарегистрировано"
+    "enrolled": "Зарегистрировано",
+    "results": {
+      "title": "Результаты экзаменов",
+      "subtitle": "Результаты, мониторинг сдано/не сдано, статистика тренеров и отделов.",
+      "loadError": "Ошибка загрузки результатов экзаменов.",
+      "empty": "Результаты не найдены.",
+      "kpi": {
+        "totalAttempts": "Всего попыток",
+        "passed": "Сдали",
+        "failed": "Не сдали",
+        "averageScore": "Средний балл",
+        "averageDuration": "Среднее время",
+        "certificates": "Сертификаты"
+      },
+      "hints": {
+        "submittedAttempts": "Завершённые попытки",
+        "passRate": "{{value}}% успешной сдачи",
+        "failRate": "{{value}}% не сдали",
+        "averageScore": "Средний результат",
+        "completionTime": "Время завершения",
+        "eligibleAttempts": "Попытки, подходящие для сертификата"
+      },
+      "scope": {
+        "passRate": "Процент сдачи",
+        "averageScore": "Средний балл",
+        "certificates": "Сертификаты"
+      },
+      "actions": {
+        "csvExport": "Экспорт CSV",
+        "clear": "Очистить",
+        "detail": "Подробнее",
+        "exporting": "Загрузка..."
+      },
+      "filters": {
+        "title": "Фильтр результатов",
+        "search": "Поиск...",
+        "department": "Отдел",
+        "trainer": "Тренер",
+        "exam": "Экзамен",
+        "sort": "Сортировка"
+      },
+      "status": {
+        "passed": "Сдал",
+        "failed": "Не сдал"
+      },
+      "sort": {
+        "newest": "Сначала новые",
+        "oldest": "Сначала старые",
+        "highest": "Самый высокий балл",
+        "lowest": "Самый низкий балл"
+      },
+      "charts": {
+        "scoreDistribution": "Распределение баллов",
+        "scoreDistributionSub": "Попытки по диапазонам баллов",
+        "passFail": "Сдали / не сдали",
+        "passFailSub": "Показатели мониторинга"
+      },
+      "sections": {
+        "departmentLeaderboard": "Рейтинг отделов",
+        "trainerAnalytics": "Аналитика тренеров",
+        "resultsTable": "Таблица результатов",
+        "resultsTableSub": "Сотрудник, экзамен, балл, попытка и пригодность для сертификата.",
+        "topPerformers": "Лучшие результаты",
+        "questionAnalytics": "Аналитика вопросов"
+      },
+      "table": {
+        "employee": "Сотрудник",
+        "exam": "Экзамен",
+        "score": "Балл",
+        "status": "Статус",
+        "attempt": "Попытка",
+        "completed": "Завершено",
+        "duration": "Длительность"
+      },
+      "metrics": {
+        "avgPercent": "{{value}}% средний",
+        "passPercent": "{{value}}% сдали",
+        "passAttempts": "{{passRate}}% сдали / {{attempts}} попыток",
+        "trainerSummary": "{{exams}} экзаменов / {{attempts}} попыток / {{average}}% средний",
+        "questionAttempts": "{{exam}} / {{attempts}} попыток"
+      },
+      "question": {
+        "success": "Успешно",
+        "failed": "Ошибка",
+        "skipped": "Пропущено",
+        "empty": "Аналитики вопросов пока нет."
+      },
+      "details": {
+        "title": "Детали попытки",
+        "selectedAnswer": "Выбранный ответ",
+        "correctAnswer": "Правильный ответ",
+        "loadError": "Ошибка загрузки деталей попытки."
+      },
+      "exportError": "Ошибка при экспорте CSV.",
+      "pagination": {
+        "range": "{{start}}-{{end}} / {{total}} результатов",
+        "prev": "Назад",
+        "next": "Вперёд"
+      }
+    }
   },
   "ai": {
     "title": "AI Ассистент",
@@ -334,9 +435,10 @@
     "size": "Размер"
   },
   "certifications": {
-    "title": "Мои Сертификаты",
-    "subtitle": "Корпоративная платформа сертификации",
-    "download": "Скачать / Печать",
+    "title": "Управление Сертификатами",
+    "subtitle": "Enterprise платформа сертификации с QR-верификацией, аналитикой и управлением шаблонами.",
+    "eyebrow": "Экосистема сертификации",
+    "download": "Скачать",
     "verify": "Проверить",
     "issued": "Дата выдачи",
     "expires": "Действителен до",
@@ -345,7 +447,107 @@
     "active": "Активный",
     "expiring": "Истекает",
     "expired": "Просрочен",
-    "noData": "Сертификаты не найдены"
+    "noData": "Сертификаты не найдены",
+    "loading": "Загрузка сертификатов...",
+    "searchPlaceholder": "Поиск по названию или ID...",
+    "noCertsTitle": "Нет сертификатов",
+    "noCertsDesc": "Пройдите экзамен чтобы получить сертификат",
+    "filter": {
+      "all": "Все",
+      "active": "Активные",
+      "expiring_soon": "Истекают",
+      "expired": "Просроченные"
+    },
+    "tabs": {
+      "my": "Мои Сертификаты",
+      "verification": "Центр верификации",
+      "analytics": "Аналитика",
+      "templates": "Шаблоны",
+      "expiration": "Истечение срока",
+      "revoked": "Отозванные",
+      "history": "История загрузок"
+    },
+    "statusMap": {
+      "active": "Активный",
+      "expiring_soon": "Истекает",
+      "expired": "Просрочен",
+      "revoked": "Отозван"
+    },
+    "card": {
+      "issued": "Выдан",
+      "expires": "Действителен до",
+      "download": "Скачать",
+      "view": "Просмотр"
+    },
+    "pdf": {
+      "certTitle": "СЕРТИФИКАТ",
+      "sub": "ПОДТВЕРЖДЕНИЕ КВАЛИФИКАЦИИ",
+      "holderLabel": "Настоящим подтверждается, что",
+      "desc": "успешно прошел(а) программу оценки знаний по курсу \"{{title}}\" с результатом {{score}}%.",
+      "completed": "УСПЕШНО ЗАВЕРШИЛ(А)",
+      "issued": "Дата выдачи",
+      "authorizer": "Утвердил",
+      "expires": "Действителен до",
+      "unlimited": "Бессрочно",
+      "verify": "ПРОВЕРИТЬ"
+    },
+    "verification": {
+      "title": "Центр верификации",
+      "sub": "Введите ID сертификата или UUID для мгновенной проверки подлинности",
+      "placeholder": "AGMK-26-0001 или UUID...",
+      "btn": "Проверить",
+      "hint": "Отсканируйте QR-код на сертификате для автоматической проверки",
+      "error": "Ошибка при проверке сертификата",
+      "valid": "✓ ДЕЙСТВИТЕЛЕН",
+      "invalid": "✗ НЕДЕЙСТВИТЕЛЕН",
+      "status": "Статус: {{status}}",
+      "revokeReason": "Причина отзыва: {{reason}}",
+      "revokeReasonLabel": "Причина отзыва: ",
+      "holder": "Владелец",
+      "course": "Курс",
+      "score": "Результат",
+      "issued": "Выдан",
+      "expires": "Действителен до"
+    },
+    "analytics": {
+      "total": "Всего",
+      "active": "Активные",
+      "expiring": "Истекают",
+      "expired": "Просрочены",
+      "revoked": "Отозваны",
+      "avgScore": "Средний балл",
+      "trend": "Ежемесячная выдача",
+      "category": "По категориям",
+      "department": "По подразделениям"
+    },
+    "templates": {
+      "loading": "Шаблоны загружаются...",
+      "default": "По умолч."
+    },
+    "expiration": {
+      "soon": "Истекают скоро ({{count}})",
+      "expired": "Просроченные ({{count}})",
+      "noSoon": "Нет истекающих сертификатов",
+      "noExpired": "Нет просроченных сертификатов",
+      "days": "{{days}} дн",
+      "expiredLabel": "Истёк"
+    },
+    "revoked": {
+      "warning": "Отозванные сертификаты отображаются как НЕДЕЙСТВИТЕЛЬНЫЕ на странице верификации.",
+      "noData": "Нет отозванных сертификатов",
+      "reason": "Причина: {{reason}}",
+      "restore": "Восстановить"
+    },
+    "history": {
+      "noData": "История пуста",
+      "desc": "Действия с сертификатами появятся здесь",
+      "actions": {
+        "download": "Скачан",
+        "print": "Распечатан",
+        "share": "Поделились",
+        "view": "Просмотрен"
+      }
+    }
   },
   "exams": {
     "title": "Тесты",

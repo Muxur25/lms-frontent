@@ -270,7 +270,7 @@ export default function Library() {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('visibility', 'public');
+    formData.append('visibility', 'authenticated');
 
     try {
       const response: any = await apiClient.post('/uploads/file', formData, {
@@ -384,7 +384,7 @@ export default function Library() {
     const newErrors: Record<string, string> = {};
     if (!bookFormData.title.trim()) newErrors.title = isRu ? 'Укажите название' : 'Kitob nomini kiriting';
     if (!bookFormData.category) newErrors.category = isRu ? 'Выберите раздел' : 'Bo\'limni tanlang';
-    if (!bookFormData.url.trim()) newErrors.url = isRu ? 'Загрузите file yoki havola kiriting' : 'Fayl yuklang yoki havolani kiriting';
+    if (!bookFormData.url.trim()) newErrors.url = isRu ? 'Загрузите файл или укажите ссылку' : 'Fayl yuklang yoki havolani kiriting';
 
     if (Object.keys(newErrors).length > 0) {
       setBookErrors(newErrors);
@@ -420,7 +420,7 @@ export default function Library() {
     const newErrors: Record<string, string> = {};
     if (!editBookFormData.title.trim()) newErrors.title = isRu ? 'Укажите название' : 'Kitob nomini kiriting';
     if (!editBookFormData.category) newErrors.category = isRu ? 'Выберите раздел' : 'Bo\'limni tanlang';
-    if (!editBookFormData.url.trim()) newErrors.url = isRu ? 'Fayl yuklang yoki havolani kiriting' : 'Fayl yuklang yoki havolani kiriting';
+    if (!editBookFormData.url.trim()) newErrors.url = isRu ? 'Загрузите файл или укажите ссылку' : 'Fayl yuklang yoki havolani kiriting';
 
     if (Object.keys(newErrors).length > 0) {
       setEditBookErrors(newErrors);

@@ -7,6 +7,7 @@
     "analytics": "Tahlil",
     "assessments": "Testlar",
     "certifications": "Sertifikatlar",
+    "leaderboard": "Reyting",
     "schedule": "Jadval",
     "settings": "Sozlamalar",
     "ai": "AI Assistant",
@@ -16,7 +17,8 @@
     "admin": "Boshqaruv",
     "main": "ASOSIY",
     "tools": "VOSITALAR",
-    "system": "TIZIM"
+    "system": "TIZIM",
+    "executive": "Executive BI"
   },
   "layout": {
     "orgName": "AGMK Korporatsiyasi",
@@ -210,7 +212,106 @@
     "enrolledCompleted": "Ro'yxatga olindi va yakunlandi",
     "users": "Foydalanuvchilar",
     "completed": "Yakunlandi",
-    "enrolled": "Ro'yxatga olindi"
+    "enrolled": "Ro'yxatga olindi",
+    "results": {
+      "title": "Imtihon natijalari",
+      "subtitle": "Natijalar, o'tish/yiqilish monitoringi, trainer va bo'lim statistikasi.",
+      "loadError": "Imtihon natijalarini yuklashda xatolik yuz berdi.",
+      "empty": "Natijalar topilmadi.",
+      "kpi": {
+        "totalAttempts": "Jami urinishlar",
+        "passed": "O'tganlar",
+        "failed": "Yiqilganlar",
+        "averageScore": "O'rtacha ball",
+        "averageDuration": "O'rtacha vaqt",
+        "certificates": "Sertifikatlar"
+      },
+      "hints": {
+        "submittedAttempts": "Yakunlangan urinishlar",
+        "passRate": "{{value}}% o'tish darajasi",
+        "failRate": "{{value}}% yiqilish darajasi",
+        "averageScore": "O'rtacha natija",
+        "completionTime": "Yakunlash vaqti",
+        "eligibleAttempts": "Sertifikatga mos urinishlar"
+      },
+      "scope": {
+        "passRate": "O'tish darajasi",
+        "averageScore": "O'rtacha ball",
+        "certificates": "Sertifikatlar"
+      },
+      "actions": {
+        "csvExport": "CSV eksport",
+        "clear": "Tozalash",
+        "detail": "Batafsil",
+        "exporting": "Yuklanmoqda..."
+      },
+      "filters": {
+        "title": "Natijalarni filtrlash",
+        "search": "Qidirish...",
+        "department": "Bo'lim",
+        "trainer": "Trainer",
+        "exam": "Imtihon",
+        "sort": "Saralash"
+      },
+      "status": {
+        "passed": "O'tdi",
+        "failed": "Yiqildi"
+      },
+      "sort": {
+        "newest": "Eng yangi",
+        "oldest": "Eng eski",
+        "highest": "Eng yuqori",
+        "lowest": "Eng past"
+      },
+      "charts": {
+        "scoreDistribution": "Ball taqsimoti",
+        "scoreDistributionSub": "Ball diapazonlari bo'yicha urinishlar",
+        "passFail": "O'tdi / yiqildi",
+        "passFailSub": "Monitoring hisoblagichlari"
+      },
+      "sections": {
+        "departmentLeaderboard": "Bo'limlar reytingi",
+        "trainerAnalytics": "Trainer tahlili",
+        "resultsTable": "Natijalar jadvali",
+        "resultsTableSub": "Xodim, imtihon, ball, urinish va sertifikatga moslik.",
+        "topPerformers": "Eng yaxshi natijalar",
+        "questionAnalytics": "Savollar tahlili"
+      },
+      "table": {
+        "employee": "Xodim",
+        "exam": "Imtihon",
+        "score": "Ball",
+        "status": "Holat",
+        "attempt": "Urinish",
+        "completed": "Yakunlangan",
+        "duration": "Davomiylik"
+      },
+      "metrics": {
+        "avgPercent": "{{value}}% o'rtacha",
+        "passPercent": "{{value}}% o'tish",
+        "passAttempts": "{{passRate}}% o'tish / {{attempts}} urinish",
+        "trainerSummary": "{{exams}} imtihon / {{attempts}} urinish / {{average}}% o'rtacha",
+        "questionAttempts": "{{exam}} / {{attempts}} urinish"
+      },
+      "question": {
+        "success": "Muvaffaqiyat",
+        "failed": "Xato",
+        "skipped": "O'tkazib yuborilgan",
+        "empty": "Savol analitikasi hali yo'q."
+      },
+      "details": {
+        "title": "Urinish tafsilotlari",
+        "selectedAnswer": "Tanlangan javob",
+        "correctAnswer": "To'g'ri javob",
+        "loadError": "Urinish tafsilotlarini yuklashda xatolik yuz berdi."
+      },
+      "exportError": "CSV eksport qilishda xatolik yuz berdi.",
+      "pagination": {
+        "range": "{{start}}-{{end}} / {{total}} natija",
+        "prev": "Oldingi",
+        "next": "Keyingi"
+      }
+    }
   },
   "ai": {
     "title": "AI Yordamchi",
@@ -334,9 +435,10 @@
     "size": "Hajm"
   },
   "certifications": {
-    "title": "Mening Sertifikatlarim",
-    "subtitle": "Enterprise sertifikatlash platformasi",
-    "download": "Yuklab olish / Chop etish",
+    "title": "Sertifikat Boshqaruvi",
+    "subtitle": "QR tekshiruvi, analitika va shablon boshqaruvi bilan enterprise sertifikatlash platformasi.",
+    "eyebrow": "Sertifikatlash Markazi",
+    "download": "Yuklab olish",
     "verify": "Tekshirish",
     "issued": "Berilgan sana",
     "expires": "Amal qiladi",
@@ -345,7 +447,107 @@
     "active": "Faol",
     "expiring": "Tugayapti",
     "expired": "Muddati o'tgan",
-    "noData": "Sertifikatlar topilmadi"
+    "noData": "Sertifikatlar topilmadi",
+    "loading": "Sertifikatlar yuklanmoqda...",
+    "searchPlaceholder": "Nomi yoki ID bo'yicha qidiring...",
+    "noCertsTitle": "Sertifikatlar topilmadi",
+    "noCertsDesc": "Sertifikat olish uchun imtihon topshiring",
+    "filter": {
+      "all": "Barchasi",
+      "active": "Faol",
+      "expiring_soon": "Tugayapti",
+      "expired": "Muddati o'tgan"
+    },
+    "tabs": {
+      "my": "Mening Sertifikatlarim",
+      "verification": "Tekshirish Markazi",
+      "analytics": "Analitika",
+      "templates": "Shablonlar",
+      "expiration": "Muddatlar",
+      "revoked": "Bekor qilingan",
+      "history": "Yuklash tarixi"
+    },
+    "statusMap": {
+      "active": "Faol",
+      "expiring_soon": "Tugayapti",
+      "expired": "Muddati o'tgan",
+      "revoked": "Bekor qilingan"
+    },
+    "card": {
+      "issued": "Berilgan",
+      "expires": "Amal qiladi",
+      "download": "Yuklab olish",
+      "view": "Ko'rish"
+    },
+    "pdf": {
+      "certTitle": "SERTIFIKAT",
+      "sub": "KVALIFIKATSIYANI TASDIQLASH",
+      "holderLabel": "Ushbu sertifikat egasi",
+      "desc": "\"{{title}}\" yo'nalishi bo'yicha imtihondan muvaffaqiyatli o'tib, {{score}}% natija ko'rsatgani tasdiqlanadi.",
+      "completed": "MUVAFFAQIYATLI YAKUNLANGAN",
+      "issued": "Berilgan sana",
+      "authorizer": "Tasdiqlovchi",
+      "expires": "Amal qiladi",
+      "unlimited": "Muddatsiz",
+      "verify": "TEKSHIRISH"
+    },
+    "verification": {
+      "title": "Tekshirish Markazi",
+      "sub": "Darhol tekshirish uchun sertifikat ID yoki UUID kiriting",
+      "placeholder": "AGMK-26-0001 yoki UUID...",
+      "btn": "Tekshirish",
+      "hint": "Avtomatik tekshirish uchun sertifikatdagi QR kodni skaner qiling",
+      "error": "Sertifikatni tekshirishda xato yuz berdi",
+      "valid": "✓ HAQIQIY",
+      "invalid": "✗ HAQIQIY EMAS",
+      "status": "Holat: {{status}}",
+      "revokeReason": "Bekor qilish sababi: {{reason}}",
+      "revokeReasonLabel": "Bekor qilish sababi: ",
+      "holder": "Egasi",
+      "course": "Kurs",
+      "score": "Natija",
+      "issued": "Berilgan",
+      "expires": "Amal qiladi"
+    },
+    "analytics": {
+      "total": "Jami",
+      "active": "Faol",
+      "expiring": "Tugayapti",
+      "expired": "Muddati o'tgan",
+      "revoked": "Bekor qilingan",
+      "avgScore": "O'rtacha ball",
+      "trend": "Oylik trend",
+      "category": "Kategoriya bo'yicha",
+      "department": "Bo'limlar bo'yicha"
+    },
+    "templates": {
+      "loading": "Shablonlar yuklanmoqda...",
+      "default": "Default"
+    },
+    "expiration": {
+      "soon": "Tez orada tugaydi ({{count}})",
+      "expired": "Muddati o'tganlar ({{count}})",
+      "noSoon": "Tugayotgan sertifikatlar yo'q",
+      "noExpired": "Muddati o'tgan sertifikatlar yo'q",
+      "days": "{{days}} kun",
+      "expiredLabel": "Tugagan"
+    },
+    "revoked": {
+      "warning": "Bekor qilingan sertifikatlar tekshiruv sahifasida HAQIQIY EMAS ko'rinishida ko'rsatiladi.",
+      "noData": "Bekor qilingan sertifikatlar yo'q",
+      "reason": "Sabab: {{reason}}",
+      "restore": "Qaytarish"
+    },
+    "history": {
+      "noData": "Tarix bo'sh",
+      "desc": "Sertifikat amallari bu yerda ko'rinadi",
+      "actions": {
+        "download": "Yuklab olindi",
+        "print": "Chop etildi",
+        "share": "Ulashildi",
+        "view": "Ko'rildi"
+      }
+    }
   },
   "exams": {
     "title": "Testlar",

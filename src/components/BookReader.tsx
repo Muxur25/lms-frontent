@@ -59,6 +59,7 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scale, setScale] = useState(1.25);
+  const isPdf = book.type?.toUpperCase() === 'PDF';
 
   const zoom = useCallback((dir: 1 | -1) => {
     setScale(s => Math.max(0.5, Math.min(3.0, +(s + dir * 0.25).toFixed(2))));
@@ -96,11 +97,19 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
     };
   }, []);
 
-  // Load the PDF as a binary Uint8Array
+  // Load PDFs as binary data for the in-app reader. Other formats open as a download card.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setFileBlob(null);
+
+    if (!isPdf) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
 
     const load = async () => {
       const url = book.url;
@@ -122,15 +131,13 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
 
     load();
     return () => { cancelled = true; };
-  }, [book.url]);
+  }, [book.url, isPdf]);
 
   const formatDate = (s: string) => {
     if (!s) return '';
     const d = new Date(s);
     return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
   };
-
-  const isPdf = book.type?.toUpperCase() === 'PDF';
 
   return (
     <div
@@ -440,7 +447,13 @@ export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
         setNumPages(doc.numPages);
       } catch (err: any) {
         console.error('PDFViewer: failed to load PDF', err);
-        if (!cancelled) setError(isRu ? 'PDF yuklanmadi. Fayl buzilgan bo\'lishi mumkin.' : "PDF yuklanmadi. Fayl buzilgan bo'lishi mumkin.");
+        if (!cancelled) {
+          setError(
+            isRu
+              ? 'PDF не загрузился. Возможно, файл поврежден.'
+              : "PDF yuklanmadi. Fayl buzilgan bo'lishi mumkin.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -448,7 +461,7 @@ export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
 
     initPdf();
     return () => { cancelled = true; };
-  }, [data]);
+  }, [data, isRu]);
 
 
   if (loading) {

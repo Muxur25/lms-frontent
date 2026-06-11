@@ -32,6 +32,7 @@ type FormState = {
 };
 
 const steps = ['personal', 'security'] as const;
+const getAuthPayload = (response: any) => response?.data || response;
 
 
 
@@ -123,7 +124,8 @@ export default function Register() {
           password: form.password,
           confirmPassword: form.confirmPassword,
         });
-        loginAction(response.data.user, response.data.accessToken, response.data.refreshToken);
+        const authPayload = getAuthPayload(response);
+        loginAction(authPayload.user, authPayload.accessToken, authPayload.refreshToken);
         navigate('/dashboard');
       } catch (requestError: any) {
         setError(requestError.message || t('register.errorsRequired'));
@@ -455,6 +457,28 @@ export default function Register() {
         .ob-btn.primary { background: linear-gradient(135deg, #fff, #bff7ff); color: #07111f; box-shadow: 0 18px 48px rgba(124,245,255,.2); }
         .ob-btn.ghost { background: rgba(255,255,255,.06); color: var(--ob-text); border: 1px solid var(--ob-border); }
         .ob-btn:disabled { opacity: .65; cursor: wait; }
+        .ob-switch {
+          margin-top: 16px;
+          padding: 14px;
+          border-radius: 18px;
+          border: 1px solid var(--ob-border);
+          background: rgba(255,255,255,.045);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .ob-switch span {
+          color: var(--ob-muted);
+          font-size: 13px;
+          font-weight: 750;
+        }
+        .ob-switch .ob-btn {
+          min-height: 40px;
+          padding: 0 14px;
+          border-radius: 13px;
+          white-space: nowrap;
+        }
         @media (max-width: 1080px) {
           .ob-shell { grid-template-columns: 1fr; max-width: 820px; }
           .ob-brand { margin-bottom: 42px; }
@@ -468,6 +492,7 @@ export default function Register() {
           .ob-card { padding: 18px; min-height: auto; border-radius: 24px; }
           .ob-step-card { padding: 18px; }
           .ob-actions { flex-direction: column-reverse; }
+          .ob-switch { align-items: stretch; flex-direction: column; }
           .ob-btn { width: 100%; }
         }
       `}</style>
@@ -615,6 +640,14 @@ export default function Register() {
               </button>
               <button type={step === 1 ? 'submit' : 'button'} className="ob-btn primary" onClick={step === 1 ? undefined : next} disabled={loading}>
                 {loading ? '...' : step === 1 ? t('register.finish') : t('register.next')}
+                <ChevronRight size={17} />
+              </button>
+            </div>
+
+            <div className="ob-switch">
+              <span>{t('auth.hasAccount')}</span>
+              <button type="button" className="ob-btn ghost" onClick={() => navigate('/auth/login')}>
+                {t('auth.loginBtn')}
                 <ChevronRight size={17} />
               </button>
             </div>

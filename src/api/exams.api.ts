@@ -55,6 +55,18 @@ export interface TestAttempt {
   totalQuestions: number;
 }
 
+export interface ExamResultsQuery {
+  from?: string;
+  to?: string;
+  department?: string;
+  trainerId?: string;
+  courseId?: string;
+  examId?: string;
+  status?: 'all' | 'passed' | 'failed';
+  search?: string;
+  sort?: 'newest' | 'oldest' | 'highest' | 'lowest';
+}
+
 const extractData = (res: any) => {
   if (res && res.data && typeof res.data === 'object' && 'success' in res.data) {
     return res.data.data;
@@ -101,7 +113,6 @@ export const examsApi = {
 
   saveAnswer: async (attemptId: string, questionId: string, selectedAnswers: number[]) => {
     const payload = { attemptId, questionId, selectedAnswers };
-    console.log('[saveAnswer] payload:', JSON.stringify(payload));
     try {
       const res = await apiClient.patch<any>('/exams/attempt/save-answer', payload);
       return extractData(res);
@@ -113,7 +124,6 @@ export const examsApi = {
 
   submitAttempt: async (attemptId: string) => {
     const payload = { attemptId };
-    console.log('[submitAttempt] payload:', JSON.stringify(payload));
     try {
       const res = await apiClient.post<any>('/exams/attempt/submit', payload);
       return extractData(res);
@@ -136,6 +146,21 @@ export const examsApi = {
 
   verifyAttempt: async (attemptId: string) => {
     const res = await apiClient.get<any>(`/exams/attempt/${attemptId}/verify`);
+    return extractData(res);
+  },
+
+  getResultsAnalytics: async (params?: ExamResultsQuery) => {
+    const res = await apiClient.get<any>('/exams/results/analytics', { params });
+    return extractData(res);
+  },
+
+  getAttemptResultDetails: async (attemptId: string) => {
+    const res = await apiClient.get<any>(`/exams/results/${attemptId}`);
+    return extractData(res);
+  },
+
+  exportResultsCsv: async (params?: ExamResultsQuery) => {
+    const res = await apiClient.get<any>('/exams/results/export/csv', { params });
     return extractData(res);
   },
 };

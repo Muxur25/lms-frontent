@@ -18,6 +18,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const Dashboard = () => {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center">
@@ -27,7 +30,7 @@ const Dashboard = () => {
       <p className="text-slate-400 mb-8">Welcome back, {user?.firstName || 'Enterprise User'}!</p>
       
       <button 
-        onClick={logout}
+        onClick={handleLogout}
         className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-xl transition-colors border border-slate-700"
       >
         Tizimdan chiqish (Logout)

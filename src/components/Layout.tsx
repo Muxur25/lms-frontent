@@ -8,7 +8,7 @@ import {
   Settings, ShieldCheck, ChevronLeft, ChevronRight,
   Search, Menu, Command, Building2, Sun, Moon,
   ChevronDown, LogOut, User, HelpCircle, Plus,
-  Home, Layers,
+  Home, Layers, Trophy
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore } from '@/store/notification.store';
@@ -44,6 +44,7 @@ const NAV = [
       { id: 'mylearning',     icon: GraduationCap,   label: 'nav.myLearning',     badge: '3'  },
       { id: 'assessments',    icon: ClipboardCheck,  label: 'nav.assessments',    badge: '5'  },
       { id: 'certifications', icon: Award,           label: 'nav.certifications', badge: null },
+      { id: 'leaderboard',    icon: Trophy,          label: 'nav.leaderboard',    badge: null },
     ],
   },
   {
@@ -85,8 +86,8 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
   const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
   const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/auth/login');
   };
 
@@ -248,8 +249,8 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
   const shortName = user?.firstName ? `${user.firstName} ${user.lastName?.[0] || ''}.` : fullName;
   const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setProfileOpen(false);
     navigate('/auth/login');
   };
@@ -261,6 +262,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
     dashboard: t('nav.dashboard'), courses: t('nav.courses'),
     mylearning: t('nav.myLearning'), analytics: t('nav.analytics'),
     assessments: t('nav.assessments'), certifications: t('nav.certifications'),
+    leaderboard: t('nav.leaderboard'),
     schedule: t('nav.schedule'), settings: t('nav.settings'),
     notifications: t('nav.notifications'), admin: t('nav.admin'),
     ai: t('nav.ai'), webinars: t('nav.webinars'),

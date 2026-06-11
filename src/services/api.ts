@@ -2,6 +2,15 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
+const clearStoredAuth = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('lms_user');
+  localStorage.removeItem('impersonation_mode');
+};
+
+const extractAuthPayload = (response: any) => response?.data?.data || response?.data || response;
+
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // important for cookies/refresh tokens
@@ -37,15 +46,20 @@ api.interceptors.response.use(
       try {
         const refresh_token = localStorage.getItem('refresh_token');
         if (refresh_token) {
-          const { data } = await axios.post(`${API_URL}/auth/refresh`, { refresh_token });
-          localStorage.setItem('access_token', data.data.accessToken);
+          const response = await axios.post(`${API_URL}/auth/refresh`, {
+            refreshToken: refresh_token,
+          });
+          const authPayload = extractAuthPayload(response);
+          localStorage.setItem('access_token', authPayload.accessToken);
+          localStorage.setItem('refresh_token', authPayload.refreshToken);
+          if (authPayload.user) {
+            localStorage.setItem('lms_user', JSON.stringify(authPayload.user));
+          }
           return api(originalRequest);
         }
       } catch (err) {
-        // Refresh failed, logout user
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        clearStoredAuth();
+        window.location.href = '/auth/login';
       }
     }
     

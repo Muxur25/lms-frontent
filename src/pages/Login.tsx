@@ -32,6 +32,8 @@ type Lang = 'uz' | 'ru';
 type LoginMode = 'username' | 'employee';
 type ThemeMode = 'dark' | 'light';
 
+const getAuthPayload = (response: any) => response?.data || response;
+
 export default function Login() {
   const navigate = useNavigate();
   const loginAction = useAuthStore((state) => state.login);
@@ -60,7 +62,7 @@ export default function Login() {
   const handleLangChange = (l: Lang) => { setLang(l); i18n.changeLanguage(l); };
 
   const credentialPlaceholder = useMemo(
-    () => (mode === 'username' ? 'husan_rustamov' : 'AGMK-0004'),
+    () => (mode === 'username' ? 'muxurga1' : '1608'),
     [mode],
   );
 
@@ -94,15 +96,20 @@ export default function Login() {
           throw requestError;
         });
 
-      if (response.data?.maxDevicesReached || response.maxDevicesReached) {
-        setMaxDevices(true, response.data?.devices || response.devices || []);
+      const authPayload = getAuthPayload(response);
+
+      if (authPayload?.maxDevicesReached || response.maxDevicesReached) {
+        setMaxDevices(true, authPayload?.devices || response.devices || []);
         return;
       }
 
-      if (response.success || response.data) {
-        loginAction(response.data.user, response.data.accessToken, response.data.refreshToken);
+      if (authPayload?.user && authPayload?.accessToken && authPayload?.refreshToken) {
+        loginAction(authPayload.user, authPayload.accessToken, authPayload.refreshToken);
         navigate('/dashboard');
+        return;
       }
+
+      setError(t('login.error'));
     } catch {
       setError(t('login.error'));
     } finally {
@@ -588,6 +595,43 @@ export default function Login() {
           cursor: pointer;
         }
         .auth-light .auth-sso button { background: rgba(7,17,31,.045); }
+        .auth-switch {
+          margin-top: 16px;
+          padding: 14px;
+          border-radius: 18px;
+          border: 1px solid var(--auth-border);
+          background: rgba(255,255,255,.045);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .auth-light .auth-switch { background: rgba(7,17,31,.045); }
+        .auth-switch span {
+          color: var(--auth-muted);
+          font-size: 13px;
+          font-weight: 750;
+        }
+        .auth-switch button {
+          min-height: 40px;
+          border-radius: 13px;
+          border: 1px solid rgba(124,245,255,.34);
+          background: rgba(124,245,255,.1);
+          color: var(--auth-text);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 0 14px;
+          font-size: 13px;
+          font-weight: 950;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .auth-light .auth-switch button {
+          color: #07111f;
+          background: rgba(7,17,31,.055);
+        }
         .auth-security-list {
           margin-top: 20px;
           display: grid;
@@ -681,6 +725,8 @@ export default function Login() {
           .auth-toolbar, .auth-row { align-items: flex-start; flex-direction: column; }
           .auth-lang, .auth-theme, .auth-row .auth-link { width: 100%; }
           .auth-lang button, .auth-theme button { flex: 1; }
+          .auth-switch { align-items: stretch; flex-direction: column; }
+          .auth-switch button { width: 100%; }
         }
       `}</style>
 
@@ -882,6 +928,14 @@ export default function Login() {
                   <Building2 size={17} />
                   {t('login.sso')}
                   <ChevronRight size={16} />
+                </button>
+              </div>
+
+              <div className="auth-switch">
+                <span>{t('auth.noAccount')}</span>
+                <button type="button" onClick={() => navigate('/auth/register')}>
+                  {t('auth.registerBtn')}
+                  <ArrowRight size={16} />
                 </button>
               </div>
             </form>

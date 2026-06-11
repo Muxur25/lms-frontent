@@ -7,6 +7,7 @@
     "analytics": "Tahlil",
     "assessments": "Testlar",
     "certifications": "Sertifikatlar",
+    "leaderboard": "Reyting",
     "schedule": "Jadval",
     "settings": "Sozlamalar",
     "ai": "AI Assistant",
@@ -16,7 +17,8 @@
     "admin": "Boshqaruv",
     "main": "ASOSIY",
     "tools": "VOSITALAR",
-    "system": "TIZIM"
+    "system": "TIZIM",
+    "executive": "Executive BI"
   },
   "schedule": {
     "title": "Shaxsiy Jadval",
@@ -24,6 +26,48 @@
     "todayEvents": "Bugungi tadbirlar",
     "calendarWidget": "Kalendar vizualizatsiyasi",
     "calendarPlaceholder": "Mini Kalendar vidjeti bu yerda bo'ladi"
+  },
+  "leaderboard": {
+    "kicker": "AGMK bilim reytingi",
+    "title": "Peshqadamlar reytingi",
+    "subtitle": "Kurslar, imtihonlar va sertifikatlar bo'yicha real ballar asosida shakllangan reyting.",
+    "myPosition": "Mening natijam",
+    "totalPoints": "jami ball",
+    "rankings": "Reyting",
+    "myHistory": "Tarix",
+    "period": "Davr",
+    "refresh": "Yangilash",
+    "retry": "Qayta urinish",
+    "loading": "Reyting yuklanmoqda...",
+    "historyLoading": "Tarix yuklanmoqda...",
+    "topThree": "Top 3",
+    "participants": "Ishtirokchilar",
+    "participantsSub": "Ball, bo'lim va yulduz darajasi bo'yicha tartiblangan ro'yxat",
+    "pointsHistory": "Ballar tarixi",
+    "historySub": "Oxirgi ball berilgan amallar",
+    "emptyTitle": "Reyting hali shakllanmagan",
+    "emptyText": "Kurs yoki imtihon yakunlanganda ballar shu yerda ko'rinadi.",
+    "historyEmptyTitle": "Tarix bo'sh",
+    "historyEmptyText": "Sizda hozircha ballar tarixi yo'q.",
+    "filters": {
+      "all_time": "Umumiy",
+      "month": "Oy",
+      "week": "Hafta",
+      "today": "Bugun"
+    },
+    "stats": {
+      "participants": "Ishtirokchilar",
+      "periodPoints": "Davrdagi ball",
+      "myStars": "Mening darajam",
+      "period": "Davr"
+    },
+    "sources": {
+      "VIDEO_COMPLETED": "Video yakunlandi",
+      "EXAM_PASSED": "Imtihon topshirildi",
+      "ASSIGNMENT_APPROVED": "Topshiriq tasdiqlandi",
+      "COURSE_COMPLETED": "Kurs yakunlandi",
+      "CERTIFICATE_EARNED": "Sertifikat olindi"
+    }
   },
   "notifications": {
     "title": "Bildirishnomalar",
@@ -140,6 +184,7 @@
     "errLessons": "Darslar soni 0 dan katta bo'lishi shart",
     "errDuration": "Davomiyligi kiritilishi shart"
   },
+  "courses": {
     "title": "Kurslar katalogi",
     "search": "Kurs qidirish...",
     "filter": "Filter",
@@ -251,6 +296,7 @@
     "noNotif": "Yangi bildirishnomalar yo'q",
     "collapse": "Yig'ish"
   },
+  "webinars": {
     "title": "Jonli Vebinarlar",
     "subtitle": "Mutaxassislar bilan jonli darslar va brifinglar",
     "create": "Yangi vebinar yaratish",
@@ -308,6 +354,7 @@
     "errorsPassword": "Parollar mos emas yoki 6 belgidan qisqa.",
     "errorsJshshir": "JShShIR 14 ta raqamdan iborat bo'lishi kerak."
   },
+  "login": {
     "eyebrow": "Enterprise AI LMS",
     "headline": "Xavfsiz korporativ ta'lim markaziga kirish",
     "subline": "AI yordamchi, real-vaqt analytics, imtihonlar va sertifikatlash tizimiga yagona enterprise login orqali ulaning.",
@@ -332,6 +379,7 @@
     "panelText": "Platforma sessiya xavfsizligi, qurilma holati va kirish risklarini real vaqtda kuzatadi.",
     "quote": "Har bir xodim uchun ta'lim, imtihon va sertifikat jarayoni bitta himoyalangan tizimda."
   },
+  "auth": {
     "login": "Tizimga kirish",
     "register": "Ro'yxatdan o'tish",
     "email": "Elektron pochta",
@@ -422,7 +470,98 @@
     "employees": "Xodimlar",
     "courses": "Kurslar",
     "performance": "Samaradorlik",
-    "export": "Eksport"
+    "export": "Eksport",
+    "results": {
+      "title": "Imtihon natijalari",
+      "subtitle": "Natijalar, o'tish/yiqilish monitoringi, trainer va bo'lim statistikasi.",
+      "loadError": "Imtihon natijalarini yuklashda xatolik yuz berdi.",
+      "empty": "Natijalar topilmadi.",
+      "kpi": {
+        "totalAttempts": "Jami urinishlar",
+        "passed": "O'tganlar",
+        "failed": "Yiqilganlar",
+        "averageScore": "O'rtacha ball",
+        "averageDuration": "O'rtacha vaqt",
+        "certificates": "Sertifikatlar"
+      },
+      "hints": {
+        "submittedAttempts": "Yakunlangan urinishlar",
+        "passRate": "{{value}}% o'tish darajasi",
+        "failRate": "{{value}}% yiqilish darajasi",
+        "averageScore": "O'rtacha natija",
+        "completionTime": "Yakunlash vaqti",
+        "eligibleAttempts": "Sertifikatga mos urinishlar"
+      },
+      "scope": {
+        "passRate": "O'tish darajasi",
+        "averageScore": "O'rtacha ball",
+        "certificates": "Sertifikatlar"
+      },
+      "actions": {
+        "csvExport": "CSV eksport",
+        "clear": "Tozalash",
+        "detail": "Batafsil"
+      },
+      "filters": {
+        "title": "Natijalarni filtrlash",
+        "search": "Qidirish...",
+        "department": "Bo'lim",
+        "trainer": "Trainer",
+        "exam": "Imtihon",
+        "sort": "Saralash"
+      },
+      "status": {
+        "passed": "O'tdi",
+        "failed": "Yiqildi"
+      },
+      "sort": {
+        "newest": "Eng yangi",
+        "oldest": "Eng eski",
+        "highest": "Eng yuqori",
+        "lowest": "Eng past"
+      },
+      "charts": {
+        "scoreDistribution": "Ball taqsimoti",
+        "scoreDistributionSub": "Ball diapazonlari bo'yicha urinishlar",
+        "passFail": "O'tdi / yiqildi",
+        "passFailSub": "Monitoring hisoblagichlari"
+      },
+      "sections": {
+        "departmentLeaderboard": "Bo'limlar reytingi",
+        "trainerAnalytics": "Trainer tahlili",
+        "resultsTable": "Natijalar jadvali",
+        "resultsTableSub": "Xodim, imtihon, ball, urinish va sertifikatga moslik.",
+        "topPerformers": "Eng yaxshi natijalar",
+        "questionAnalytics": "Savollar tahlili"
+      },
+      "table": {
+        "employee": "Xodim",
+        "exam": "Imtihon",
+        "score": "Ball",
+        "status": "Holat",
+        "attempt": "Urinish",
+        "completed": "Yakunlangan",
+        "duration": "Davomiylik"
+      },
+      "metrics": {
+        "avgPercent": "{{value}}% o'rtacha",
+        "passPercent": "{{value}}% o'tish",
+        "passAttempts": "{{passRate}}% o'tish / {{attempts}} urinish",
+        "trainerSummary": "{{exams}} imtihon / {{attempts}} urinish / {{average}}% o'rtacha",
+        "questionAttempts": "{{exam}} / {{attempts}} urinish"
+      },
+      "question": {
+        "success": "Muvaffaqiyat",
+        "failed": "Xato",
+        "skipped": "O'tkazib yuborilgan",
+        "empty": "Savol analitikasi hali yo'q."
+      },
+      "details": {
+        "title": "Urinish tafsilotlari",
+        "selectedAnswer": "Tanlangan javob",
+        "correctAnswer": "To'g'ri javob"
+      }
+    }
   },
   "verify": {
     "navBack": "Bosh sahifa",
@@ -449,9 +588,11 @@
     "rights": "© 2026 AGMK LMS Platform. Barcha huquqlar himoyalangan.",
     "subtext": "Uzbek va Russian interfeys, enterprise xavfsizlik va AI."
   },
-    "title": "Mening Sertifikatlarim",
-    "subtitle": "Enterprise sertifikatlash platformasi",
-    "download": "Yuklab olish / Chop etish",
+  "certifications": {
+    "title": "Sertifikat Boshqaruvi",
+    "subtitle": "QR tekshiruvi, analitika va shablon boshqaruvi bilan enterprise sertifikatlash platformasi.",
+    "eyebrow": "Sertifikatlash Markazi",
+    "download": "Yuklab olish",
     "verify": "Tekshirish",
     "issued": "Berilgan sana",
     "expires": "Amal qiladi",
@@ -460,7 +601,107 @@
     "active": "Faol",
     "expiring": "Tugayapti",
     "expired": "Muddati o'tgan",
-    "noData": "Sertifikatlar topilmadi"
+    "noData": "Sertifikatlar topilmadi",
+    "loading": "Sertifikatlar yuklanmoqda...",
+    "searchPlaceholder": "Nomi yoki ID bo'yicha qidiring...",
+    "noCertsTitle": "Sertifikatlar topilmadi",
+    "noCertsDesc": "Sertifikat olish uchun imtihon topshiring",
+    "filter": {
+      "all": "Barchasi",
+      "active": "Faol",
+      "expiring_soon": "Tugayapti",
+      "expired": "Muddati o'tgan"
+    },
+    "tabs": {
+      "my": "Mening Sertifikatlarim",
+      "verification": "Tekshirish Markazi",
+      "analytics": "Analitika",
+      "templates": "Shablonlar",
+      "expiration": "Muddatlar",
+      "revoked": "Bekor qilingan",
+      "history": "Yuklash tarixi"
+    },
+    "statusMap": {
+      "active": "Faol",
+      "expiring_soon": "Tugayapti",
+      "expired": "Muddati o'tgan",
+      "revoked": "Bekor qilingan"
+    },
+    "card": {
+      "issued": "Berilgan",
+      "expires": "Amal qiladi",
+      "download": "Yuklab olish",
+      "view": "Ko'rish"
+    },
+    "pdf": {
+      "certTitle": "SERTIFIKAT",
+      "sub": "KVALIFIKATSIYANI TASDIQLASH",
+      "holderLabel": "Ushbu sertifikat egasi",
+      "desc": "\"{{title}}\" yo'nalishi bo'yicha imtihondan muvaffaqiyatli o'tib, {{score}}% natija ko'rsatgani tasdiqlanadi.",
+      "completed": "MUVAFFAQIYATLI YAKUNLANGAN",
+      "issued": "Berilgan sana",
+      "authorizer": "Tasdiqlovchi",
+      "expires": "Amal qiladi",
+      "unlimited": "Muddatsiz",
+      "verify": "TEKSHIRISH"
+    },
+    "verification": {
+      "title": "Tekshirish Markazi",
+      "sub": "Darhol tekshirish uchun sertifikat ID yoki UUID kiriting",
+      "placeholder": "AGMK-26-0001 yoki UUID...",
+      "btn": "Tekshirish",
+      "hint": "Avtomatik tekshirish uchun sertifikatdagi QR kodni skaner qiling",
+      "error": "Sertifikatni tekshirishda xato yuz berdi",
+      "valid": "✓ HAQIQIY",
+      "invalid": "✗ HAQIQIY EMAS",
+      "status": "Holat: {{status}}",
+      "revokeReason": "Bekor qilish sababi: {{reason}}",
+      "revokeReasonLabel": "Bekor qilish sababi: ",
+      "holder": "Egasi",
+      "course": "Kurs",
+      "score": "Natija",
+      "issued": "Berilgan",
+      "expires": "Amal qiladi"
+    },
+    "analytics": {
+      "total": "Jami",
+      "active": "Faol",
+      "expiring": "Tugayapti",
+      "expired": "Muddati o'tgan",
+      "revoked": "Bekor qilingan",
+      "avgScore": "O'rtacha ball",
+      "trend": "Oylik trend",
+      "category": "Kategoriya bo'yicha",
+      "department": "Bo'limlar bo'yicha"
+    },
+    "templates": {
+      "loading": "Shablonlar yuklanmoqda...",
+      "default": "Default"
+    },
+    "expiration": {
+      "soon": "Tez orada tugaydi ({{count}})",
+      "expired": "Muddati o'tganlar ({{count}})",
+      "noSoon": "Tugayotgan sertifikatlar yo'q",
+      "noExpired": "Muddati o'tgan sertifikatlar yo'q",
+      "days": "{{days}} kun",
+      "expiredLabel": "Tugagan"
+    },
+    "revoked": {
+      "warning": "Bekor qilingan sertifikatlar tekshiruv sahifasida HAQIQIY EMAS ko'rinishida ko'rsatiladi.",
+      "noData": "Bekor qilingan sertifikatlar yo'q",
+      "reason": "Sabab: {{reason}}",
+      "restore": "Qaytarish"
+    },
+    "history": {
+      "noData": "Tarix bo'sh",
+      "desc": "Sertifikat amallari bu yerda ko'rinadi",
+      "actions": {
+        "download": "Yuklab olindi",
+        "print": "Chop etildi",
+        "share": "Ulashildi",
+        "view": "Ko'rildi"
+      }
+    }
   },
   "exams": {
     "title": "Testlar",

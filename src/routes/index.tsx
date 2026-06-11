@@ -23,6 +23,7 @@ const Library = lazy(() => import('@/pages/Library'));
 const Schedule = lazy(() => import('@/pages/Schedule'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
 const Settings = lazy(() => import('@/pages/Settings'));
+const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
       { path: 'webinars', element: <Suspense fallback={<PageLoader />}><Webinars /></Suspense> },
       { path: 'library', element: <Suspense fallback={<PageLoader />}><Library /></Suspense> },
       { path: 'schedule', element: <Suspense fallback={<PageLoader />}><Schedule /></Suspense> },
+      { path: 'leaderboard', element: <Suspense fallback={<PageLoader />}><Leaderboard /></Suspense> },
       { path: 'notifications', element: <Suspense fallback={<PageLoader />}><Notifications /></Suspense> },
       { path: 'settings', element: <Suspense fallback={<PageLoader />}><Settings /></Suspense> },
       // Catch all 404 inside layout

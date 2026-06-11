@@ -1,9 +1,12 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const extractAuthPayload = (response: any) => response?.data?.data || response?.data || response;
+
 // Create a configured Axios instance for enterprise API calls
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -30,16 +33,29 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 401 Unauthorized globally — only logout if not already retried
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      // Clear stale credentials and let ProtectedRoute handle redirect
-      const { logout } = useAuthStore.getState();
-      logout();
+      try {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await axios.post(`${API_URL}/auth/refresh`, {
+            refreshToken,
+          });
+          const authPayload = extractAuthPayload(response);
+          if (authPayload?.accessToken && authPayload?.refreshToken) {
+            const { login, user } = useAuthStore.getState();
+            login(authPayload.user || user, authPayload.accessToken, authPayload.refreshToken);
+            originalRequest.headers.Authorization = `Bearer ${authPayload.accessToken}`;
+            return apiClient(originalRequest);
+          }
+        }
+      } catch {
+        // Continue with local logout below.
+      }
 
-      // Do NOT reject with error here — just silently logout.
-      // ProtectedRoute will redirect to /auth/login automatically.
+      const { clearAuth } = useAuthStore.getState();
+      clearAuth();
       return Promise.reject(error);
     }
 
