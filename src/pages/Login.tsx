@@ -62,8 +62,8 @@ export default function Login() {
   const handleLangChange = (l: Lang) => { setLang(l); i18n.changeLanguage(l); };
 
   const credentialPlaceholder = useMemo(
-    () => (mode === 'username' ? 'muxurga1' : '1608'),
-    [mode],
+    () => (mode === 'username' ? t('login.username') : t('login.employee')),
+    [mode, t],
   );
 
 

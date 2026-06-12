@@ -17,8 +17,8 @@ export interface AiTopic {
 const unwrap = (r: any): any => r.data?.data ?? r.data;
 
 export const aiApi = {
-  getRecommendations: (): Promise<{ recommendations: AiRecommendation[]; source: 'ai' | 'mock' }> =>
+  getRecommendations: (): Promise<{ recommendations: AiRecommendation[]; source: 'ai' }> =>
     apiClient.get('/ai/recommendations').then(unwrap),
-  getTopicAnalysis: (): Promise<{ topics: AiTopic[]; source: 'ai' | 'mock' }> =>
+  getTopicAnalysis: (): Promise<{ topics: AiTopic[]; source: 'ai' }> =>
     apiClient.get('/ai/topic-analysis').then(unwrap),
 };

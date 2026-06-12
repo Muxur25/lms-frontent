@@ -18,10 +18,7 @@ import { customConfirm } from '@/shared/lib/toast-utils';
 
 type Tab = 'overview' | 'users' | 'courses' | 'analytics' | 'settings' | 'monitoring';
 
-const areaData = [
-  { name: 'Yan', users: 400 }, { name: 'Fev', users: 300 }, { name: 'Mar', users: 550 },
-  { name: 'Apr', users: 480 }, { name: 'May', users: 700 }, { name: 'Iyn', users: 650 },
-];
+const areaData: any[] = [];
 
 const roleLabels: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -33,43 +30,11 @@ const roleLabels: Record<string, string> = {
   department_manager: 'Rahbar',
 };
 
-const MOCK_ADMIN_COURSES = [
-  { id: '1', title: 'Sanoat Xavfsizligi Asoslari', cat: 'Xavfsizlik', level: "Boshlang'ich", enrolled: 245, lessons: 18, duration: '12 soat', rating: 4.9, status: 'active', color: '#ef4444', instructor: 'B. Rahimov' },
-  { id: '2', title: 'React va TypeScript', cat: 'IT', level: "O'rta", enrolled: 189, lessons: 32, duration: '24 soat', rating: 4.8, status: 'active', color: '#3b82f6', instructor: 'A. Toshev' },
-  { id: '3', title: 'Menejment va Liderlik', cat: 'Boshqaruv', level: 'Yuqori', enrolled: 156, lessons: 24, duration: '16 soat', rating: 4.7, status: 'active', color: '#8b5cf6', instructor: 'N. Karimova' },
-];
-
-const MOCK_ADMIN_EXAMS = [
-  { id: '1', title: 'Sanoat Xavfsizligi', passing: 75, duration: 60, questionsCount: 40, status: 'active', color: '#ef4444' },
-  { id: '2', title: 'React TypeScript Pro', passing: 80, duration: 90, questionsCount: 60, status: 'active', color: '#3b82f6' },
-  { id: '3', title: 'Menejment Asoslari', passing: 70, duration: 45, questionsCount: 30, status: 'active', color: '#8b5cf6' },
-];
-
-const MOCK_KPIS = [
-  { label: "Jami o'quvchilar", value: '1,284', change: '+8.4%', up: true, color: '#3b82f6' },
-  { label: 'Kurslar yakunladi', value: '790', change: '+12.1%', up: true, color: '#22c55e' },
-  { label: 'Sertifikatlar', value: '342', change: '+5.7%', up: true, color: '#f59e0b' },
-  { label: "O'rtacha soat", value: '34.2', change: '-2.3%', up: false, color: '#8b5cf6' },
-];
-
-const MOCK_MONTHLY_DATA = [
-  { m: 'Yan', users: 820, completions: 340, hours: 2100 },
-  { m: 'Fev', users: 890, completions: 420, hours: 2480 },
-  { m: 'Mar', users: 960, completions: 510, hours: 2850 },
-  { m: 'Apr', users: 1020, completions: 580, hours: 3100 },
-  { m: 'May', users: 1100, completions: 640, hours: 3400 },
-  { m: 'Iyn', users: 1180, completions: 710, hours: 3800 },
-  { m: 'Iyl', users: 1284, completions: 790, hours: 4200 },
-];
-
-const MOCK_DEPT_DATA = [
-  { dept: 'IT', score: 87, enrolled: 145, completed: 112 },
-  { dept: 'HR', score: 74, enrolled: 98, completed: 68 },
-  { dept: 'Moliya', score: 91, enrolled: 87, completed: 79 },
-  { dept: 'Muhandis', score: 68, enrolled: 234, completed: 142 },
-  { dept: 'Xavfsizlik', score: 82, enrolled: 312, completed: 258 },
-  { dept: 'Boshqaruv', score: 79, enrolled: 56, completed: 44 },
-];
+const MOCK_ADMIN_COURSES: any[] = [];
+const MOCK_ADMIN_EXAMS: any[] = [];
+const MOCK_KPIS: any[] = [];
+const MOCK_MONTHLY_DATA: any[] = [];
+const MOCK_DEPT_DATA: any[] = [];
 
 export default function AdminPage() {
   const { user: currentUser } = useAuthStore();

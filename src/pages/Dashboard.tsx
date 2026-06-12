@@ -17,48 +17,14 @@ import { apiClient } from '@/api/axios';
 import { aiApi } from '@/api/ai.api';
 
 /* ── Data ─────────────────────────────────────── */
-const areaData = [
-  { m: 'Yan', h: 12 }, { m: 'Fev', h: 18 }, { m: 'Mar', h: 14 },
-  { m: 'Apr', h: 22 }, { m: 'May', h: 28 }, { m: 'Iyn', h: 24 },
-  { m: 'Iyl', h: 34 },
-];
-const pieData = [
-  { name: 'Yakunlagan', value: 45, color: 'var(--green-500)' },
-  { name: 'Jarayonda', value: 30, color: 'var(--blue-500)' },
-  { name: 'Boshlamagan', value: 25, color: 'var(--border-3)' },
-];
-const barData = [
-  { d: 'IT', v: 87 }, { d: 'HR', v: 74 }, { d: 'Mol', v: 91 },
-  { d: 'Muh', v: 68 }, { d: 'Xav', v: 82 },
-];
-const MOCK_COURSES = [
-  { id: '1', title: 'React va TypeScript', cat: 'IT', prog: 68, lessons: 32, color: '#3b82f6', instructor: 'A.Toshev', left: '4 soat' },
-  { id: '2', title: 'Sanoat Xavfsizligi', cat: 'Xavfsizlik', prog: 34, lessons: 18, color: '#ef4444', instructor: 'B.Rahimov', left: '8 soat' },
-  { id: '3', title: 'Menejment Asoslari', cat: 'Boshqaruv', prog: 85, lessons: 24, color: '#8b5cf6', instructor: 'N.Karimova', left: '1 soat' },
-];
-const events = [
-  { type: 'webinar', title: 'React 2026 Yangiliklari', date: '24 May', time: '14:00', color: '#3b82f6', icon: Video },
-  { type: 'exam', title: 'Xavfsizlik sertifikati', date: '26 May', time: '10:00', color: '#f59e0b', icon: FileText },
-  { type: 'deadline', title: 'ISO 9001 kursini tugating', date: '28 May', time: '23:59', color: '#ef4444', icon: Clock },
-];
-const MOCK_LEADERS = [
-  { name: 'Kamola Y.', dept: 'HR', pts: 2840, change: 'up', rank: 1 },
-  { name: 'Jahongir T.', dept: 'Muhandis', pts: 2710, change: 'up', rank: 2 },
-  { name: 'Alisher H.', dept: 'IT', pts: 2580, change: 'same', rank: 3 },
-  { name: 'Nargiza S.', dept: 'Boshqaruv', pts: 2450, change: 'down', rank: 4 },
-  { name: 'Dilnoza K.', dept: 'Moliya', pts: 2310, change: 'up', rank: 5 },
-];
-const MOCK_AI_RECS = [
-  { title: 'Docker va Kubernetes', reason: 'IT ko\'nikmalaringizga mos', color: '#3b82f6', match: 94 },
-  { title: 'Loyiha Boshqaruvi', reason: 'Karyerangizni rivojlantirish uchun', color: '#8b5cf6', match: 88 },
-  { title: 'Ma\'lumotlar Tahlili', reason: 'Eng ko\'p o\'qilayotgan kurs', color: '#06b6d4', match: 82 },
-];
-const MOCK_ACTIVITY = [
-  { color: '#22c55e', text: 'React Hooks darsini yakunladingiz', time: '10 daqiqa oldin', icon: CheckCircle },
-  { color: '#3b82f6', text: 'Sanoat Xavfsizligi kursiga yozildingiz', time: '2 soat oldin', icon: BookOpen },
-  { color: '#f59e0b', text: 'ISO 9001 sertifikati yangilandi', time: 'Kecha', icon: Award },
-  { color: '#8b5cf6', text: 'AI test natijasi: 94/100', time: '2 kun oldin', icon: Star },
-];
+const areaData: any[] = [];
+const pieData: any[] = [];
+const barData: any[] = [];
+const MOCK_COURSES: any[] = [];
+const events: any[] = [];
+const MOCK_LEADERS: any[] = [];
+const MOCK_AI_RECS: any[] = [];
+const MOCK_ACTIVITY: any[] = [];
 
 // Backend activity type -> icon/color mapping
 const ACTIVITY_STYLE: Record<string, { color: string; icon: any }> = {
@@ -246,7 +212,7 @@ export default function Dashboard() {
   const role = (user?.role || user?.roles?.[0] || 'employee') as EnterpriseRole;
   const dashboard = roleDashboards[role] || roleDashboards.employee;
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
-  const displayName = user?.firstName || user?.fullName?.split(' ')[0] || 'Alisher';
+  const displayName = user?.firstName || user?.fullName?.split(' ')[0] || 'Foydalanuvchi';
   const userSubtitle = `${user?.department || 'AGMK'} • ${user?.position || dashboard.subtitle} • ${user?.roleLabel || role}`;
   const isRu = i18n.language === 'ru';
 
@@ -570,12 +536,11 @@ export default function Dashboard() {
                 {l.rank}
               </div>
               <div className="avatar" style={{ width: 30, height: 30, fontSize: 10, background: `hsl(${200 + i * 25}, 70%, 45%)`, minWidth: 30 }}>
-                {l.name.split(' ').map(n => n[0]).join('')}
+                {String(l.name || '').split(' ').map((n: string) => n[0]).join('')}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {l.name}
-                  {l.name === 'Alisher H.' && <span style={{ fontSize: 9, background: '#3b82f620', color: '#3b82f6', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>SEN</span>}
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{l.dept}</div>
               </div>

@@ -16,6 +16,7 @@ import { aiApi } from '@/api/ai.api';
 import { useAuthStore } from '@/store/auth.store';
 import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
 import { PDFViewer } from '@/components/BookReader';
+import toast from 'react-hot-toast';
 
 export interface QuizQuestion {
   id: string;
@@ -690,6 +691,7 @@ export default function CoursePage() {
       }
     } catch (err) {
       console.error('Error uploading lesson file:', err);
+      toast.error('Fayl yuklashda xatolik yuz berdi');
     } finally {
       setUploadingLessons(prev => ({ ...prev, [key]: false }));
     }
@@ -899,7 +901,7 @@ export default function CoursePage() {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('visibility', 'public');
+    formData.append('visibility', 'authenticated');
     try {
       const res = await apiClient.post('/uploads/file', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -909,6 +911,7 @@ export default function CoursePage() {
       if (url) setDiscussionImageUrl(url);
     } catch (err) {
       console.error('Upload failed', err);
+      toast.error('Rasm yuklashda xatolik yuz berdi');
     }
   };
 
@@ -967,6 +970,7 @@ export default function CoursePage() {
       await apiClient.patch(`/courses/${course.id}`, { materials: updatedMaterials });
     } catch (err) {
       console.error(err);
+      toast.error('Material yuklashda xatolik yuz berdi');
     }
   };
   /* ── Render ─────────────────────────────────── */

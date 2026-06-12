@@ -317,7 +317,7 @@ export default function Settings() {
 
                 <div className="input-group">
                   <label className="input-label">{t('settings.email')}</label>
-                  <input type="email" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.email || 'admin@agmk.uz'} disabled />
+                  <input type="email" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.email || ''} disabled />
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{t('settings.emailNote')}</p>
                 </div>
 

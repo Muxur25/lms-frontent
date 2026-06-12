@@ -29,21 +29,8 @@ const formatExamDateTime = (value: string) =>
     minute: '2-digit',
   });
 
-const MOCK_AI_TOPICS = [
-  { t: 'TypeScript Generics', p: 65, c: '#f59e0b', status: 'weak' },
-  { t: 'React Performance', p: 72, c: '#f59e0b', status: 'moderate' },
-  { t: 'State Management', p: 78, c: '#3b82f6', status: 'moderate' },
-  { t: 'Hooks asoslari', p: 92, c: '#22c55e', status: 'strong' },
-  { t: 'TypeScript Types', p: 88, c: '#22c55e', status: 'strong' },
-];
-
-const MOCK_CERT_ROADMAP = [
-  { title: 'React Foundation', done: true, date: 'Mar 2026' },
-  { title: 'TypeScript Pro', done: true, date: 'Apr 2026' },
-  { title: 'React Advanced', done: false, date: 'Jun 2026', active: true },
-  { title: 'Full Stack', done: false, date: 'Aug 2026' },
-  { title: 'Architecture', done: false, date: 'Oct 2026' },
-];
+const MOCK_AI_TOPICS: any[] = [];
+const MOCK_CERT_ROADMAP: any[] = [];
 
 function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -328,8 +315,9 @@ export default function ExamPage() {
     if (activeAttempt && activeAttempt.status === 'in_progress') {
       const localAnswers: Record<number, number[]> = {};
       Object.entries(activeAttempt.answers).forEach(([key, val]) => {
-        const index = parseInt(key, 10);
-        if (!isNaN(index) && val) {
+        const questionIndex = questions.findIndex((question: any) => question.id === key);
+        const index = questionIndex >= 0 ? questionIndex : parseInt(key, 10);
+        if (!isNaN(index) && index >= 0 && val) {
           localAnswers[index] = val;
         }
       });
@@ -343,7 +331,7 @@ export default function ExamPage() {
         setTimeLeft(remainingSecs);
       }
     }
-  }, [activeAttempt, selectedExam]);
+  }, [activeAttempt, selectedExam, questions]);
 
   const getExamTitle = (testId: string) => {
     const exam = exams.find(e => e.id === testId);
@@ -364,12 +352,14 @@ export default function ExamPage() {
     }
 
     try {
-      const fullExam = Array.isArray(exam.questions) && exam.questions.length > 0
-        ? exam
-        : await examsApi.getById(exam.id);
-      setSelectedExam(fullExam || exam);
-      await startExam(exam.id, exam.hasPassword ? examPassword : undefined);
+      const session = await startExam(exam.id, exam.hasPassword ? examPassword : undefined);
+      setSelectedExam({
+        ...exam,
+        ...session.exam,
+        questions: session.questions || [],
+      });
       setCurrent(0);
+      setAnswers({});
       setFlagged(new Set());
       setView('exam');
     } catch (err: any) {
@@ -394,11 +384,13 @@ export default function ExamPage() {
       newAnswersForQuestion = [optIndex];
     }
 
+    const questionId = questions[qIndex]?.id;
     setAnswers(prev => ({ ...prev, [qIndex]: newAnswersForQuestion }));
-    saveAnswerLocally(qIndex.toString(), newAnswersForQuestion);
+    if (questionId) saveAnswerLocally(questionId, newAnswersForQuestion);
     if (activeAttempt) {
       try {
-        await examsApi.saveAnswer(activeAttempt.id, qIndex.toString(), newAnswersForQuestion);
+        if (!questionId) throw new Error('Question is not available');
+        await examsApi.saveAnswer(activeAttempt.id, questionId, newAnswersForQuestion);
       } catch (err) {
         console.error('Javobni saqlashda xatolik:', err);
       }
@@ -407,33 +399,8 @@ export default function ExamPage() {
 
   const handleSubmitExam = async () => {
     if (!activeAttempt) {
-      // Fallback
-      const questionsList = selectedExam?.questions || [];
-      let correct = 0, wrong = 0;
-      questionsList.forEach((q: any, index: number) => {
-        const ua = answers[index] || [];
-        const isCorrect = q.type === 'multiple' 
-          ? JSON.stringify(ua.sort()) === JSON.stringify((q.correctAnswers || []).sort())
-          : ua[0] === q.answer;
-        if (isCorrect) correct++;
-        else wrong++;
-      });
-      const total = questionsList.length;
-      const skipped = total - correct - wrong;
-      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-      setResult({
-        score, passing: selectedExam?.passing || 70, total, correct, wrong, skipped,
-        topics: [
-          { name: selectedExam?.title || 'Imtihon', score, color: score >= (selectedExam?.passing || 70) ? '#22c55e' : '#ef4444' },
-          { name: 'Nazariy qism', score: Math.min(Math.round(score * 0.95), 100), color: '#3b82f6' },
-          { name: 'Amaliy qism', score: Math.min(Math.round(score * 1.05), 100), color: '#8b5cf6' },
-        ],
-        attemptId: 'mock-' + Math.random().toString(36).substring(2, 10),
-        examTitle: selectedExam?.title || 'Imtihon',
-        examTitleRu: selectedExam?.titleRu || selectedExam?.title || 'Imtihon',
-        submittedAt: new Date().toISOString(),
-      });
-      setView('result');
+      toast.error('Faol imtihon sessiyasi topilmadi. Imtihonni qayta boshlang.');
+      setView('dashboard');
       return;
     }
 
@@ -464,13 +431,9 @@ export default function ExamPage() {
       useExamStore.setState({ activeAttempt: null });
       loadHistory();
     } catch (err: any) {
-      // Agar attempt allaqachon submitted bo'lsa (auto-submit) — result sahifasiga o'tish
-      const status = err.response?.status;
-      if (status === 404 || status === 400) {
-        setView('result');
-        return;
-      }
-      toast.error(`Imtihonni topshirishda xatolik: ${err.message || err}`);
+      const backendMessage = err.response?.data?.message;
+      const message = Array.isArray(backendMessage) ? backendMessage[0] : backendMessage;
+      toast.error(`Imtihonni topshirishda xatolik: ${message || err.message || err}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1501,6 +1464,10 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
 
   const handlePrint = () => {
     if (!score) return;
+    if (!score.attemptId || String(score.attemptId).startsWith('mock-')) {
+      alert('Sertifikat faqat server tasdiqlagan natija uchun chiqariladi.');
+      return;
+    }
     const printWindow = window.open('', '_blank', 'width=900,height=650');
     if (!printWindow) return;
 
@@ -1508,7 +1475,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
     const holderName = user ? (user.fullName || `${user.firstName} ${user.lastName}`) : 'Xodim';
     const examTitle = score.examTitle || 'Imtihon';
     const examTitleRu = score.examTitleRu || score.examTitle || 'Imtihon';
-    const certId = score.attemptId || 'mock-id';
+    const certId = score.attemptId;
     const certScore = score.score || 0;
     const submittedAt = score.submittedAt ? new Date(score.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 

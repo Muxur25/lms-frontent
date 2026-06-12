@@ -9,11 +9,11 @@ import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
 
-const MOCK: Webinar[] = [
+/* Disabled webinar fixture removed from runtime.
   { id: 'm1', title: 'Ochiq konlarni qazishda xavfsizlik', titleRu: 'Безопасность при открытой добыче', speaker: 'Alisher Rahimov', scheduledAt: new Date(Date.now() + 86400000).toISOString(), durationMinutes: 90, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1542621334-a254cf47733d?auto=format&fit=crop&q=80&w=800', joinCount: 120 },
   { id: 'm2', title: "Yangi uskunalar bilan ishlash bo'yicha brifing", titleRu: 'Брифинг по работе с новым оборудованием', speaker: 'Rustam Karimov', scheduledAt: new Date(Date.now() + 3 * 86400000).toISOString(), durationMinutes: 45, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=800', joinCount: 85 },
   { id: 'm3', title: 'Korporativ etika va menejment', titleRu: 'Корпоративная этика и менеджмент', speaker: "Nodira To'rayeva", scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(), durationMinutes: 60, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=800', joinCount: 250 },
-];
+*/
 
 function formatDate(iso: string | Date) {
   if (!iso) return '—';
@@ -37,7 +37,8 @@ const EMPTY_FORM = { title: '', titleRu: '', speaker: '', scheduledAt: '', durat
 
 export default function Webinars() {
   const [webinars, setWebinars] = useState<Webinar[]>([]);
-  const [, setUseMock] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -111,24 +112,29 @@ export default function Webinars() {
     });
 
   useEffect(() => {
+    setLoading(true);
+    setLoadError('');
     webinarsApi.getAll()
       .then((res: any) => {
         const data = Array.isArray(res) ? res : (res?.data ?? res);
-        if (Array.isArray(data) && data.length) setWebinars(data);
-        else { setWebinars(MOCK); setUseMock(true); }
+        setWebinars(Array.isArray(data) ? data : []);
       })
-      .catch(() => { setWebinars(MOCK); setUseMock(true); });
+      .catch((error) => {
+        setWebinars([]);
+        setLoadError(error?.response?.data?.message || 'Vebinarlarni yuklashda xatolik yuz berdi');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleRegister = async (w: Webinar) => {
-    const next = new Set(registered).add(w.id);
-    setRegistered(next);
-    localStorage.setItem('webinar_registered', JSON.stringify([...next]));
     try {
       const updated = await webinarsApi.join(w.id);
+      const next = new Set(registered).add(w.id);
+      setRegistered(next);
+      localStorage.setItem('webinar_registered', JSON.stringify([...next]));
       setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, joinCount: updated.joinCount } : x));
-    } catch {
-      setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, joinCount: x.joinCount + 1 } : x));
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Vebinarga yozilishda xatolik yuz berdi', { position: 'bottom-right' });
     }
   };
 
@@ -185,8 +191,9 @@ export default function Webinars() {
       const url = payload?.url || `${apiClient.defaults.baseURL}/uploads/download/${payload?.id}`;
       setForm(p => ({ ...p, imageUrl: url }));
       setImgPreview(URL.createObjectURL(file));
-    } catch (e) {
+    } catch (e: any) {
       console.error('Upload error:', e);
+      toast.error(e?.response?.data?.message || 'Rasm yuklashda xatolik yuz berdi', { position: 'bottom-right' });
     } finally {
       setUploading(false);
     }
@@ -204,11 +211,7 @@ export default function Webinars() {
         durationMinutes: Number(form.durationMinutes),
         scheduledAt: new Date(form.scheduledAt).toISOString(),
       });
-      setWebinars(prev => {
-        const filtered = prev.filter(w => !w.id.startsWith('m')); // mock larni olib tashlash
-        return [...filtered, created];
-      });
-      setUseMock(false);
+      setWebinars(prev => [...prev, created]);
       setShowModal(false);
       setImgPreview('');
       setForm(EMPTY_FORM);
@@ -362,6 +365,25 @@ export default function Webinars() {
         )}
       </div>
 
+      {loading && (
+        <div className="card" style={{ padding: 24, color: 'var(--text-secondary)' }}>
+          Vebinarlar yuklanmoqda...
+        </div>
+      )}
+
+      {!loading && loadError && (
+        <div className="card" style={{ padding: 24, borderColor: 'rgba(239,68,68,0.35)', color: 'var(--red-400)' }}>
+          {loadError}
+        </div>
+      )}
+
+      {!loading && !loadError && sortedWebinars.length === 0 && (
+        <div className="card" style={{ padding: 24, color: 'var(--text-secondary)' }}>
+          Hozircha rejalashtirilgan vebinarlar yo'q.
+        </div>
+      )}
+
+      {!loading && !loadError && sortedWebinars.length > 0 && (
       <div className="grid grid-3">
         {sortedWebinars.map(w => {
           const status = getStatus(w);
@@ -436,6 +458,7 @@ export default function Webinars() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

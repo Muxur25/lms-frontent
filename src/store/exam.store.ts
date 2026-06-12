@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { examsApi } from '../api/exams.api';
-import type { Exam, TestAttempt } from '../api/exams.api';
+import type { Exam, StartAttemptResponse, TestAttempt } from '../api/exams.api';
 
 interface ExamState {
   exams: Exam[];
@@ -12,7 +12,7 @@ interface ExamState {
   // Actions
   loadExams: () => Promise<void>;
   loadHistory: () => Promise<void>;
-  startExam: (testId: string, password?: string) => Promise<void>;
+  startExam: (testId: string, password?: string) => Promise<StartAttemptResponse>;
   saveAnswerLocally: (questionId: string, selectedAnswers: number[]) => void;
   syncAnswers: () => Promise<void>;
   submitExam: () => Promise<void>;
@@ -50,8 +50,9 @@ export const useExamStore = create<ExamState>((set, get) => ({
   startExam: async (testId: string, password?: string) => {
     set({ isLoading: true, error: null });
     try {
-      const attempt = await examsApi.startAttempt(testId, password);
-      set({ activeAttempt: attempt, isLoading: false });
+      const session = await examsApi.startAttempt(testId, password);
+      set({ activeAttempt: session.attempt, isLoading: false });
+      return session;
     } catch (error: any) {
       set({ error: error.response?.data?.message || error.message, isLoading: false });
       throw error;

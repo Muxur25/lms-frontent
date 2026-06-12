@@ -55,6 +55,12 @@ export interface TestAttempt {
   totalQuestions: number;
 }
 
+export interface StartAttemptResponse {
+  attempt: TestAttempt;
+  exam: Exam;
+  questions: TestQuestion[];
+}
+
 export interface ExamResultsQuery {
   from?: string;
   to?: string;
@@ -104,7 +110,7 @@ export const examsApi = {
   startAttempt: async (testId: string, password?: string) => {
     try {
       const res = await apiClient.post<any>('/exams/start', { testId, ...(password ? { password } : {}) });
-      return extractData(res);
+      return extractData(res) as StartAttemptResponse;
     } catch (err: any) {
       console.error('[startAttempt] ERROR details:', err.response?.data);
       throw err;

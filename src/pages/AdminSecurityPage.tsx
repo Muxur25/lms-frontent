@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, ShieldAlert, MonitorOff, UserX, AlertCircle } from 'lucide-react';
+import { Search, ShieldAlert, MonitorOff, AlertCircle } from 'lucide-react';
 import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
-import { useAuthStore } from '@/store/auth.store';
 
 export default function AdminSecurityPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const setImpersonationMode = useAuthStore(s => s.setImpersonationMode);
 
   useEffect(() => {
     fetchUsers();
@@ -35,23 +33,6 @@ export default function AdminSecurityPage() {
         toast.success('User has been forced logged out from all devices.');
       } catch (err) {
         toast.error('Failed to force logout');
-      }
-    });
-  };
-
-  const handleImpersonate = async (userId: string) => {
-    customConfirm('Warning: You are about to impersonate this user. All actions taken will be logged under your admin identity.', async () => {
-      try {
-        const res = await apiClient.post(`/admin/security/impersonate/${userId}`);
-        if (res.data?.success) {
-          toast.success('Impersonation started. This is a mock UI transition for now.');
-          setImpersonationMode(true);
-          // In a real app, the backend would return a new token here, and we'd call login() with the new token.
-        } else {
-          toast.error(res.data?.message || 'Forbidden');
-        }
-      } catch (err) {
-        toast.error('Failed to impersonate');
       }
     });
   };
@@ -135,12 +116,6 @@ export default function AdminSecurityPage() {
                           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors flex items-center gap-1.5 border border-amber-500/20"
                         >
                           <MonitorOff size={14} /> Force Logout
-                        </button>
-                        <button 
-                          onClick={() => handleImpersonate(user.id)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors flex items-center gap-1.5 border border-red-500/20"
-                        >
-                          <UserX size={14} /> Impersonate
                         </button>
                       </div>
                     </td>
