@@ -4,6 +4,7 @@ import { Sidebar, Topbar } from '@/components/Layout';
 import { useTranslation } from 'react-i18next';
 import { useSocket } from '@/hooks/useSocket';
 import { useUIStore } from '@/store/useUIStore';
+import { LevelUpModal } from '@/components/LevelUpModal';
 
 /**
  * Enterprise Application Layout
@@ -20,7 +21,9 @@ export default function AppLayout() {
   // Example of syncing local UI state with Router
   const location = useLocation();
   const navigate = useNavigate();
-  const activePage = location.pathname.split('/')[1] || 'dashboard';
+  const activePage = location.pathname.startsWith('/admin/security')
+    ? 'admin/security'
+    : location.pathname.split('/')[1] || 'dashboard';
 
   useEffect(() => {
     if (theme === 'system') {
@@ -73,7 +76,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <LevelUpModal />
     </div>
   );
 }
-

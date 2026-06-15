@@ -21,7 +21,10 @@ interface CertificateStore {
   templates: CertificateTemplate[];
   downloadHistory: any[];
   loading: boolean;
+  myCertsLoaded: boolean;
   analyticsLoading: boolean;
+  analyticsLoaded: boolean;
+  analyticsError: string | null;
   error: string | null;
 
   // Actions
@@ -43,16 +46,19 @@ export const useCertificateStore = create<CertificateStore>((set) => ({
   templates: [],
   downloadHistory: [],
   loading: false,
+  myCertsLoaded: false,
   analyticsLoading: false,
+  analyticsLoaded: false,
+  analyticsError: null,
   error: null,
 
   loadMyCerts: async () => {
     set({ loading: true, error: null });
     try {
       const certs = await getMyCertificates();
-      set({ myCerts: certs, loading: false });
+      set({ myCerts: certs, loading: false, myCertsLoaded: true });
     } catch (e: any) {
-      set({ loading: false, error: e?.response?.data?.message || 'Sertifikatlar yuklanmadi' });
+      set({ loading: false, myCertsLoaded: true, error: e?.response?.data?.message || 'Sertifikatlar yuklanmadi' });
     }
   },
 
@@ -67,12 +73,16 @@ export const useCertificateStore = create<CertificateStore>((set) => ({
   },
 
   loadAnalytics: async () => {
-    set({ analyticsLoading: true });
+    set({ analyticsLoading: true, analyticsError: null });
     try {
       const analytics = await getCertificateAnalytics();
-      set({ analytics, analyticsLoading: false });
-    } catch {
-      set({ analyticsLoading: false });
+      set({ analytics, analyticsLoading: false, analyticsLoaded: true });
+    } catch (e: any) {
+      set({
+        analyticsLoading: false,
+        analyticsLoaded: true,
+        analyticsError: e?.response?.data?.message || 'Sertifikat analitikasi yuklanmadi',
+      });
     }
   },
 
@@ -117,5 +127,5 @@ export const useCertificateStore = create<CertificateStore>((set) => ({
     }
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ error: null, analyticsError: null }),
 }));

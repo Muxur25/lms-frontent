@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,10 +16,12 @@ import { useAntiCheat } from '@/hooks/useAntiCheat';
 import { CreateExamWizard } from '@/components/exam/CreateExamWizard';
 import { examsApi } from '@/api/exams.api';
 import { aiApi } from '@/api/ai.api';
+import { gamificationApi } from '@/api/gamification.api';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
 
 type View = 'dashboard' | 'start' | 'exam' | 'result';
+type AiTopic = { t: string; p: number; c: string };
 
 const formatExamDateTime = (value: string) =>
   new Date(value).toLocaleString('uz-UZ', {
@@ -28,9 +31,6 @@ const formatExamDateTime = (value: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
-
-const MOCK_AI_TOPICS: any[] = [];
-const MOCK_CERT_ROADMAP: any[] = [];
 
 function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -56,12 +56,22 @@ function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: strin
   return <>{count}{suffix}</>;
 }
 
-function RadarChart({ topics }: { topics: typeof MOCK_AI_TOPICS }) {
+function RadarChart({ topics }: { topics: AiTopic[] }) {
   const size = 140;
   const cx = size / 2;
   const cy = size / 2;
   const r = 55;
   const n = topics.length;
+
+  if (n === 0) {
+    return (
+      <svg width={size} height={size} style={{ overflow: 'visible' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        <circle cx={cx} cy={cy} r={r * 0.62} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        <circle cx={cx} cy={cy} r="4" fill="rgba(139,92,246,0.7)" />
+      </svg>
+    );
+  }
 
   const getPoint = (i: number, ratio: number) => {
     const angle = (i * 2 * Math.PI) / n - Math.PI / 2;
@@ -95,6 +105,7 @@ function RadarChart({ topics }: { topics: typeof MOCK_AI_TOPICS }) {
 }
 
 export default function ExamPage() {
+  const { t, i18n } = useTranslation();
   const { 
     exams, 
     isLoading: loading, 
@@ -121,21 +132,22 @@ export default function ExamPage() {
   const [timeLeft, setTimeLeft] = useState(5400);
   const [result, setResult] = useState<any | null>(null);
   const [aiExpanded, setAiExpanded] = useState(true);
-  const [readiness] = useState(85);
-  const [streak] = useState(7);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [examPassword, setExamPassword] = useState('');
-  const [aiTopics, setAiTopics] = useState(MOCK_AI_TOPICS);
+  const [aiTopics, setAiTopics] = useState<AiTopic[]>([]);
   const [violationCount, setViolationCount] = useState(0);
   const [securityStatus, setSecurityStatus] = useState('NORMAL');
   const [showViolationWarning, setShowViolationWarning] = useState(false);
-  const [lastViolationType, setLastViolationType] = useState('');
+  const [lastViolationType, setLastViolationType] = useState<string | null>(null);
+  const [gamification, setGamification] = useState<any>(null);
+  const [showAllResults, setShowAllResults] = useState(false);
+  const [showAllPending, setShowAllPending] = useState(false);
 
   const handleEditExamClick = async (exam: any) => {
     const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
     if (isStarted && user?.role !== 'super_admin') {
-      toast.error("Imtihon boshlangan! Uni tahrirlash taqiqlanadi.", { position: 'top-center' });
+      toast.error(t('exam.toastStartedEdit'), { position: 'top-center' });
       return;
     }
     
@@ -147,52 +159,119 @@ export default function ExamPage() {
       setShowWizard(true);
     } catch (err: any) {
       toast.dismiss('edit-load');
-      toast.error("Ma'lumotlarni yuklashda xatolik yuz berdi.");
+      toast.error(t('exam.toastLoadErr'));
     }
   };
 
   const handleDeleteExamClick = (exam: any) => {
     const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
     if (isStarted && user?.role !== 'super_admin') {
-      toast.error("Imtihon boshlangan! Uni o'chirish taqiqlanadi.", { position: 'top-center' });
+      toast.error(t('exam.toastStartedDel'), { position: 'top-center' });
       return;
     }
 
     customConfirm(`"${exam.title}" imtihonini o'chirmoqchimisiz?`, async () => {
       try {
         await examsApi.delete(exam.id);
-        toast.success("Imtihon muvaffaqiyatli o'chirildi! 🗑️", { position: 'bottom-right' });
+        toast.success(t('exam.toastDelSuccess'), { position: 'bottom-right' });
         loadExams();
       } catch (err: any) {
-        toast.error(err.response?.data?.message || "Imtihonni o'chirishda xatolik yuz berdi");
+        toast.error(err.response?.data?.message || t('exam.toastDelErr'));
       }
     });
   };
 
-  // certRoadmap: passed imtihonlar = done, qolganlari = upcoming (birinchisi active)
-  const certRoadmap = useMemo<Array<{ title: string; done: boolean; date: string; active?: boolean }>>(() => {
-    if (!exams.length) return MOCK_CERT_ROADMAP;
+  const completedHistory = useMemo(() => history.filter(h => typeof h.score === 'number'), [history, t]);
+  const readiness = useMemo(() => {
+    if (completedHistory.length === 0) return 0;
+    const recent = completedHistory.slice(0, 5);
+    return Math.round(recent.reduce((sum, item) => sum + Number(item.score || 0), 0) / recent.length);
+  }, [completedHistory, t]);
+  const streak = gamification?.currentStreak ?? 0;
+
+  const aiRecommendations = useMemo(() => {
+    const weakTopics = aiTopics
+      .filter((topic) => Number(topic.p) < 70)
+      .slice(0, 2)
+      .map((topic) => ({
+        text: `${topic.t} ${t('exam.aiTipTopic')}`,
+        icon: Zap,
+        color: '#f59e0b',
+      }));
+    const nextExam = exams.find((exam) => !history.some((item) => item.testId === exam.id && item.passed));
+    const examTips = nextExam
+      ? [{
+          text: `"${nextExam.title}" imtihonidagi savollarni qayta ko'rib chiqing`,
+          icon: Target,
+          color: nextExam.color || '#3b82f6',
+        }]
+      : [];
+    const practiceTip = completedHistory.length > 0
+      ? [{
+          text: t('exam.aiTipAnalyze').replace('ta', Math.min(completedHistory.length, 5).toString() + ' ta'),
+          icon: Activity,
+          color: '#22c55e',
+        }]
+      : [{
+          text: t('exam.aiTipFirstExam'),
+          icon: Activity,
+          color: '#22c55e',
+        }];
+
+    return [...weakTopics, ...examTips, ...practiceTip].slice(0, 3);
+  }, [aiTopics, completedHistory.length, exams, history, t]);
+
+  const pendingExams = useMemo(() => {
     const passedIds = new Set(history.filter(h => h.passed).map(h => h.testId));
-    const passed = exams.filter(e => passedIds.has(e.id));
-    const notPassed = exams.filter(e => !passedIds.has(e.id));
-    const roadmap = [
-      ...passed.map(e => {
-        const att = history.find(h => h.testId === e.id && h.passed);
-        return {
-          title: e.title,
-          done: true,
-          date: att?.submittedAt ? new Date(att.submittedAt).toLocaleDateString('uz', { month: 'short', year: 'numeric' }) : '',
-        };
-      }),
-      ...notPassed.map((e, i) => ({
-        title: e.title,
-        done: false,
-        date: '',
-        active: i === 0,
-      })),
-    ].slice(0, 5);
-    return roadmap.length > 0 ? roadmap : MOCK_CERT_ROADMAP;
+    return exams.filter(e => !passedIds.has(e.id));
   }, [exams, history]);
+
+  // certRoadmap: dynamic sliding window focused on active exam, stable ordering
+  const certRoadmap = useMemo<Array<{ title: string; done: boolean; date: string; active?: boolean }>>(() => {
+    if (!exams.length) return [];
+    
+    // 1. Sort exams to ensure stable ordering (e.g. oldest first as a basic curriculum path)
+    const sortedExams = [...exams].sort((a, b) => {
+      if (a.createdAt && b.createdAt) {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+    const passedIds = new Set(history.filter(h => h.passed).map(h => h.testId));
+    
+    // 2. Map to roadmap items
+    const fullRoadmap = sortedExams.map(e => {
+      const isPassed = passedIds.has(e.id);
+      const att = isPassed ? history.find(h => h.testId === e.id && h.passed) : null;
+      const locale = i18n.language === 'ru' ? 'ru-RU' : 'uz-UZ';
+      return {
+        id: e.id,
+        title: e.title,
+        done: isPassed,
+        active: false,
+        date: att?.submittedAt ? new Date(att.submittedAt).toLocaleDateString(locale, { month: 'short', year: 'numeric' }) : '',
+      };
+    });
+
+    // 3. Find active exam (first unpassed)
+    const firstActiveIndex = fullRoadmap.findIndex(item => !item.done);
+    const activeIndex = firstActiveIndex === -1 ? fullRoadmap.length : firstActiveIndex;
+
+    if (activeIndex >= 0 && activeIndex < fullRoadmap.length) {
+      fullRoadmap[activeIndex].active = true;
+    }
+
+    // 4. Dynamic Slicing: Show 5 items, try to keep active item in the middle
+    let start = Math.max(0, activeIndex - 2);
+    let end = start + 5;
+    if (end > fullRoadmap.length) {
+      end = fullRoadmap.length;
+      start = Math.max(0, end - 5);
+    }
+
+    return fullRoadmap.slice(start, end);
+  }, [exams, history, i18n.language]);
 
   const questions = useMemo(() => {
     const rawQuestions = Array.isArray(selectedExam?.questions) ? selectedExam.questions : [];
@@ -213,6 +292,9 @@ export default function ExamPage() {
   useEffect(() => {
     loadExams();
     loadHistory();
+    gamificationApi.getMySummary()
+      .then(setGamification)
+      .catch(() => setGamification(null));
   }, [loadExams, loadHistory]);
 
   useEffect(() => {
@@ -224,12 +306,12 @@ export default function ExamPage() {
     setCurrent(c => Math.min(Math.max(c, 0), questions.length - 1));
   }, [questions.length, view]);
 
-  // AI topic analysis: real yoki mock
+  // AI topic analysis from the backend.
   useEffect(() => {
     let mounted = true;
     aiApi.getTopicAnalysis()
       .then(res => { if (mounted && res?.topics?.length) setAiTopics(res.topics as any); })
-      .catch(() => { /* mock fallback already set */ });
+      .catch(() => { if (mounted) setAiTopics([]); });
     return () => { mounted = false; };
   }, []);
 
@@ -276,8 +358,8 @@ export default function ExamPage() {
         skipped: questions.length,
         topics: [],
         attemptId: activeAttempt?.id || '',
-        examTitle: selectedExam?.title || 'Imtihon',
-        examTitleRu: selectedExam?.titleRu || selectedExam?.title || 'Imtihon',
+        examTitle: selectedExam?.title || t('exam.defaultTitle'),
+        examTitleRu: selectedExam?.titleRu || selectedExam?.title || t('exam.defaultTitle'),
         submittedAt: new Date().toISOString(),
         autoTerminated: true,
       });
@@ -343,11 +425,11 @@ export default function ExamPage() {
 
     // startAt tekshiruvi — frontend da ham ko'rsatish
     if (exam.startAt && new Date() < new Date(exam.startAt)) {
-      setStartError(`Imtihon ${formatExamDateTime(exam.startAt)} da boshlanadi`);
+      setStartError(`$\${t('exam.examWillStartAt')} ${formatExamDateTime(exam.startAt)}`);
       return;
     }
     if (exam.endAt && new Date() > new Date(exam.endAt)) {
-      setStartError('Imtihon muddati tugagan');
+      setStartError(t('exam.examEndedErr'));
       return;
     }
 
@@ -399,7 +481,7 @@ export default function ExamPage() {
 
   const handleSubmitExam = async () => {
     if (!activeAttempt) {
-      toast.error('Faol imtihon sessiyasi topilmadi. Imtihonni qayta boshlang.');
+      toast.error(t('exam.sessionNotFound'));
       setView('dashboard');
       return;
     }
@@ -416,13 +498,13 @@ export default function ExamPage() {
         wrong: finishedAttempt.wrongCount,
         skipped: finishedAttempt.skippedCount,
         topics: [
-          { name: selectedExam?.title || 'Imtihon', score: finishedAttempt.score, color: finishedAttempt.passed ? '#22c55e' : '#ef4444' },
-          { name: 'Nazariy qism', score: Math.min(Math.round(finishedAttempt.score * 0.95), 100), color: '#3b82f6' },
-          { name: 'Amaliy qism', score: Math.min(Math.round(finishedAttempt.score * 1.05), 100), color: '#8b5cf6' },
+          { name: selectedExam?.title || t('exam.defaultTitle'), score: finishedAttempt.score, color: finishedAttempt.passed ? '#22c55e' : '#ef4444' },
+          { name: t('exam.theoryPart'), score: Math.min(Math.round(finishedAttempt.score * 0.95), 100), color: '#3b82f6' },
+          { name: t('exam.practicePart'), score: Math.min(Math.round(finishedAttempt.score * 1.05), 100), color: '#8b5cf6' },
         ],
         attemptId: finishedAttempt.id,
-        examTitle: selectedExam?.title || 'Imtihon',
-        examTitleRu: selectedExam?.titleRu || selectedExam?.title || 'Imtihon',
+        examTitle: selectedExam?.title || t('exam.defaultTitle'),
+        examTitleRu: selectedExam?.titleRu || selectedExam?.title || t('exam.defaultTitle'),
         submittedAt: finishedAttempt.submittedAt || new Date().toISOString(),
       });
       setView('result');
@@ -430,10 +512,13 @@ export default function ExamPage() {
       // Reset active attempt and refresh history
       useExamStore.setState({ activeAttempt: null });
       loadHistory();
+      gamificationApi.getMySummary()
+        .then(setGamification)
+        .catch(() => setGamification(null));
     } catch (err: any) {
       const backendMessage = err.response?.data?.message;
       const message = Array.isArray(backendMessage) ? backendMessage[0] : backendMessage;
-      toast.error(`Imtihonni topshirishda xatolik: ${message || err.message || err}`);
+      toast.error(`${t('exam.toastSubmitErr', { defaultValue: 'Imtihonni topshirishda xatolik:' })} ${message || err.message || err}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -473,13 +558,13 @@ export default function ExamPage() {
       <div style={{ width: 'min(460px, 100%)', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 16, padding: 28, textAlign: 'center' }}>
         <AlertCircle size={34} color="var(--amber-400)" style={{ marginBottom: 12 }} />
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>
-          Savollar topilmadi
+          {t('exam.questionsNotFound')}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
-          {selectedExam?.title || 'Ushbu imtihon'} uchun savollar yuklanmagan yoki hali mavjud emas.
+          {selectedExam?.title || t('exam.thisExam')} - {t('exam.questionsNotLoadedInfo')}
         </div>
         <button className="btn btn-secondary" onClick={() => setView('dashboard')} style={{ justifyContent: 'center' }}>
-          Dashboardga qaytish
+          {t('exam.returnToDashboard')}
         </button>
       </div>
     </div>
@@ -498,24 +583,24 @@ export default function ExamPage() {
               <Shield size={24} color="#ef4444" />
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#ef4444', marginBottom: 8 }}>
-              {violationCount >= 3 ? '⛔ Imtihon yakunlandi!' : '⚠️ ' + {
-                FULLSCREEN_EXIT: "To'liq ekrandan chiqdingiz",
-                TAB_SWITCH: 'Boshqa oynaga o\'tdingiz',
-                WINDOW_BLUR: 'Imtihon oynasini tark etdingiz',
-                F12_ATTEMPT: 'F12 tugmasi bosildi',
-                DEVTOOLS_ATTEMPT: 'Dasturchi vositalari ochildi',
-                VIEW_SOURCE_ATTEMPT: 'Sahifa kodi ko\'rildi',
-                RIGHT_CLICK_ATTEMPT: 'O\'ng tugma bosildi',
-              }[lastViolationType] || 'Qoida buzildi'}
+              {violationCount >= 3 ? t('exam.examEndedCritical') : '⚠️ ' + ({
+                FULLSCREEN_EXIT: t('exam.fullscreenExit'),
+                TAB_SWITCH: t('exam.tabSwitch'),
+                WINDOW_BLUR: t('exam.windowBlur'),
+                F12_ATTEMPT: t('exam.f12Attempt'),
+                DEVTOOLS_ATTEMPT: t('exam.devtoolsAttempt'),
+                VIEW_SOURCE_ATTEMPT: t('exam.viewSourceAttempt'),
+                RIGHT_CLICK_ATTEMPT: t('exam.rightClickAttempt'),
+              }[lastViolationType as string] || t('exam.ruleBroken'))}
             </div>
             <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
               {violationCount >= 3
-                ? 'Siz imtihon xavfsizligi qoidalarini 3 marta buzgansiz. Imtihon avtomatik yakunlandi.'
+                ? t('exam.threeViolations')
                 : violationCount === 2
-                ? 'Yana 1 ta qoidabuzarlik imtihonni avtomatik yakunlaydi.'
+                ? t('exam.oneViolationLeft')
                 : lastViolationType === 'FULLSCREEN_EXIT'
-                ? 'Imtihon to\'liq ekran rejimida o\'tkazilishi shart. "Tushundim" tugmasini bosing — to\'liq ekranga qaytasiz.'
-                : 'Imtihon davomida boshqa oyna yoki dasturga o\'tish taqiqlanadi.'}
+                ? t('exam.fullscreenRequired')
+                : t('exam.tabSwitchForbidden')}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
               {[1, 2, 3].map(i => (
@@ -523,7 +608,7 @@ export default function ExamPage() {
               ))}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Qolgan ogohlantirishlar: {Math.max(0, 3 - violationCount)}
+              {t('exam.remainingWarnings')} {Math.max(0, 3 - violationCount)}
             </div>
             {violationCount < 3 && (
               <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#ef4444,#dc2626)' }} onClick={() => {
@@ -535,7 +620,7 @@ export default function ExamPage() {
                   else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
                 }
               }}>
-                Tushundim, davom etaman
+                {t('exam.understandContinue')}
               </button>
             )}
           </div>
@@ -547,15 +632,15 @@ export default function ExamPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#22c55e', fontWeight: 700 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
-            AI Monitoring Faol
+            {t('exam.aiMonActive')}
           </span>
           <span style={{ color: 'var(--text-muted)' }}>|</span>
           <span style={{ color: violationCount > 0 ? '#f59e0b' : 'var(--text-muted)', fontWeight: 600 }}>
-            Buzilishlar: {violationCount}/3
+            {t('exam.violations')}: {violationCount}/3
           </span>
           <span style={{ color: 'var(--text-muted)' }}>|</span>
           <span style={{ color: securityStatus === 'NORMAL' ? '#22c55e' : securityStatus === 'WARNING' ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
-            {securityStatus === 'NORMAL' ? '🟢 XAVFSIZ' : securityStatus === 'WARNING' ? '🟡 OGOHLANTIRISH' : securityStatus === 'CRITICAL' ? '🔴 KRITIK' : '⛔ YAKUNLANDI'}
+            {securityStatus === 'NORMAL' ? '🟢 ' + t('exam.secSafe') : securityStatus === 'WARNING' ? '🟡 ' + t('exam.secWarn') : securityStatus === 'CRITICAL' ? '🔴 ' + t('exam.secCrit') : '⛔ ' + t('exam.secEnded')}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -574,7 +659,7 @@ export default function ExamPage() {
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedExam.title}</div>
             <div style={{ fontSize: 11, color: 'var(--green-400)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Radio size={9} style={{ animation: 'pulse 2s infinite' }} /> AI monitoring faol
+              <Radio size={9} style={{ animation: 'pulse 2s infinite' }} /> {t('exam.aiMonitoringActive')}
             </div>
           </div>
         </div>
@@ -588,7 +673,7 @@ export default function ExamPage() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{answered}/{questions.length}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Javoblandi</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('exam.answered')}</div>
           </div>
           <button
             className="btn btn-primary btn-sm"
@@ -604,11 +689,11 @@ export default function ExamPage() {
             {isSubmitting ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin-fast 1s linear infinite' }} />
-                <span>Kutilmoqda...</span>
+                <span>{t('exam.waitingLabel')}</span>
               </>
             ) : (
               <>
-                <CheckCircle size={13} /> Topshirish
+                <CheckCircle size={13} /> {t('exam.submitBtnText')}
               </>
             )}
           </button>
@@ -626,16 +711,16 @@ export default function ExamPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <span className="badge badge-blue" style={{ fontSize: 12, padding: '5px 14px' }}>
-                Savol {current + 1} / {questions.length}
+                {t('exam.questionNumber', { current: current + 1, total: questions.length })}
               </span>
-              {flagged.has(current) && <span className="badge badge-amber"><Flag size={10} /> Belgilangan</span>}
+              {flagged.has(current) && <span className="badge badge-amber"><Flag size={10} /> {t('exam.flaggedText')}</span>}
             </div>
             <button
               className={clsx('btn btn-sm', flagged.has(current) ? 'btn-secondary' : 'btn-ghost')}
               style={{ color: flagged.has(current) ? 'var(--amber-400)' : undefined, borderRadius: 99 }}
               onClick={() => setFlagged(f => { const n = new Set(f); n.has(current) ? n.delete(current) : n.add(current); return n; })}
             >
-              <Flag size={12} /> {flagged.has(current) ? 'Belgini olib tashlash' : 'Belgilash'}
+              <Flag size={12} /> {flagged.has(current) ? t('exam.unflag') : t('exam.flag')}
             </button>
           </div>
 
@@ -643,11 +728,11 @@ export default function ExamPage() {
             {!currentQuestion ? (
               <div style={{ display: 'grid', gap: 14, justifyItems: 'center', padding: '28px 16px', textAlign: 'center' }}>
                 <AlertCircle size={34} color="var(--amber-400)" />
-                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>Savollar topilmadi</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' }}>{t('exam.questionsNotFound')}</div>
                 <p style={{ maxWidth: 460, color: 'var(--text-secondary)', fontSize: 14 }}>
-                  Bu imtihon uchun savollar yuklanmadi yoki imtihon ma'lumotlari to'liq emas.
+                  {t('exam.questionsNotLoadedInfo')}
                 </p>
-                <button className="btn btn-secondary" onClick={() => setView('dashboard')}>Imtihonlar ro'yxatiga qaytish</button>
+                <button className="btn btn-secondary" onClick={() => setView('dashboard')}>{t('exam.returnToDashboard')}</button>
               </div>
             ) : (
               <>
@@ -687,7 +772,7 @@ export default function ExamPage() {
               onClick={() => setCurrent(c => Math.max(0, c - 1))}
               disabled={current === 0}
             >
-              ← Oldingi
+              ← {t('exam.prevBtn')}
             </button>
             <button
               className="btn btn-primary"
@@ -701,15 +786,15 @@ export default function ExamPage() {
               }}
             >
               {current < questions.length - 1 ? (
-                <>Keyingi <ArrowRight size={14} /></>
+                <>{t('exam.nextBtn')} <ArrowRight size={14} /></>
               ) : isSubmitting ? (
                 <>
                   <Loader2 size={14} style={{ animation: 'spin-fast 1s linear infinite' }} />
-                  <span>Kutilmoqda...</span>
+                  <span>{t('exam.waitingLabel')}</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle size={14} /> Topshirish
+                  <CheckCircle size={14} /> {t('exam.submitBtnText')}
                 </>
               )}
             </button>
@@ -719,7 +804,7 @@ export default function ExamPage() {
         {/* Navigation Panel */}
         <aside className="exam-nav-premium">
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 14 }}>
-            Navigatsiya
+            {t('exam.navTitle')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 20 }}>
             {questions.map((_: any, i: number) => (
@@ -739,9 +824,9 @@ export default function ExamPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
             {[
-              { cls: 'exam-nav-answered', label: `Javoblandi`, count: answered, color: '#22c55e' },
-              { cls: 'exam-nav-flagged', label: `Belgilandi`, count: flagged.size, color: '#f59e0b' },
-              { cls: 'exam-nav-btn', label: `Javobsiz`, count: questions.length - answered, color: '#64748b' },
+              { cls: 'exam-nav-answered', label: t('exam.answered'), count: answered, color: '#22c55e' },
+              { cls: 'exam-nav-flagged', label: t('exam.flagged'), count: flagged.size, color: '#f59e0b' },
+              { cls: 'exam-nav-btn', label: t('exam.unanswered'), count: questions.length - answered, color: '#64748b' },
             ].map((l, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--surface-1)', borderRadius: 8, border: '1px solid var(--border-1)' }}>
                 <div className={clsx('exam-nav-btn', l.cls)} style={{ width: 20, height: 20, fontSize: 9, pointerEvents: 'none', flexShrink: 0 }} />
@@ -754,8 +839,8 @@ export default function ExamPage() {
           <div style={{ padding: '12px 14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Shield size={13} color="#22c55e" />
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>AI Monitoring</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Faol himoya</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>{t('exam.aiMonitoring')}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('exam.activeProtect')}</div>
             </div>
           </div>
         </aside>
@@ -772,10 +857,10 @@ export default function ExamPage() {
             <div className="exam-error-icon-wrapper">
               <AlertCircle size={28} color="var(--red-400)" />
             </div>
-            <h3 className="exam-error-title">{startError === 'Maximum attempts reached for this exam' ? 'Urinishlar tugagan' : 'Xatolik'}</h3>
+            <h3 className="exam-error-title">{startError === 'Maximum attempts reached for this exam' ? t('exam.errAttempts') : t('exam.errGeneral')}</h3>
             <p className="exam-error-message">
               {startError === 'Maximum attempts reached for this exam'
-                ? 'Ushbu imtihon uchun belgilangan barcha urinishlar sonidan foydalanib bo‘lgansiz.'
+                ? t('exam.errAttemptsText')
                 : startError}
             </p>
             <button 
@@ -783,7 +868,7 @@ export default function ExamPage() {
               onClick={() => setStartError(null)}
               style={{ width: '100%', borderRadius: 12, padding: '10px 0', marginTop: 8 }}
             >
-              Tushunarli
+              {t('exam.understood')}
             </button>
           </div>
         </div>
@@ -805,7 +890,7 @@ export default function ExamPage() {
           {/* Secure Environment Badge */}
           <div className="exam-env-badge">
             <div className="exam-env-dot" />
-            <span>Xavfsiz imtihon muhiti faol</span>
+            <span>{t('exam.secureEnv')}</span>
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--green-400)', fontWeight: 700 }}>
               <Shield size={11} />
               SECURE
@@ -819,18 +904,18 @@ export default function ExamPage() {
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--text-muted)', marginBottom: 6 }}>
-                Rasmiy Sertifikatlash Imtihoni
+                {t('exam.officialBadge')}
               </div>
               <h1 className="exam-start-name">{selectedExam.title}</h1>
               <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
                 <span className="badge badge-blue" style={{ fontSize: 11 }}>
-                  <Clock size={10} /> {selectedExam.duration} daqiqa
+                  <Clock size={10} /> {selectedExam.duration} {t('exam.minutesText')}
                 </span>
                 <span className="badge badge-violet" style={{ fontSize: 11 }}>
-                  <FileText size={10} /> {selectedExam.questionsCount || selectedExam.questions?.length || 0} savol
+                  <FileText size={10} /> {selectedExam.questionsCount || selectedExam.questions?.length || 0} {t('exam.questionsLabel')}
                 </span>
                 <span className="badge badge-green" style={{ fontSize: 11 }}>
-                  <Award size={10} /> {selectedExam.passing}% o'tish
+                  <Award size={10} /> {selectedExam.passing}% {t('exam.passing')}
                 </span>
               </div>
             </div>
@@ -839,10 +924,10 @@ export default function ExamPage() {
           {/* Stats Grid */}
           <div className="exam-start-stats">
             {[
-              { label: 'Davomiylik', value: `${selectedExam.duration}`, unit: 'min', icon: Clock, color: '#3b82f6' },
-              { label: 'Savollar', value: selectedExam.questionsCount || selectedExam.questions?.length || 0, unit: 'ta', icon: FileText, color: '#8b5cf6' },
-              { label: "O'tish bali", value: selectedExam.passing, unit: '%', icon: Award, color: '#22c55e' },
-              { label: 'Urinish', value: (selectedExam.attempts || 0) + 1, unit: '-chi', icon: TrendingUp, color: '#f59e0b' },
+              { label: t('exam.durationLabel'), value: `${selectedExam.duration}`, unit: t('exam.min'), icon: Clock, color: '#3b82f6' },
+              { label: t('exam.questionsLabel'), value: selectedExam.questionsCount || selectedExam.questions?.length || 0, unit: t('exam.ta'), icon: FileText, color: '#8b5cf6' },
+              { label: t('exam.passingLabel'), value: selectedExam.passing, unit: '%', icon: Award, color: '#22c55e' },
+              { label: t('exam.attemptLabel'), value: (selectedExam.attempts || 0) + 1, unit: t('exam.chi'), icon: TrendingUp, color: '#f59e0b' },
             ].map((s, i) => (
               <div key={i} className="exam-start-stat-card" style={{ borderColor: `${s.color}18` }}>
                 <div className="exam-start-stat-icon" style={{ background: `${s.color}12`, border: `1px solid ${s.color}20` }}>
@@ -863,15 +948,15 @@ export default function ExamPage() {
               <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <AlertCircle size={14} color="var(--red-400)" />
               </div>
-              <span>Imtihon qoidalari</span>
+              <span>{t('exam.rulesTitle')}</span>
             </div>
             <div className="exam-start-rules-list">
               {[
-                { icon: '🖥️', text: "Brauzerni to'liq ekranda ishlating" },
-                { icon: '⏱️', text: 'Vaqt tugaganda avtomatik topshiriladi' },
-                { icon: '✏️', text: "Har bir savolga faqat bir marta javob bering" },
-                { icon: '🤖', text: "AI monitoring butun imtihon davomida faol bo'ladi" },
-                { icon: '🔒', text: "Imtihon davomida boshqa sahifaga o'tish taqiqlanadi" },
+                { icon: '🖥️', text: t('exam.rule1') },
+                { icon: '⏱️', text: t('exam.rule2') },
+                { icon: '✏️', text: t('exam.rule3') },
+                { icon: '🤖', text: t('exam.rule4') },
+                { icon: '🔒', text: t('exam.rule5') },
               ].map((r, i) => (
                 <div key={i} className="exam-start-rule-item" style={{ animationDelay: `${i * 0.07}s` }}>
                   <span className="exam-start-rule-emoji">{r.icon}</span>
@@ -889,7 +974,7 @@ export default function ExamPage() {
                 type="password"
                 value={examPassword}
                 onChange={e => setExamPassword(e.target.value)}
-                placeholder="Imtihon parolini kiriting..."
+                placeholder={t('exam.passwordPlaceholder')}
                 className="input"
                 style={{ width: '100%', borderRadius: 12, padding: '12px 16px', fontSize: 14 }}
               />
@@ -897,7 +982,7 @@ export default function ExamPage() {
             {/* startAt countdown */}
             {selectedExam?.startAt && new Date() < new Date(selectedExam.startAt) && (
               <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, textAlign: 'center', fontSize: 13, color: 'var(--amber-400)', fontWeight: 600, width: '100%' }}>
-                ⏳ Imtihon {formatExamDateTime(selectedExam.startAt)} da boshlanadi
+                ⏳ {t('exam.examWillStartAt')} {formatExamDateTime(selectedExam.startAt)}
               </div>
             )}
             {/* Orqaga + Boshlash */}
@@ -907,7 +992,7 @@ export default function ExamPage() {
                 onClick={() => setView('dashboard')}
                 style={{ borderRadius: 14, padding: '12px 24px', flexShrink: 0 }}
               >
-                ← Orqaga
+                ← {t('exam.backBtn')}
               </button>
               <button
                 className="exam-start-launch-btn"
@@ -917,9 +1002,9 @@ export default function ExamPage() {
               >
                 <div className="exam-launch-btn-glow" />
                 {loading ? (
-                  <><Loader2 size={17} style={{ animation: 'spin-fast 1s linear infinite' }} /><span>Kutilmoqda...</span></>
+                  <><Loader2 size={17} style={{ animation: 'spin-fast 1s linear infinite' }} /><span>{t('exam.waitingLabel')}</span></>
                 ) : (
-                  <><Shield size={17} /><span>Imtihonni boshlash</span></>
+                  <><Shield size={17} /><span>{t('exam.startExamBtn')}</span></>
                 )}
               </button>
             </div>
@@ -939,20 +1024,20 @@ export default function ExamPage() {
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>AI Proctoring</div>
-                  <div style={{ fontSize: 11, color: 'var(--violet-400)' }}>Enterprise monitoring tizimi</div>
+                  <div style={{ fontSize: 11, color: 'var(--violet-400)' }}>{t('exam.enterpriseMon')}</div>
                 </div>
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 99 }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#22c55e' }}>FAOL</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#22c55e' }}>{t('exam.activeLabel')}</span>
                 </div>
               </div>
 
               {/* Monitoring Checks */}
               {[
-                { label: 'Sessiya xavfsizligi', status: 'ok', icon: Shield },
-                { label: 'AI kamera monitoring', status: 'ok', icon: Eye },
-                { label: 'Fokus kuzatish', status: 'ok', icon: Activity },
-                { label: 'Shubhali faollik deteksiya', status: 'ok', icon: Zap },
+                { label: t('exam.sessionSecurity'), status: 'ok', icon: Shield },
+                { label: t('exam.aiCamera'), status: 'ok', icon: Eye },
+                { label: t('exam.focusTracking'), status: 'ok', icon: Activity },
+                { label: t('exam.suspiciousActivity'), status: 'ok', icon: Zap },
               ].map((check, i) => (
                 <div key={i} className="exam-proctor-check" style={{ animationDelay: `${i * 0.08}s` }}>
                   <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -961,13 +1046,13 @@ export default function ExamPage() {
                   <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{check.label}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <CheckCircle size={13} color="var(--green-400)" />
-                    <span style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700 }}>Tayyor</span>
+                    <span style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700 }}>{t('exam.readyShort')}</span>
                   </div>
                 </div>
               ))}
 
               <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Xavfsizlik darajasi</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t('exam.securityLevel')}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: '96%', background: 'linear-gradient(90deg,#22c55e,#4ade80)', borderRadius: 99, boxShadow: '0 0 8px rgba(34,197,94,0.4)' }} />
@@ -981,14 +1066,14 @@ export default function ExamPage() {
           {/* Readiness Gauge */}
           <div className="exam-readiness-panel">
             <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 16 }}>
-              Tayyorgarlik darajasi
+              {t('exam.readinessLevel')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
                 <svg width="90" height="90" style={{ transform: 'rotate(-90deg)' }}>
                   <circle cx="45" cy="45" r="38" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
                   <circle cx="45" cy="45" r="38" fill="none" stroke="url(#readGrad)" strokeWidth="8"
-                    strokeDasharray={`${2 * Math.PI * 38 * 85 / 100} ${2 * Math.PI * 38}`}
+                    strokeDasharray={`${2 * Math.PI * 38 * readiness / 100} ${2 * Math.PI * 38}`}
                     strokeLinecap="round" style={{ transition: 'stroke-dasharray 1.2s' }} />
                   <defs>
                     <linearGradient id="readGrad" x1="0" y1="0" x2="1" y2="0">
@@ -998,16 +1083,16 @@ export default function ExamPage() {
                   </defs>
                 </svg>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>85%</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>tayyor</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{readiness}%</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{t('exam.ready')}</div>
                 </div>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
-                  Yaxshi tayyor!
+                  {readiness >= 70 ? t('exam.wellPrepared') : t('exam.startPrep')}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  "TypeScript Generics" bo'limini biroz takrorlasangiz, 95%+ ehtimol bilan o'tasiz.
+                  {aiRecommendations[0]?.text || t('exam.noRecommendationsYet')}
                 </div>
               </div>
             </div>
@@ -1016,19 +1101,19 @@ export default function ExamPage() {
           {/* Exam Timer Preview */}
           <div className="exam-timer-preview">
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 12 }}>
-              Imtihon vaqti
+              {t('exam.examTime')}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 38, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-1px' }}>
                 {String(selectedExam.duration || 60).padStart(2, '0')}:00
               </span>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>daqiqa</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('exam.minutesText')}</span>
             </div>
             <div style={{ marginTop: 12, height: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 99, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: '100%', background: 'linear-gradient(90deg,#3b82f6,#8b5cf6)', borderRadius: 99 }} />
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-              Vaqt tugaganda avtomatik topshiriladi
+              {t('exam.autoSubmitHint')}
             </div>
           </div>
 
@@ -1056,7 +1141,7 @@ export default function ExamPage() {
     <div style={{ textAlign: 'center', padding: '60px 20px' }}>
       <AlertCircle size={48} color="var(--red-400)" style={{ marginBottom: 16 }} />
       <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>{error}</div>
-      <button className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>Qayta urinish</button>
+      <button className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>{t('exam.retry')}</button>
     </div>
   );
 
@@ -1083,32 +1168,32 @@ export default function ExamPage() {
               <Cpu size={16} color="#fff" />
             </div>
             <span className="badge badge-violet" style={{ fontSize: 11 }}>
-              <Sparkles size={10} /> Sertifikatlash Markazi
+              <Sparkles size={10} /> {t('exam.certCenter')}
             </span>
           </div>
 
           <h1 style={{ fontSize: 38, fontWeight: 900, letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: 12, background: 'linear-gradient(180deg, #f1f5f9, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Imtihon Ekosistemi
+            {t('exam.heroTitle')}
           </h1>
           <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', marginBottom: 28, maxWidth: 480, lineHeight: 1.6 }}>
-            AI-powered sertifikatlash platformasi. Real-time tahlil, aqlli tavsiyalar va premium imtihon tajribasi.
+            {t('exam.heroSub')}
           </p>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 99 }}>
               <Flame size={13} color="#22c55e" />
-              <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>{streak} kunlik streak</span>
+              <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 700 }}>{streak} {t('exam.streakDays')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 99 }}>
               <Brain size={13} color="#8b5cf6" />
-              <span style={{ fontSize: 13, color: '#8b5cf6', fontWeight: 700 }}>AI tayyor: {readiness}%</span>
+              <span style={{ fontSize: 13, color: '#8b5cf6', fontWeight: 700 }}>{t('exam.aiReady')} {readiness}%</span>
             </div>
             {canCreate && (
               <button 
                 onClick={() => setShowWizard(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', border: 'none', borderRadius: 99, color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px rgba(59,130,246,0.4)', transition: 'all 0.3s' }}
               >
-                <Plus size={16} /> Test Yaratish
+                <Plus size={16} /> {t('exam.createTest')}
               </button>
             )}
           </div>
@@ -1117,7 +1202,7 @@ export default function ExamPage() {
         {/* Right: AI Readiness Gauge */}
         <div className="exam-hero-gauge">
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 8 }}>AI Tayyor Ko'rsatkich</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 8 }}>{t('exam.aiReadyGauge')}</div>
             <div style={{ position: 'relative', width: 120, height: 120, margin: '0 auto' }}>
               <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
                 <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />
@@ -1133,15 +1218,15 @@ export default function ExamPage() {
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-1px' }}>{readiness}%</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>tayyor</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('exam.ready')}</div>
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
             {[
-              { label: "O'tildi", value: passedExams, color: '#22c55e' },
-              { label: 'Sertifikat', value: uniquePassedExams, color: '#8b5cf6' },
+              { label: t('exam.passedCount'), value: passedExams, color: '#22c55e' },
+              { label: t('exam.certCount'), value: uniquePassedExams, color: '#8b5cf6' },
             ].map((s, i) => (
               <div key={i} style={{ flex: 1, textAlign: 'center', padding: '10px 8px', background: 'var(--surface-1)', borderRadius: 12, border: '1px solid var(--border-1)' }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.value}</div>
@@ -1155,12 +1240,12 @@ export default function ExamPage() {
       {/* ─── KPI Analytics Cards ─── */}
       <div className="exam-kpi-grid">
         {[
-          { label: 'Jami urinishlar', value: totalAttempts, icon: FileText, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', change: history.length > 0 ? `+${history.length}` : '0', up: true, sub: 'bu oy' },
-          { label: "O'tilgan imtihonlar", value: passedExams, icon: CheckCircle, color: '#22c55e', bg: 'rgba(34,197,94,0.08)', change: totalAttempts > 0 ? `${Math.round((passedExams / totalAttempts) * 100)}%` : '0%', up: true, sub: 'muvaffaqiyat' },
-          { label: "O'rtacha ball", value: averageScore, icon: Star, color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', change: averageScore >= 70 ? 'Yaxshi' : 'Qoniqarsiz', up: averageScore >= 70, sub: "umumiy natija", suffix: '%' },
-          { label: 'Sertifikatlar', value: uniquePassedExams, icon: Award, color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', change: `+${uniquePassedExams}`, up: true, sub: 'muvaffaqiyatli' },
-          { label: 'AI Tayyor', value: readiness, icon: Brain, color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', change: '+12%', up: true, sub: 'keyingi imtihon', suffix: '%' },
-          { label: 'Streak', value: streak, icon: Flame, color: '#f87171', bg: 'rgba(248,113,113,0.08)', change: 'rekord', up: true, sub: "kunlik o'qish", suffix: ' kun' },
+          { label: t('exam.totalAttempts'), value: totalAttempts, icon: FileText, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', change: history.length > 0 ? `+${history.length}` : '0', up: true, sub: t('exam.thisMonth') },
+          { label: t('exam.passedExams'), value: passedExams, icon: CheckCircle, color: '#22c55e', bg: 'rgba(34,197,94,0.08)', change: totalAttempts > 0 ? `${Math.round((passedExams / totalAttempts) * 100)}%` : '0%', up: true, sub: t('exam.successRate') },
+          { label: t('exam.avgScore'), value: averageScore, icon: Star, color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', change: averageScore >= 70 ? t('exam.good') : t('exam.unsatisfactory'), up: averageScore >= 70, sub: t('exam.overallResult'), suffix: '%' },
+          { label: t('exam.certCount'), value: uniquePassedExams, icon: Award, color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', change: `+${uniquePassedExams}`, up: true, sub: t('exam.successful') },
+          { label: t('exam.aiReadyGauge'), value: readiness, icon: Brain, color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', change: completedHistory.length ? `${readiness}%` : '0%', up: readiness >= 70, sub: t('exam.nextExam'), suffix: '%' },
+          { label: t('exam.streak'), value: streak, icon: Flame, color: '#f87171', bg: 'rgba(248,113,113,0.08)', change: `${streak} ${t('exam.days')}`, up: streak > 0, sub: t('exam.dailyStudy'), suffix: ` ${t('exam.days')}` },
         ].map((s, i) => (
           <div key={i} className="exam-kpi-card" style={{ animationDelay: `${i * 0.05}s` }}>
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${s.color}, transparent)`, opacity: 0.6, borderRadius: '20px 20px 0 0' }} />
@@ -1188,25 +1273,34 @@ export default function ExamPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.3px' }}>Kutilayotgan imtihonlar</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{exams.length} ta imtihon siz uchun tayyor</div>
+              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.3px' }}>{t('exam.pendingExams')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{pendingExams.length} {t('exam.examsReadyForYou')}</div>
             </div>
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
-              Barchasi <ChevronRight size={12} />
-            </button>
+            {pendingExams.length > 5 && (
+              <button 
+                className="btn btn-ghost btn-sm" 
+                style={{ fontSize: 12 }}
+                onClick={() => setShowAllPending(!showAllPending)}
+              >
+                {showAllPending ? t('exam.hide', { defaultValue: 'Yashirish' }) : t('exam.seeAll')} 
+                <ChevronRight size={12} style={{ transform: showAllPending ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+            )}
           </div>
 
-          {exams.length === 0 ? (
+          {pendingExams.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 24px', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
               <Trophy size={40} color="var(--text-muted)" style={{ marginBottom: 12, opacity: 0.4 }} />
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Imtihonlar topilmadi</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Yangi imtihonlar qo'shilganda shu yerda ko'rinadi</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{t('exam.noExams')}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('exam.noExamsSub')}</div>
             </div>
           ) : (
-            exams.map((exam, idx) => {
+            (showAllPending ? pendingExams : pendingExams.slice(0, 5)).map((exam, idx) => {
               const isStarted = ((exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt))) && user?.role !== 'super_admin';
+              const isAiRecommended = idx === 0; // First unpassed exam
+              
               return (
-                <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s` }}>
+                <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s`, border: isAiRecommended ? '1px solid var(--violet-500)' : undefined }}>
                   {/* Difficulty band */}
                   <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: `linear-gradient(180deg, ${exam.color || '#3b82f6'}, transparent)`, borderRadius: '20px 0 0 20px' }} />
 
@@ -1218,29 +1312,27 @@ export default function ExamPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                         <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>{exam.title}</div>
-                        <span className="badge badge-blue" style={{ fontSize: 10 }}>Rasmiy</span>
+                        {isAiRecommended && (
+                          <span className="badge badge-violet" style={{ fontSize: 10 }}>
+                            <Sparkles size={10} style={{ marginRight: 2 }} />
+                            AI Tavsiyasi
+                          </span>
+                        )}
+                        {!isAiRecommended && (
+                          <span className="badge badge-blue" style={{ fontSize: 10 }}>{t('exam.officialBadge')}</span>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Clock size={10} /> {exam.timeLimitMinutes || 60} min
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <FileText size={10} /> {exam.questionsCount || exam.questions?.length || 0} savol
+                          <Clock size={10} /> {exam.timeLimitMinutes || 60} {t('exam.min')}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Target size={10} /> O'tish: {exam.passingScore || 70}%
+                          <FileText size={10} /> {exam.questionsCount || exam.questions?.length || 0} {t('exam.questionsLabel')}
                         </span>
-                        {exam.deadline && <span style={{ color: 'var(--amber-400)' }}>Muddat: {exam.deadline}</span>}
-                      </div>
-
-                      {/* AI Readiness for this exam */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ flex: 1, height: 4, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${readiness}%`, background: `linear-gradient(90deg, ${exam.color || '#3b82f6'}, rgba(139,92,246,0.8))`, borderRadius: 99 }} />
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: exam.color || '#3b82f6', whiteSpace: 'nowrap' }}>
-                          {readiness}% tayyor
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Target size={10} /> {t('exam.passing')}: {exam.passingScore || 70}%
                         </span>
+                        {exam.deadline && <span style={{ color: 'var(--amber-400)' }}>{t('exam.deadlineLabel')} {exam.deadline}</span>}
                       </div>
                     </div>
 
@@ -1250,11 +1342,11 @@ export default function ExamPage() {
                         onClick={() => { setSelectedExam(exam); setExamPassword(''); setView('start'); }}
                         style={{ borderRadius: 12, whiteSpace: 'nowrap' }}
                       >
-                        Boshlash <ChevronRight size={12} />
+                        {t('exam.startBtn')} <ChevronRight size={12} />
                       </button>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          <Eye size={11} /> Ko'rish
+                          <Eye size={11} /> {t('exam.view')}
                         </button>
                         {canCreate && (
                           <>
@@ -1271,7 +1363,7 @@ export default function ExamPage() {
                                 minWidth: 'auto',
                               }}
                               onClick={() => handleEditExamClick(exam)}
-                              title={isStarted ? "Test boshlangan, tahrirlash mumkin emas" : "Tahrirlash"}
+                              title={isStarted ? t('exam.cantEditTest') : t('exam.editBtn')}
                             >
                               <Edit3 size={13} style={{ color: isStarted ? 'var(--text-muted)' : 'var(--blue-400)' }} />
                             </button>
@@ -1288,7 +1380,7 @@ export default function ExamPage() {
                                 minWidth: 'auto',
                               }}
                               onClick={() => handleDeleteExamClick(exam)}
-                              title={isStarted ? "Test boshlangan, o'chirish mumkin emas" : "O'chirish"}
+                              title={isStarted ? t('exam.cantDelTest') : t('exam.delBtn')}
                             >
                               <Trash2 size={13} style={{ color: isStarted ? 'var(--text-muted)' : 'var(--red-400)' }} />
                             </button>
@@ -1304,22 +1396,28 @@ export default function ExamPage() {
 
           {/* Certification Roadmap */}
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16, letterSpacing: '-0.3px' }}>Sertifikatlash yo'nalishi</div>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16, letterSpacing: '-0.3px' }}>{t('exam.certRoadmap')}</div>
             <div className="cert-roadmap-container">
-              {certRoadmap.map((item, i) => (
-                <div key={i} className={clsx('cert-roadmap-item', item.done && 'done', item.active && 'active')}>
-                  <div className="cert-roadmap-dot">
-                    {item.done ? <CheckCircle size={14} /> : item.active ? <Play size={10} /> : <Lock size={10} />}
-                  </div>
-                  {i < certRoadmap.length - 1 && <div className={clsx('cert-roadmap-line', item.done && 'done')} />}
-                  <div className="cert-roadmap-label">
-                    <div style={{ fontSize: 12, fontWeight: 600, color: item.done ? 'var(--text-primary)' : item.active ? 'var(--blue-400)' : 'var(--text-muted)' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.date}</div>
-                  </div>
+              {certRoadmap.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '10px 0' }}>
+                  {t('exam.roadmapPlaceholder')}
                 </div>
-              ))}
+              ) : (
+                certRoadmap.map((item, i) => (
+                  <div key={i} className={clsx('cert-roadmap-item', item.done && 'done', item.active && 'active')}>
+                    <div className="cert-roadmap-dot">
+                      {item.done ? <CheckCircle size={14} /> : item.active ? <Play size={10} /> : <Lock size={10} />}
+                    </div>
+                    {i < certRoadmap.length - 1 && <div className={clsx('cert-roadmap-line', item.done && 'done')} />}
+                    <div className="cert-roadmap-label">
+                      <div style={{ fontSize: 12, fontWeight: 600, color: item.done ? 'var(--text-primary)' : item.active ? 'var(--blue-400)' : 'var(--text-muted)' }}>
+                        {item.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.date}</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1338,7 +1436,7 @@ export default function ExamPage() {
                   </div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 14 }}>AI Exam Coach</div>
-                    <div style={{ fontSize: 11, color: 'var(--violet-400)' }}>Aqlli tayyorgarlik yordamchisi</div>
+                    <div style={{ fontSize: 11, color: 'var(--violet-400)' }}>{t('exam.aiCoachSub')}</div>
                   </div>
                 </div>
                 <button
@@ -1355,13 +1453,15 @@ export default function ExamPage() {
                   {/* Pass Probability */}
                   <div style={{ marginBottom: 16, padding: '14px 16px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>O'tish ehtimoli</span>
-                      <span style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>87%</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('exam.passProb')}</span>
+                      <span style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{readiness}%</span>
                     </div>
                     <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: '87%', background: 'linear-gradient(90deg,#22c55e,#4ade80)', borderRadius: 99, boxShadow: '0 0 10px rgba(34,197,94,0.4)' }} />
+                      <div style={{ height: '100%', width: `${readiness}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)', borderRadius: 99, boxShadow: '0 0 10px rgba(34,197,94,0.4)' }} />
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>TypeScript bo'limlarini takrorlang — 95% bo'ladi!</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                      {aiRecommendations[0]?.text || t('exam.noRecommendationsYet')}
+                    </div>
                   </div>
 
                   {/* Radar Chart + Topics */}
@@ -1386,12 +1486,8 @@ export default function ExamPage() {
 
                   {/* AI Suggestions */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 2 }}>Aqlli tavsiyalar</div>
-                    {[
-                      { text: 'TypeScript Generics bo\'limini o\'tkazing', priority: 'high', icon: Zap, color: '#f59e0b' },
-                      { text: 'React Performance patternsini takrorlang', priority: 'medium', icon: Activity, color: '#3b82f6' },
-                      { text: '3 ta amaliy test ishlang', priority: 'low', icon: Target, color: '#22c55e' },
-                    ].map((s, i) => (
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 2 }}>{t('exam.smartRecs')}</div>
+                    {aiRecommendations.map((s, i) => (
                       <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--surface-1)', borderRadius: 10, border: '1px solid var(--border-1)', cursor: 'pointer' }} className="card-hover-subtle">
                         <div style={{ width: 28, height: 28, borderRadius: 8, background: `${s.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <s.icon size={13} color={s.color} />
@@ -1402,8 +1498,12 @@ export default function ExamPage() {
                     ))}
                   </div>
 
-                  <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)' }}>
-                    <Sparkles size={13} /> AI amaliy test rejimi
+                  <button 
+                    className="btn btn-primary btn-sm" 
+                    style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)' }}
+                    onClick={() => toast('AI amaliy test rejimi tez kunda ishga tushadi! 🚀', { icon: '✨' })}
+                  >
+                    <Sparkles size={13} /> {t('exam.aiPracticeMode')}
                   </button>
                 </>
               )}
@@ -1413,19 +1513,19 @@ export default function ExamPage() {
           {/* Last Results */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16, letterSpacing: '-0.2px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BarChart3 size={15} color="var(--blue-400)" /> Oxirgi natijalar
+              <BarChart3 size={15} color="var(--blue-400)" /> {t('exam.lastResults')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {history.length === 0 ? (
+              {completedHistory.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
-                  Hozircha imtihon topshirilmagan
+                  {t('exam.noHistory')}
                 </div>
               ) : (
-                history.slice(0, 5).map((h, i) => {
+                completedHistory.slice(0, 5).map((h, i) => {
                   const title = getExamTitle(h.testId);
                   const color = h.passed ? '#22c55e' : '#ef4444';
                   const IconComponent = h.passed ? CheckCircle : X;
-                  const dateStr = h.startedAt ? new Date(h.startedAt).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' }) : '';
+                  const dateStr = h.submittedAt ? new Date(h.submittedAt).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' }) : (h.startedAt ? new Date(h.startedAt).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' }) : '');
                   return (
                     <div key={h.id || i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface-1)', borderRadius: 12, border: '1px solid var(--border-1)' }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1438,7 +1538,7 @@ export default function ExamPage() {
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 18, fontWeight: 900, color: color }}>{h.score}%</div>
                         <div style={{ fontSize: 10, color: h.passed ? 'var(--green-400)' : 'var(--red-400)', fontWeight: 600 }}>
-                          {h.passed ? "O'tdi" : "O'tmadi"}
+                          {h.passed ? t('exam.passedLabel') : t('exam.failedLabel')}
                         </div>
                       </div>
                     </div>
@@ -1446,12 +1546,72 @@ export default function ExamPage() {
                 })
               )}
             </div>
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 12, width: '100%', justifyContent: 'center', fontSize: 12 }}>
-              Barcha natijalar ko'rish <ChevronRight size={12} />
+            <button 
+              className="btn btn-ghost btn-sm" 
+              style={{ marginTop: 12, width: '100%', justifyContent: 'center', fontSize: 12 }}
+              onClick={() => setShowAllResults(true)}
+            >
+              {t('exam.seeAllResults')} <ChevronRight size={12} />
             </button>
           </div>
         </div>
       </div>
+      
+      {/* All Results Modal */}
+      {showAllResults && typeof document !== 'undefined' && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+          <div className="card" style={{ maxWidth: 650, width: '90%', position: 'relative', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-lg)' }}>
+            <button 
+              className="btn btn-ghost btn-icon" 
+              onClick={() => setShowAllResults(false)} 
+              style={{ position: 'absolute', top: 16, right: 16, borderRadius: '50%', background: 'var(--surface-2)' }}
+            >
+              <X size={20} color="var(--text-secondary)" />
+            </button>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-primary)' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '12px', background: 'var(--blue-400)', opacity: 0.1, position: 'absolute' }} />
+              <BarChart3 size={22} color="var(--blue-400)" style={{ marginLeft: 9 }} />
+              <span style={{ position: 'relative' }}>{t('exam.lastResults')} - {t('exam.seeAllResults')}</span>
+            </div>
+            
+            <div style={{ overflowY: 'auto', flex: 1, paddingRight: 8, display: 'flex', flexDirection: 'column', gap: 12 }} className="custom-scrollbar">
+              {completedHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
+                  <Activity size={48} color="var(--text-muted)" style={{ opacity: 0.5, margin: '0 auto 16px' }} />
+                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{t('exam.noHistory')}</div>
+                </div>
+              ) : (
+                completedHistory.map((h, i) => {
+                  const title = getExamTitle(h.testId);
+                  const color = h.passed ? '#22c55e' : '#ef4444';
+                  const IconComponent = h.passed ? CheckCircle : X;
+                  const dateStr = h.submittedAt ? new Date(h.submittedAt).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  return (
+                    <div key={h.id || i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: 'var(--surface-1)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-1)', transition: 'var(--transition)' }}>
+                      <div style={{ width: 48, height: 48, borderRadius: '14px', background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <IconComponent size={24} color={color} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Clock size={12} /> {dateStr}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: color }}>{h.score}%</div>
+                        <div style={{ fontSize: 11, color: h.passed ? 'var(--green-400)' : 'var(--red-400)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2, background: `${color}15`, padding: '2px 8px', borderRadius: '99px', display: 'inline-block' }}>
+                          {h.passed ? t('exam.passedLabel') : t('exam.failedLabel')}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1459,13 +1619,13 @@ export default function ExamPage() {
 // ── Result Screen ─────────────────────────────────────
 function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
   const passed = score.score >= score.passing;
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
 
   const handlePrint = () => {
     if (!score) return;
-    if (!score.attemptId || String(score.attemptId).startsWith('mock-')) {
-      alert('Sertifikat faqat server tasdiqlagan natija uchun chiqariladi.');
+    if (!score.attemptId) {
+      alert(t('exam.certCount') + ' ' + t('exam.onlyVerifiedResult'));
       return;
     }
     const printWindow = window.open('', '_blank', 'width=900,height=650');
@@ -1473,8 +1633,8 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
 
     const { user } = useAuthStore.getState();
     const holderName = user ? (user.fullName || `${user.firstName} ${user.lastName}`) : 'Xodim';
-    const examTitle = score.examTitle || 'Imtihon';
-    const examTitleRu = score.examTitleRu || score.examTitle || 'Imtihon';
+    const examTitle = score.examTitle || t('exam.defaultTitle');
+    const examTitleRu = score.examTitleRu || score.examTitle || t('exam.defaultTitle');
     const certId = score.attemptId;
     const certScore = score.score || 0;
     const submittedAt = score.submittedAt ? new Date(score.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -1482,7 +1642,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
     printWindow.document.write(`
       <html>
         <head>
-          <title>${isRu ? 'Сертификат' : 'Sertifikat'} - ${isRu ? examTitleRu : examTitle}</title>
+          <title>${isRu ? 'Сертификат' : t('exam.certLabel')} - ${isRu ? examTitleRu : examTitle}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@600;700;800;900&family=Great+Vibes&family=Pinyon+Script&family=Montserrat:wght@400;500;600;700&display=swap');
             body {
@@ -1675,40 +1835,40 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               
               <div class="cert-serial">No. AGMK-LMS-${certId.substring(0, 8).toUpperCase()}</div>
               
-              <div class="cert-header">${isRu ? 'СЕРТИФИКАТ' : 'SERTIFIKAT'}</div>
-              <div class="cert-subtitle">${isRu ? 'ПОДТВЕРЖДЕНИЕ КВАЛИФИКАЦИИ' : 'KVALIFIKATSIYANI TASDIQLASH'}</div>
+              <div class="cert-header">${isRu ? 'СЕРТИФИКАТ' : t('exam.certLabel')}</div>
+              <div class="cert-subtitle">${isRu ? 'ПОДТВЕРЖДЕНИЕ КВАЛИФИКАЦИИ' : t('exam.certSub')}</div>
               
-              <div class="award-to">${isRu ? 'Настоящим подтверждается, что' : 'Ushbu sertifikat egasi'}</div>
+              <div class="award-to">${isRu ? 'Настоящим подтверждается, что' : t('exam.awardTo')}</div>
               <div class="holder-name">${holderName}</div>
               
               <div class="cert-body">
                 ${isRu 
                   ? `успешно прошел(ла) программу оценки знаний по курсу <strong>"${examTitleRu}"</strong> с результатом <strong>${certScore}%</strong>.`
-                  : `<strong>"${examTitle}"</strong> yo‘nalishi bo‘yicha imtihondan muvaffaqiyatli o‘tib, <strong>${certScore}%</strong> natija ko‘rsatgani uchun ushbu sertifikat bilan taqdirlanadi.`}
+                  : t('exam.certBody', { title: examTitle, score: certScore })}
               </div>
               
               <div class="cert-meta">
                 <div>
                   <div>${submittedAt}</div>
                   <div class="signature-line"></div>
-                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Дата выдачи' : 'Berilgan sana'}</div>
+                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Дата выдачи' : t('exam.dateIssued')}</div>
                 </div>
                 <div>
                   <div class="signature-specimen">Alisher Qodirov</div>
                   <div class="signature-line"></div>
-                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Директор / Утвердил' : 'Tasdiqlovchi / Direktor'}</div>
+                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Директор / Утвердил' : t('exam.directorSign')}</div>
                 </div>
                 <div>
                   <div style="font-style:italic; font-family:'Cinzel', serif; font-size:12px; color:#0d1117; font-weight: 700;">AGMK LMS</div>
                   <div class="signature-line"></div>
-                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Организация' : 'Tashkilot'}</div>
+                  <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Организация' : t('exam.organization')}</div>
                 </div>
               </div>
               
               <div class="qr-code" style="display: flex; gap: 10px; align-items: center;">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=64&data=${encodeURIComponent(window.location.protocol + '//' + window.location.host + '/verify-certificate?id=' + certId)}" width="64" height="64" style="border: 1px solid #d4af37; padding: 2px; background: white;" />
                 <div>
-                  <div style="font-weight: bold; color: #aa7c11; font-size: 9px; margin-bottom: 2px; letter-spacing: 0.5px;">${isRu ? 'ПРОВЕРИТЬ' : 'TEKSHIRISH'}</div>
+                  <div style="font-weight: bold; color: #aa7c11; font-size: 9px; margin-bottom: 2px; letter-spacing: 0.5px;">${isRu ? 'ПРОВЕРИТЬ' : t('exam.verify')}</div>
                   <div style="font-size: 8px; color: #64748b;">ID: ${certId.substring(0, 18).toUpperCase()}...</div>
                 </div>
               </div>
@@ -1758,17 +1918,17 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
             {score.score}%
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, margin: '12px 0 6px', letterSpacing: '-0.5px' }}>
-            {passed ? '🎉 Tabriklaymiz!' : 'Yana harakat qiling'}
+            {passed ? t('exam.congratulations') : t('exam.tryAgain')}
           </div>
           <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 28 }}>
-            {passed ? "Sertifikat olishga haqli bo'ldingiz!" : `O'tish uchun ${score.passing}% kerak`}
+            {passed ? t('exam.earnedCert') : t('exam.needMoreForPassing', { passing: score.passing })}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, maxWidth: 400, margin: '0 auto' }}>
             {[
-              { label: "To'g'ri", value: score.correct, color: '#22c55e', icon: CheckCircle },
-              { label: "Noto'g'ri", value: score.wrong, color: '#ef4444', icon: X },
-              { label: "O'tkazildi", value: score.skipped, color: '#f59e0b', icon: Flag },
+              { label: t('exam.correct'), value: score.correct, color: '#22c55e', icon: CheckCircle },
+              { label: t('exam.wrong'), value: score.wrong, color: '#ef4444', icon: X },
+              { label: t('exam.skipped'), value: score.skipped, color: '#f59e0b', icon: Flag },
             ].map((s, i) => (
               <div key={i} style={{ padding: '16px 12px', background: 'var(--surface-1)', borderRadius: 14, border: '1px solid var(--border-1)', textAlign: 'center' }}>
                 <s.icon size={18} color={s.color} style={{ marginBottom: 6 }} />
@@ -1783,7 +1943,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
       {/* Topic Breakdown */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 15, marginBottom: 20, letterSpacing: '-0.2px' }}>
-          <BarChart3 size={16} color="var(--blue-400)" /> Mavzu bo'yicha tahlil
+          <BarChart3 size={16} color="var(--blue-400)" /> {t('exam.topicBreakdown')}
         </div>
         {score.topics.map((t: any, i: number) => (
           <div key={i} style={{ marginBottom: 16 }}>
@@ -1800,10 +1960,10 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 12 }}>
-        <button className="btn btn-secondary" onClick={onBack}>← Orqaga</button>
+        <button className="btn btn-secondary" onClick={onBack}>← {t('exam.backBtn')}</button>
         {passed && (
           <button className="btn btn-primary" onClick={handlePrint} style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 8px 24px rgba(34,197,94,0.3)' }}>
-            <Download size={14} /> Sertifikat yuklab olish
+            <Download size={14} /> {t('exam.downloadCert')}
           </button>
         )}
         {!passed && (

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo } from 'react';
 import { clsx } from 'clsx';
 import { useSocket } from '@/hooks/useSocket';
 import {
@@ -18,8 +18,6 @@ import { customConfirm } from '@/shared/lib/toast-utils';
 
 type Tab = 'overview' | 'users' | 'courses' | 'analytics' | 'settings' | 'monitoring';
 
-const areaData: any[] = [];
-
 const roleLabels: Record<string, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
@@ -30,11 +28,16 @@ const roleLabels: Record<string, string> = {
   department_manager: 'Rahbar',
 };
 
-const MOCK_ADMIN_COURSES: any[] = [];
-const MOCK_ADMIN_EXAMS: any[] = [];
-const MOCK_KPIS: any[] = [];
-const MOCK_MONTHLY_DATA: any[] = [];
-const MOCK_DEPT_DATA: any[] = [];
+const EmptyState = ({ text, height = 180 }: { text: string; height?: number }) => (
+  <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
+    {text}
+  </div>
+);
+
+const unwrapArray = (response: any) => {
+  const payload = response?.data?.data ?? response?.data ?? response;
+  return Array.isArray(payload) ? payload : [];
+};
 
 export default function AdminPage() {
   const { user: currentUser } = useAuthStore();
@@ -62,12 +65,11 @@ export default function AdminPage() {
       setLoadingUsers(true);
       apiClient.get('/users')
         .then(res => {
-          const data = res.data?.data || res.data || [];
-          setUsers(Array.isArray(data) ? data : []);
+          setUsers(unwrapArray(res));
           setLoadingUsers(false);
         })
         .catch(err => {
-          console.error('Error fetching users in admin:', err);
+          toast.error(err.response?.data?.message || 'Foydalanuvchilarni yuklashda xatolik');
           setLoadingUsers(false);
         });
     }
@@ -82,14 +84,12 @@ export default function AdminPage() {
         apiClient.get('/exams')
       ])
         .then(([coursesRes, examsRes]) => {
-          const coursesData = coursesRes.data?.data || coursesRes.data || [];
-          const examsData = examsRes.data?.data || examsRes.data || [];
-          setCourses(Array.isArray(coursesData) ? coursesData : []);
-          setExams(Array.isArray(examsData) ? examsData : []);
+          setCourses(unwrapArray(coursesRes));
+          setExams(unwrapArray(examsRes));
           setCoursesExamsLoading(false);
         })
         .catch(err => {
-          console.error('Error fetching courses/exams in admin:', err);
+          toast.error(err.response?.data?.message || 'Kurs va imtihonlarni yuklashda xatolik');
           setCoursesExamsLoading(false);
         });
     }
@@ -97,7 +97,7 @@ export default function AdminPage() {
 
   // Fetch Analytics
   useEffect(() => {
-    if (activeTab === 'analytics') {
+    if (activeTab === 'analytics' || activeTab === 'overview') {
       setLoadingAnalytics(true);
       Promise.all([
         apiClient.get('/analytics/kpis'),
@@ -105,13 +105,13 @@ export default function AdminPage() {
         apiClient.get('/analytics/departments')
       ])
         .then(([kpisRes, monthlyRes, deptRes]) => {
-          setKpis(kpisRes.data || []);
-          setMonthlyData(monthlyRes.data || []);
-          setDeptData(deptRes.data || []);
+          setKpis(unwrapArray(kpisRes));
+          setMonthlyData(unwrapArray(monthlyRes));
+          setDeptData(unwrapArray(deptRes));
           setLoadingAnalytics(false);
         })
         .catch(err => {
-          console.error('Error fetching analytics in admin:', err);
+          toast.error(err.response?.data?.message || 'Analitikani yuklashda xatolik');
           setLoadingAnalytics(false);
         });
     }
@@ -140,11 +140,31 @@ export default function AdminPage() {
   };
 
   const displayUsers = users;
-  const displayCourses = courses.length > 0 ? courses : MOCK_ADMIN_COURSES;
-  const displayExams = exams.length > 0 ? exams : MOCK_ADMIN_EXAMS;
-  const displayKpis = kpis.length > 0 ? kpis : MOCK_KPIS;
-  const displayMonthly = monthlyData.length > 0 ? monthlyData : MOCK_MONTHLY_DATA;
-  const displayDept = deptData.length > 0 ? deptData : MOCK_DEPT_DATA;
+  const displayCourses = courses;
+  const displayExams = exams;
+  const displayKpis = kpis;
+  const displayMonthly = monthlyData;
+  const displayDept = deptData;
+  const overviewStats = useMemo(() => {
+    const icons = [Users, BookOpen, Award, ServerCrash];
+    return displayKpis.slice(0, 4).map((kpi, index) => ({
+      label: kpi.label,
+      value: kpi.value ?? 0,
+      icon: icons[index] || BarChart3,
+      color: kpi.color || ['#3b82f6', '#8b5cf6', '#22c55e', '#10b981'][index] || '#3b82f6',
+      trend: kpi.change || '',
+      up: kpi.up !== undefined ? kpi.up : !String(kpi.change || '').startsWith('-'),
+    }));
+  }, [displayKpis]);
+  const adminInsights = useMemo(() => {
+    const lowScoreDept = [...displayDept].sort((a, b) => Number(a.score || 0) - Number(b.score || 0))[0];
+    const lastMonth = displayMonthly[displayMonthly.length - 1];
+    const insights: Array<{ type: string; icon: typeof AlertTriangle; title: string; sub: string }> = [];
+    if (lowScoreDept) insights.push({ type: 'warning', icon: AlertTriangle, title: `${lowScoreDept.dept} bo'limida o'rtacha ball ${lowScoreDept.score}`, sub: "Qo'shimcha trening rejasini ko'rib chiqing" });
+    if (lastMonth) insights.push({ type: 'info', icon: TrendingUp, title: `${lastMonth.users || 0} faol foydalanuvchi`, sub: `${lastMonth.m} oyidagi test faolligi` });
+    if (displayKpis.length) insights.push({ type: 'success', icon: CheckCircle, title: "KPI ma'lumotlari real va yangilangan", sub: `${displayKpis.length} ta ko'rsatkich yuklandi` });
+    return insights;
+  }, [displayDept, displayMonthly, displayKpis]);
 
   const Tip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -160,7 +180,7 @@ export default function AdminPage() {
 
   return (
     <div className="admin-layout">
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div className="admin-header fade-in">
         <div>
           <h1 className="page-title">Boshqaruv Paneli</h1>
@@ -172,7 +192,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* ── Navigation ── */}
+      {/* -- Navigation -- */}
       <div className="admin-nav fade-in">
         {[
           { id: 'overview', icon: LayoutDashboard, label: 'Umumiy' },
@@ -193,19 +213,18 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* ── Content Area ── */}
+      {/* -- Content Area -- */}
       <div className="admin-content fade-in fade-in-1">
         
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="admin-overview">
             <div className="grid grid-4" style={{ marginBottom: 24 }}>
-              {[
-                { label: 'Jami xodimlar', value: '1,284', icon: Users, color: '#3b82f6', trend: '+12%' },
-                { label: 'Faol kurslar', value: '64', icon: BookOpen, color: '#8b5cf6', trend: '+4' },
-                { label: 'Sertifikatlar', value: '892', icon: Award, color: '#22c55e', trend: '+28%' },
-                { label: 'Tizim salomatligi', value: '99.9%', icon: ServerCrash, color: '#10b981', trend: 'Zo\'r' },
-              ].map((s, i) => (
+              {overviewStats.length === 0 ? (
+                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                  <EmptyState text="KPI ma'lumotlari hali shakllanmagan" height={120} />
+                </div>
+              ) : overviewStats.map((s, i) => (
                 <div key={i} className="stat-card">
                   <div className="stat-header">
                     <div>
@@ -216,8 +235,8 @@ export default function AdminPage() {
                       <s.icon size={20} color={s.color} />
                     </div>
                   </div>
-                  <div className="stat-change up">
-                    <TrendingUp size={12} /> {s.trend}
+                  <div className={clsx('stat-change', s.up ? 'up' : 'down')}>
+                    {s.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {s.trend}
                   </div>
                 </div>
               ))}
@@ -230,18 +249,21 @@ export default function AdminPage() {
                   <button className="btn btn-ghost btn-sm"><Calendar size={13} /> Oxirgi 6 oy</button>
                 </div>
                 <div style={{ height: 260 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={areaData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <Tooltip content={<Tip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                      <Area type="monotone" dataKey="users" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  {displayMonthly.length === 0 ? <EmptyState text="Oylik faollik ma'lumotlari hali yo'q" height={260} /> : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={displayMonthly} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="m" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <Tooltip content={<Tip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                        <Area type="monotone" dataKey="users" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
@@ -251,27 +273,15 @@ export default function AdminPage() {
                   <span style={{ fontWeight: 700, fontSize: 15 }}>AI Tahlil & Muammolar</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div className="admin-alert warning">
-                    <AlertTriangle size={15} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>32 xodim testdan o'tmadi</div>
-                      <div style={{ fontSize: 11, color: 'var(--amber-400)', opacity: 0.8 }}>Sanoat xavfsizligi kursi</div>
+                  {adminInsights.length === 0 ? <EmptyState text="Tahlil uchun ma'lumot yetarli emas" height={180} /> : adminInsights.map((insight, index) => (
+                    <div key={index} className={clsx('admin-alert', insight.type)}>
+                      <insight.icon size={15} />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{insight.title}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', opacity: 0.9 }}>{insight.sub}</div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="admin-alert info">
-                    <TrendingUp size={15} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>Trafik 45% ga oshdi</div>
-                      <div style={{ fontSize: 11, color: 'var(--blue-400)', opacity: 0.8 }}>Server resurslarini optimallashtiring</div>
-                    </div>
-                  </div>
-                  <div className="admin-alert success">
-                    <CheckCircle size={15} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>Yangi modul muvaffaqiyatli</div>
-                      <div style={{ fontSize: 11, color: 'var(--green-400)', opacity: 0.8 }}>"React asoslari" 98% bitiruvchiga ega</div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -447,7 +457,11 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayCourses.map(c => (
+                    {displayCourses.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: 30, color: 'var(--text-tertiary)' }}>Kurslar topilmadi</td>
+                      </tr>
+                    ) : displayCourses.map(c => (
                       <tr key={c.id || c._id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -460,7 +474,7 @@ export default function AdminPage() {
                         <td>{c.lessons} ta</td>
                         <td>{c.duration}</td>
                         <td>{c.enrolled || 0} ta</td>
-                        <td>⭐ {c.rating || 5.0}</td>
+                        <td>? {c.rating || 5.0}</td>
                         <td>
                           <span className={clsx('badge', c.status === 'active' || c.status === 'published' ? 'badge-green' : 'badge-amber')}>
                             {c.status === 'active' || c.status === 'published' ? 'Faol' : 'Qoralama'}
@@ -484,7 +498,11 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayExams.map(e => (
+                    {displayExams.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-tertiary)' }}>Imtihonlar topilmadi</td>
+                      </tr>
+                    ) : displayExams.map(e => (
                       <tr key={e.id || e._id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -511,7 +529,11 @@ export default function AdminPage() {
         {activeTab === 'analytics' && (
           <div className="admin-overview" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div className="grid grid-4">
-              {displayKpis.map((kpi, i) => {
+              {displayKpis.length === 0 ? (
+                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                  <EmptyState text="Analytics KPI ma'lumotlari hali yo'q" height={120} />
+                </div>
+              ) : displayKpis.map((kpi, i) => {
                 const IconComponent = i === 0 ? Users : i === 1 ? CheckCircle : i === 2 ? Award : Clock;
                 const trendUp = kpi.up !== undefined ? kpi.up : kpi.change.startsWith('+');
                 return (
@@ -539,6 +561,8 @@ export default function AdminPage() {
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>Foydalanuvchilar faolligi (Oylik)</div>
                 {loadingAnalytics ? (
                   <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)' }}>Yuklanmoqda...</div>
+                ) : displayMonthly.length === 0 ? (
+                  <EmptyState text="Oylik faollik ma'lumotlari hali yo'q" height={260} />
                 ) : (
                   <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -559,6 +583,8 @@ export default function AdminPage() {
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>Bo'limlar kesimida reytinglar</div>
                 {loadingAnalytics ? (
                   <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)' }}>Yuklanmoqda...</div>
+                ) : displayDept.length === 0 ? (
+                  <EmptyState text="Bo'limlar kesimida reyting ma'lumotlari hali yo'q" height={260} />
                 ) : (
                   <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -635,7 +661,7 @@ export default function AdminPage() {
   );
 }
 
-// ─── Exam Monitoring Panel ───────────────────────────────────────────────────
+// --- Exam Monitoring Panel ---------------------------------------------------
 const RISK_COLORS: Record<string, string> = {
   NORMAL: '#22c55e', WARNING: '#f59e0b', CRITICAL: '#ef4444', TERMINATED: '#7f1d1d',
 };
@@ -790,7 +816,7 @@ function ExamMonitoringPanel() {
               <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 16px', borderBottom: '1px solid var(--border-1)', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 2 }}>{e.time}</span>
                 <span style={{ fontSize: 12, color: e.type === 'auto_submit' ? '#ef4444' : '#f59e0b', fontWeight: 600 }}>
-                  {e.type === 'auto_submit' ? '⛔' : '⚠️'} {e.msg}
+                  {e.type === 'auto_submit' ? '?' : '??'} {e.msg}
                 </span>
               </div>
             ))}

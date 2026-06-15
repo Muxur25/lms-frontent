@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Filter, Mail, MoreHorizontal } from 'lucide-react';
+import { Search, Mail } from 'lucide-react';
 import { clsx } from 'clsx';
 import { apiClient } from '@/api/axios';
 
@@ -32,9 +32,8 @@ export default function Employees() {
           setLoading(false);
         }
       })
-      .catch(err => {
+      .catch(() => {
         if (isMounted) {
-          console.error('Error fetching employees:', err);
           setError(t('common.error') || 'Xatolik yuz berdi');
           setLoading(false);
         }
@@ -50,8 +49,21 @@ export default function Employees() {
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
+  const selectedEmails = employees
+    .filter((employee) => selected.includes(employee.id) && employee.email)
+    .map((employee) => employee.email);
+
   const toggleSelect = (id: string) => {
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((current) => current.length === filtered.length ? [] : filtered.map((employee) => employee.id));
+  };
+
+  const sendEmailToSelected = () => {
+    if (!selectedEmails.length) return;
+    window.location.href = `mailto:${selectedEmails.join(',')}`;
   };
 
   if (loading) {
@@ -89,10 +101,11 @@ export default function Employees() {
           <div className="page-title">{t('employees.title')}</div>
           <div className="page-sub">{employees.length} {t('employees.title').toLowerCase()}</div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary btn-sm"><Mail size={14} /> {t('employees.invite')}</button>
-          <button className="btn btn-primary btn-sm"><Plus size={14} /> {t('common.create')}</button>
-        </div>
+        {selectedEmails.length > 0 && (
+          <button className="btn btn-secondary btn-sm" onClick={sendEmailToSelected}>
+            <Mail size={14} /> {t('employees.sendEmail', 'Email yuborish')} ({selectedEmails.length})
+          </button>
+        )}
       </div>
 
       <div className="card fade-in fade-in-1" style={{ marginBottom: 20 }}>
@@ -101,7 +114,6 @@ export default function Employees() {
             <Search size={14} color="var(--text-muted)" />
             <input placeholder={t('employees.search')} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <button className="btn btn-secondary btn-sm"><Filter size={13} /> {t('common.all')}</button>
         </div>
       </div>
 
@@ -110,7 +122,14 @@ export default function Employees() {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 40, paddingLeft: 20 }}><input type="checkbox" style={{ accentColor: 'var(--blue-500)' }} /></th>
+                <th style={{ width: 40, paddingLeft: 20 }}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selected.length === filtered.length}
+                    onChange={toggleSelectAll}
+                    style={{ accentColor: 'var(--blue-500)' }}
+                  />
+                </th>
                 <th>{t('employees.employee', 'Xodim')}</th>
                 <th>{t('employees.department')}</th>
                 <th>{t('employees.position')}</th>
@@ -121,11 +140,20 @@ export default function Employees() {
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-secondary)' }}>
+                    {search ? t('employees.notFound', 'Qidiruv bo‘yicha xodim topilmadi.') : t('employees.empty', 'Xodimlar ro‘yxati bo‘sh.')}
+                  </td>
+                </tr>
+              )}
               {filtered.map(emp => {
                 const displayName = isRu ? (emp.nameRu || emp.name || emp.fullName || 'Xodim') : (emp.name || emp.fullName || 'Xodim');
                 const deptKey = emp.dept || emp.departmentName || '';
                 const color = deptColors[deptKey] || '#3b82f6';
                 const initials = displayName.split(' ').filter(Boolean).map((n: string) => n[0]).join('').toUpperCase() || '??';
+                const progress = Math.max(0, Math.min(Number(emp.progress ?? 0) || 0, 100));
+                const isActive = emp.status ? emp.status === 'active' : emp.isActive !== false;
                 return (
                   <tr key={emp.id}>
                     <td style={{ paddingLeft: 20 }}>
@@ -149,21 +177,24 @@ export default function Employees() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div className="progress-bar" style={{ height: 5, width: 80 }}>
-                          <div className="progress-fill" style={{ width: `${emp.progress}%`, background: color }} />
+                          <div className="progress-fill" style={{ width: `${progress}%`, background: color }} />
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: emp.progress >= 80 ? 'var(--green-400)' : emp.progress >= 60 ? 'var(--amber-400)' : 'var(--red-400)' }}>{emp.progress}%</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: progress >= 80 ? 'var(--green-400)' : progress >= 60 ? 'var(--amber-400)' : 'var(--red-400)' }}>{progress}%</span>
                       </div>
                     </td>
                     <td>
-                      <span className={clsx('badge', emp.status === 'active' ? 'badge-green' : 'badge-red')}>
+                      <span className={clsx('badge', isActive ? 'badge-green' : 'badge-red')}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
-                        {emp.status === 'active' ? t('employees.active') : t('employees.inactive')}
+                        {isActive ? t('employees.active') : t('employees.inactive')}
                       </span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost btn-sm btn-icon"><Mail size={13} /></button>
-                        <button className="btn btn-ghost btn-sm btn-icon"><MoreHorizontal size={13} /></button>
+                        {emp.email && (
+                          <a className="btn btn-ghost btn-sm btn-icon" href={`mailto:${emp.email}`} aria-label={t('employees.sendEmail', 'Email yuborish')}>
+                            <Mail size={13} />
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>

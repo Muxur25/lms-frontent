@@ -136,6 +136,16 @@ const pageSize = 15;
 
 const unwrap = (payload: any): AnalyticsData => payload || emptyData;
 
+  const formatChange = (t: any, changeStr: string) => {
+    if (!changeStr) return changeStr;
+    return changeStr
+      .replace('active', tr(t, 'analytics.executive.kpiChange.active', 'active'))
+      .replace('issued', tr(t, 'analytics.executive.kpiChange.issued', 'issued'))
+      .replace('joins', tr(t, 'analytics.executive.kpiChange.joins', 'joins'))
+      .replace('tokens', tr(t, 'analytics.executive.kpiChange.tokens', 'tokens'));
+  };
+
+
 const tr = (
   t: (key: string, options?: Record<string, unknown>) => string,
   key: string,
@@ -991,16 +1001,16 @@ function ExecutiveCenter({ data, loading }: { data: ExecutiveData | null; loadin
             {tr(t, 'analytics.executive.subtitle', 'Learning, exams, certificates, webinars, AI adoption and predictive intelligence in one command center.')}
           </div>
         </div>
-        <div className="executive-bi-badge">{data.scope}</div>
+        <div className="executive-bi-badge">{tr(t, `analytics.executive.scope.${data.scope}`, data.scope)}</div>
       </div>
 
       <div className="executive-kpi-grid">
         {data.kpis.map((item) => (
           <div key={item.key} className="executive-kpi-card">
-            <div className="executive-kpi-label">{item.label}</div>
+            <div className="executive-kpi-label">{tr(t, `analytics.executive.kpi.${item.key}`, item.label)}</div>
             <div className="executive-kpi-value">{item.value}</div>
             <div className="executive-kpi-change" style={{ color: item.direction === 'up' ? 'var(--green-400)' : 'var(--red-400)' }}>
-              {item.change}
+              {formatChange(t, item.change)}
             </div>
           </div>
         ))}
@@ -1030,31 +1040,31 @@ function ExecutiveCenter({ data, loading }: { data: ExecutiveData | null; loadin
             <div className="exam-panel-sub">{tr(t, 'analytics.executive.kpiCenterSub', 'Board-level operating indicators and AI readiness.')}</div>
           </div>
           <div className="executive-mini-grid">
-            <ExecutiveMini label="Learning Hours" value={data.executiveKpis.totalLearningHours} />
-            <ExecutiveMini label="Monthly Active" value={data.executiveKpis.monthlyActiveLearners} />
-            <ExecutiveMini label="Avg Score" value={`${data.executiveKpis.averageScore}%`} />
-            <ExecutiveMini label="Certification" value={`${data.executiveKpis.certificationRate}%`} />
-            <ExecutiveMini label="AI Adoption" value={`${data.executiveKpis.aiAdoptionRate}%`} />
-            <ExecutiveMini label="Engagement" value={`${data.executiveKpis.employeeEngagement}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.learningHours', 'Learning Hours')} value={data.executiveKpis.totalLearningHours} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.monthlyActive', 'Monthly Active')} value={data.executiveKpis.monthlyActiveLearners} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.avgScore', 'Avg Score')} value={`${data.executiveKpis.averageScore}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.certification', 'Certification')} value={`${data.executiveKpis.certificationRate}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.aiAdoption', 'AI Adoption')} value={`${data.executiveKpis.aiAdoptionRate}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.engagement', 'Engagement')} value={`${data.executiveKpis.employeeEngagement}%`} />
           </div>
         </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Leaderboard title={tr(t, 'analytics.executive.departmentRanking', 'Top Departments')} rows={data.rankings.departments.map((item) => ({
-          name: item.name,
+          name: item.name === 'Unassigned' ? tr(t, 'analytics.executive.department.unassigned', 'Unassigned') : item.name,
           metric: `${item.averageScore}%`,
-          sub: `${item.passRate}% pass / ${item.attempts} attempts`,
+          sub: tr(t, 'analytics.results.metrics.passAttempts', '{{passRate}}% pass / {{attempts}} attempts', { passRate: String(item.passRate), attempts: String(item.attempts) }),
         }))} />
         <Leaderboard title={tr(t, 'analytics.executive.trainerRanking', 'Top Trainers')} rows={data.rankings.trainers.map((item) => ({
-          name: item.name,
+          name: item.name === 'Unknown trainer' ? tr(t, 'analytics.executive.trainer.unknown', 'Unknown trainer') : (item.name === 'Current trainer' ? tr(t, 'analytics.executive.trainer.current', 'Current trainer') : item.name),
           metric: `${item.passRate}%`,
-          sub: `${item.exams} exams / ${item.attempts} attempts / ${item.averageScore}% avg`,
+          sub: tr(t, 'analytics.results.metrics.trainerSummary', '{{exams}} exams / {{attempts}} attempts / {{average}}% avg', { exams: String(item.exams), attempts: String(item.attempts), average: String(item.averageScore) }),
         }))} />
         <Leaderboard title={tr(t, 'analytics.executive.courseRanking', 'Top Courses')} rows={data.rankings.courses.map((item) => ({
           name: item.name,
           metric: `${item.completionRate}%`,
-          sub: `${item.enrollments} enrollments`,
+          sub: tr(t, 'analytics.executive.metrics.enrollments', '{{enrollments}} enrollments', { enrollments: String(item.enrollments) }),
         }))} />
       </div>
 
@@ -1062,17 +1072,32 @@ function ExecutiveCenter({ data, loading }: { data: ExecutiveData | null; loadin
         <div className="exam-panel">
           <div className="exam-panel-title">{tr(t, 'analytics.executive.predictive', 'Predictive Analytics')}</div>
           <div className="mt-4 executive-mini-grid">
-            <ExecutiveMini label="Certification Probability" value={`${data.predictive.certificationProbability}%`} />
-            <ExecutiveMini label="Exam Success Probability" value={`${data.predictive.examSuccessProbability}%`} />
-            <ExecutiveMini label="Dropout Risk" value={`${data.predictive.dropoutRisk}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.certProb', 'Certification Probability')} value={`${data.predictive.certificationProbability}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.examProb', 'Exam Success Probability')} value={`${data.predictive.examSuccessProbability}%`} />
+            <ExecutiveMini label={tr(t, 'analytics.executive.mini.dropoutRisk', 'Dropout Risk')} value={`${data.predictive.dropoutRisk}%`} />
           </div>
         </div>
-        <div className="exam-panel">
+            <div className="exam-panel">
           <div className="exam-panel-title">{tr(t, 'analytics.executive.recommendations', 'AI Recommendations')}</div>
           <div className="mt-4 grid gap-3">
-            {data.predictive.recommendations.map((item, index) => (
-              <div key={index} className="executive-recommendation">{item}</div>
-            ))}
+            {data.predictive.recommendations.map((item, index) => {
+              let key = '';
+              const cleanItem = String(item || '').trim().toLowerCase();
+              if (cleanItem.includes('launch targeted nudges')) {
+                key = 'analytics.executive.recommendationsList.nudges';
+              } else if (cleanItem.includes('review exam difficulty')) {
+                key = 'analytics.executive.recommendationsList.review';
+              } else if (cleanItem.includes('promote ai assistant')) {
+                key = 'analytics.executive.recommendationsList.promoteAi';
+              } else if (cleanItem.includes('maintain current learning')) {
+                key = 'analytics.executive.recommendationsList.maintain';
+              }
+              return (
+                <div key={index} className="executive-recommendation">
+                  {key ? tr(t, key, item) : item}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

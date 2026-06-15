@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore, type Notification, type NotificationType, type NotificationPriority } from '@/store/notification.store';
+import toast from 'react-hot-toast';
 
 const sections: Array<{ id: 'ALL' | 'UNREAD' | NotificationType; labelKey: string; icon: any }> = [
   { id: 'ALL', labelKey: 'notifications.sections.all', icon: Bell },
@@ -53,6 +54,7 @@ export default function Notifications() {
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
   const [composerOpen, setComposerOpen] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [sending, setSending] = useState(false);
   const [form, setForm] = useState({
     titleUz: '',
     titleRu: '',
@@ -106,14 +108,22 @@ export default function Notifications() {
 
   const submitComposer = async (event: React.FormEvent) => {
     event.preventDefault();
-    await api.post('/notifications', {
-      ...form,
-      targetRoles: form.targetRoles.split(',').map((item) => item.trim()).filter(Boolean),
-      targetDepartments: form.targetDepartments.split(',').map((item) => item.trim()).filter(Boolean),
-    });
-    setComposerOpen(false);
-    setForm({ ...form, titleUz: '', titleRu: '', messageUz: '', messageRu: '', targetRoles: '', targetDepartments: '' });
-    fetchNotifications(queryParams);
+    setSending(true);
+    try {
+      await api.post('/notifications', {
+        ...form,
+        targetRoles: form.targetRoles.split(',').map((item) => item.trim()).filter(Boolean),
+        targetDepartments: form.targetDepartments.split(',').map((item) => item.trim()).filter(Boolean),
+      });
+      setComposerOpen(false);
+      setForm({ ...form, titleUz: '', titleRu: '', messageUz: '', messageRu: '', targetRoles: '', targetDepartments: '' });
+      toast.success(t('notifications.form.sent', 'Xabarnoma yuborildi'));
+      fetchNotifications(queryParams);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || t('notifications.form.sendError', 'Xabarnomani yuborib bo‘lmadi'));
+    } finally {
+      setSending(false);
+    }
   };
 
   const openRelated = (notification: Notification) => {
@@ -198,7 +208,9 @@ export default function Notifications() {
             <input className="input" placeholder={t('notifications.form.targetDepartments')} value={form.targetDepartments} onChange={(e) => setForm({ ...form, targetDepartments: e.target.value })} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" type="submit"><Send size={16} /> {t('notifications.form.send')}</button>
+            <button className="btn btn-primary" type="submit" disabled={sending}>
+              <Send size={16} /> {sending ? t('common.sending', 'Yuborilmoqda...') : t('notifications.form.send')}
+            </button>
           </div>
         </motion.form>
       )}

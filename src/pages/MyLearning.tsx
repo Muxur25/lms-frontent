@@ -15,149 +15,43 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { apiClient } from '@/api/axios';
-
-type EnrollmentStatus = 'all' | 'in-progress' | 'completed';
-
-interface EnrolledCourse {
-  enrollmentId: string;
-  courseId: string;
-  progress: number;
-  status: string;
-  enrolledAt: string;
-  course: {
-    id: string;
-    title: string;
-    titleRu?: string;
-    cat?: string;
-    catRu?: string;
-    level?: string;
-    color?: string;
-    instructor?: string;
-    lessons?: number;
-    duration?: string;
-    rating?: number;
-  } | null;
-}
-
-const copy = {
-  uz: {
-    title: "Mening ta'limim",
-    subtitle: "Kurslaringiz, progress va o'quv jarayonini kuzating",
-    browseCourses: "Kurslarni ko'rish",
-    loading: 'Kurslaringiz yuklanmoqda...',
-    loadError: "Ma'lumotlarni yuklashda xatolik yuz berdi",
-    loadErrorHint: "Internet yoki server bilan ulanishni tekshirib, qayta urinib ko'ring.",
-    retry: 'Qayta urinish',
-    total: 'Jami kurslar',
-    inProgress: 'Jarayonda',
-    completed: 'Yakunlangan',
-    avgProgress: "O'rtacha progress",
-    searchPlaceholder: 'Kurs qidirish...',
-    all: 'Barchasi',
-    emptyTitle: 'Siz hali hech qanday kursga yozilmagansiz',
-    emptySearchTitle: 'Kurslar topilmadi',
-    emptySubtitle: "Katalogdan kerakli kursni tanlab, o'qishni boshlang.",
-    emptySearchSubtitle: "Qidiruv yoki filtr qiymatini o'zgartirib ko'ring.",
-    courseFallback: 'Kurs',
-    progress: 'Progress',
-    lessons: 'dars',
-    continue: 'Davom etish',
-    view: "Ko'rish",
-    unknownInstructor: "O'qituvchi ko'rsatilmagan",
-  },
-  ru: {
-    title: 'Мое обучение',
-    subtitle: 'Отслеживайте свои курсы, прогресс и учебный процесс',
-    browseCourses: 'Смотреть курсы',
-    loading: 'Ваши курсы загружаются...',
-    loadError: 'Не удалось загрузить данные',
-    loadErrorHint: 'Проверьте подключение к интернету или серверу и попробуйте снова.',
-    retry: 'Повторить',
-    total: 'Всего курсов',
-    inProgress: 'В процессе',
-    completed: 'Завершено',
-    avgProgress: 'Средний прогресс',
-    searchPlaceholder: 'Поиск курса...',
-    all: 'Все',
-    emptyTitle: 'Вы еще не записались ни на один курс',
-    emptySearchTitle: 'Курсы не найдены',
-    emptySubtitle: 'Выберите подходящий курс из каталога и начните обучение.',
-    emptySearchSubtitle: 'Попробуйте изменить поисковый запрос или фильтр.',
-    courseFallback: 'Курс',
-    progress: 'Прогресс',
-    lessons: 'уроков',
-    continue: 'Продолжить',
-    view: 'Просмотреть',
-    unknownInstructor: 'Преподаватель не указан',
-  },
-} as const;
-
-function clampProgress(value: unknown) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.min(100, Math.max(0, Math.round(numeric)));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function normalizeStatus(status: unknown, progress: number): Exclude<EnrollmentStatus, 'all'> {
-  const normalized = String(status || '').toLowerCase().replace(/_/g, '-');
-  if (['completed', 'complete', 'finished', 'done'].includes(normalized) || progress >= 100) {
-    return 'completed';
-  }
-  return 'in-progress';
-}
-
-function normalizeEnrollment(item: unknown): EnrolledCourse | null {
-  if (!isRecord(item)) return null;
-
-  const rawCourse = item.course || item.courseData || item;
-  if (!isRecord(rawCourse)) return null;
-
-  const courseId = item.courseId || rawCourse.id || rawCourse._id;
-
-  if (!courseId) return null;
-
-  const progress = clampProgress(item.progress ?? item.completion ?? rawCourse.progress ?? rawCourse.completion);
-
-  return {
-    enrollmentId: String(item.enrollmentId || item.id || item._id || courseId),
-    courseId: String(courseId),
-    progress,
-    status: normalizeStatus(item.status, progress),
-    enrolledAt: String(item.enrolledAt || item.createdAt || ''),
-    course: {
-      id: String(courseId),
-      title: String(rawCourse.title || ''),
-      titleRu: typeof rawCourse.titleRu === 'string' ? rawCourse.titleRu : undefined,
-      cat: typeof rawCourse.cat === 'string' ? rawCourse.cat : typeof rawCourse.category === 'string' ? rawCourse.category : undefined,
-      catRu: typeof rawCourse.catRu === 'string' ? rawCourse.catRu : typeof rawCourse.categoryRu === 'string' ? rawCourse.categoryRu : undefined,
-      level: typeof rawCourse.level === 'string' ? rawCourse.level : undefined,
-      color: typeof rawCourse.color === 'string' ? rawCourse.color : undefined,
-      instructor: typeof rawCourse.instructor === 'string' ? rawCourse.instructor : undefined,
-      lessons: Number.isFinite(Number(rawCourse.lessons)) ? Number(rawCourse.lessons) : undefined,
-      duration: typeof rawCourse.duration === 'string' ? rawCourse.duration : undefined,
-      rating: Number.isFinite(Number(rawCourse.rating)) ? Number(rawCourse.rating) : undefined,
-    },
-  };
-}
-
-function getResponseList(response: unknown) {
-  if (!isRecord(response)) return [];
-  const payload = response.data;
-  const data = isRecord(payload) && 'data' in payload ? payload.data : payload;
-  if (Array.isArray(data)) return data;
-  if (isRecord(data) && Array.isArray(data.items)) return data.items;
-  if (isRecord(data) && Array.isArray(data.results)) return data.results;
-  return [];
-}
+import {
+  getResponseList,
+  isRecord,
+  normalizeEnrollment,
+  type EnrolledCourse,
+  type EnrollmentStatus,
+} from '@/shared/lib/course-enrollments';
 
 export default function MyLearning() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
-  const text = isRu ? copy.ru : copy.uz;
+
+  const text = {
+    title: t('myLearning.title'),
+    subtitle: t('myLearning.subtitle'),
+    browseCourses: t('myLearning.browseCourses'),
+    loading: t('myLearning.loading'),
+    loadError: t('myLearning.loadError'),
+    loadErrorHint: t('myLearning.loadErrorHint'),
+    retry: t('myLearning.retry'),
+    total: t('myLearning.total'),
+    inProgress: t('myLearning.inProgress'),
+    completed: t('myLearning.completed'),
+    avgProgress: t('myLearning.avgProgress'),
+    searchPlaceholder: t('myLearning.searchPlaceholder'),
+    all: t('myLearning.all'),
+    emptyTitle: t('myLearning.emptyTitle'),
+    emptySearchTitle: t('myLearning.emptySearchTitle'),
+    emptySubtitle: t('myLearning.emptySubtitle'),
+    emptySearchSubtitle: t('myLearning.emptySearchSubtitle'),
+    courseFallback: t('myLearning.courseFallback'),
+    progress: t('myLearning.progress'),
+    lessons: t('myLearning.lessons'),
+    continue: t('myLearning.continue'),
+    view: t('myLearning.view'),
+    unknownInstructor: t('myLearning.unknownInstructor')
+  };
 
   const [enrollments, setEnrollments] = useState<EnrolledCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,12 +72,12 @@ export default function MyLearning() {
     } catch (err: unknown) {
       const isCancelled = isRecord(err) && (err.name === 'CanceledError' || err.code === 'ERR_CANCELED');
       if (!isCancelled) {
-        setError(text.loadError);
+        setError(t('myLearning.loadError', 'Kurslarni yuklashda xatolik yuz berdi'));
       }
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [text.loadError]);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import type { EnterpriseRole } from '@/shared/lib/auth-user';
+import { getApiBaseUrl } from '@/shared/lib/api-config';
 
 interface User {
   id: string;
@@ -10,9 +11,17 @@ interface User {
   fullName?: string;
   role: EnterpriseRole;
   roleLabel?: string;
+  departmentId?: string;
   department?: string;
+  departmentName?: string;
+  organizationCode?: string;
   position?: string;
+  notificationPreferences?: Record<string, boolean>;
   roles: string[];
+  xp?: number;
+  level?: number;
+  title?: string;
+  employeeId?: string;
 }
 
 interface AuthState {
@@ -31,7 +40,7 @@ interface AuthState {
   updateUser: (user: Partial<User>) => void;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_URL = getApiBaseUrl();
 const storedUser = localStorage.getItem('lms_user');
 const storedToken = localStorage.getItem('access_token');
 const parseStoredUser = () => {

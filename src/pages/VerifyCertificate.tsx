@@ -29,13 +29,13 @@ export default function VerifyCertificate() {
     setError(null);
     setCertData(null);
 
-    // Keep ID in URL query params
+    // Keep the verification ID shareable in the URL.
     setSearchParams({ id: trimmedId });
 
     try {
       const result = await verifyCertificate(trimmedId);
       if (result.valid && result.certificate) {
-        // Map to legacy certData shape for rendering
+        // Normalize the API response into the shape used by this view.
         setCertData({
           valid: true,
           holderName: result.certificate.holderName,
@@ -53,7 +53,7 @@ export default function VerifyCertificate() {
           color: result.certificate.color || '#d4af37',
         });
       } else {
-        // Certificate found but invalid/revoked/expired
+        // Certificate found, but it is invalid, revoked, or expired.
         setCertData({
           valid: false,
           status: result.status,
@@ -73,14 +73,16 @@ export default function VerifyCertificate() {
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-        (err.response?.status === 404 ? t('verify.errorSub') : 'Tekshirishda xatolik yuz berdi')
+        (err.response?.status === 404
+          ? t('verify.errorSub')
+          : t('verify.errorFallback', { defaultValue: 'Tekshirishda xatolik yuz berdi' }))
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // Auto-verify if id is in URL on load
+  // Auto-verify if the URL already contains an ID.
   useEffect(() => {
     if (certIdFromUrl) {
       handleVerify(certIdFromUrl);
@@ -889,14 +891,24 @@ export default function VerifyCertificate() {
                     <AlertCircle size={26} color="#ef4444" />
                   </div>
                   <div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: '#ef4444' }}>{isRu ? '✗ НЕДЕЙСТВИТЕЛЕН' : '✗ HAQIQIY EMAS'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--vp-muted, #9ca3af)', marginTop: 4 }}>{isRu ? `Статус: ${certData.status}` : `Holat: ${certData.status}`}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: '#ef4444' }}>
+                      {t('certifications.verification.invalid', { defaultValue: isRu ? '✗ НЕДЕЙСТВИТЕЛЕН' : '✗ HAQIQIY EMAS' })}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--vp-muted, #9ca3af)', marginTop: 4 }}>
+                      {t('certifications.verification.status', {
+                        status: certData.status,
+                        defaultValue: isRu ? `Статус: ${certData.status}` : `Holat: ${certData.status}`,
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
               {certData.revokeReason && (
                 <div style={{ fontSize: 12, color: '#ef4444', padding: '10px 14px', background: 'rgba(239,68,68,0.06)', borderRadius: 10 }}>
-                  {isRu ? 'Причина отзыва: ' : 'Bekor qilish sababi: '}{certData.revokeReason}
+                  {t('certifications.verification.revokeReason', {
+                    reason: certData.revokeReason,
+                    defaultValue: `${isRu ? 'Причина отзыва' : 'Bekor qilish sababi'}: ${certData.revokeReason}`,
+                  })}
                 </div>
               )}
 
@@ -937,7 +949,7 @@ export default function VerifyCertificate() {
                     <div className="vp-stat-box">
                       <div className="vp-stat-lbl">{t('verify.dateLabel')}</div>
                       <div className="vp-stat-val">
-                        {certData.submittedAt ? new Date(certData.submittedAt).toLocaleDateString() : '—'}
+                        {certData.submittedAt ? new Date(certData.submittedAt).toLocaleDateString() : '-'}
                       </div>
                     </div>
                     <div className="vp-stat-box">

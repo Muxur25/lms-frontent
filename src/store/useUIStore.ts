@@ -43,8 +43,8 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'ui-storage',
-      // Only persist theme and language
-      partialize: (state) => ({ theme: state.theme, language: state.language }),
+      // Persist theme, language, and sidebar state
+      partialize: (state) => ({ theme: state.theme, language: state.language, isSidebarOpen: state.isSidebarOpen }),
     }
   )
 );

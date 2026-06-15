@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import {
@@ -8,11 +9,13 @@ import {
   Settings, ShieldCheck, ChevronLeft, ChevronRight,
   Search, Menu, Command, Building2, Sun, Moon,
   ChevronDown, LogOut, User, HelpCircle, Plus,
-  Home, Layers, Trophy
+  Home, Layers, Trophy, Star, FileText
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore } from '@/store/notification.store';
+import { useUIStore } from '@/store/useUIStore';
 import { getInitials } from '@/shared/lib/auth-user';
+import ProfileModal from './ProfileModal';
 
 /* ─── Types ────────────────────────────────────────────────── */
 interface SidebarProps {
@@ -45,6 +48,7 @@ const NAV = [
       { id: 'assessments',    icon: ClipboardCheck,  label: 'nav.assessments',    badge: '5'  },
       { id: 'certifications', icon: Award,           label: 'nav.certifications', badge: null },
       { id: 'leaderboard',    icon: Trophy,          label: 'nav.leaderboard',    badge: null },
+      { id: 'achievements',   icon: Star,            label: 'nav.achievements',   badge: null },
     ],
   },
   {
@@ -62,7 +66,9 @@ const NAV = [
     items: [
       { id: 'notifications', icon: Bell,        label: 'nav.notifications', badge: '8' },
       { id: 'settings',      icon: Settings,    label: 'nav.settings',      badge: null },
+      { id: 'security',      icon: ShieldCheck, label: 'nav.security',      badge: null },
       { id: 'admin',         icon: ShieldCheck, label: 'nav.admin',         badge: null },
+      { id: 'admin/security', icon: ShieldCheck, label: 'nav.adminSecurity', badge: null },
     ],
   },
 ];
@@ -84,7 +90,6 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
   const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
-  const roleLabel = user?.roleLabel || user?.roles?.[0] || 'User';
 
   const handleLogout = async () => {
     await logout();
@@ -119,7 +124,7 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
           {collapsed && (
             <button
               className="collapse-btn"
-              style={{ position: 'absolute', right: -14, top: '50%', transform: 'translateY(-50%)' }}
+              style={{ position: 'absolute', right: -13, top: 40, zIndex: 100, boxShadow: 'var(--shadow-sm)' }}
               onClick={() => setCollapsed(false)}
             >
               <ChevronRight size={13} />
@@ -144,6 +149,9 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
             const items = section.items.filter(item => {
               if (item.id === 'admin') {
                 return user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'hr_manager';
+              }
+              if (item.id === 'admin/security') {
+                return user?.role === 'super_admin' || user?.role === 'admin';
               }
               return true;
             });
@@ -186,12 +194,22 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
         {/* Footer User */}
         <div className="sidebar-footer">
           <div className="user-card" title={collapsed ? fullName : undefined}>
-            <div className="avatar">{initials}</div>
+            <div className="avatar" style={{ overflow: 'hidden' }}>
+              {(user as any)?.avatarName ? (
+                <img src={(user as any).avatarName} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (user as any)?.avatar ? (
+                <img src={(user as any).avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
+            </div>
             {!collapsed && (
               <>
                 <div className="user-info">
                   <div className="user-name">{fullName}</div>
-                  <div className="user-role">{roleLabel}</div>
+                  <div className="user-role" style={{ color: '#fbbf24', fontWeight: 600 }}>
+                    Lvl {user?.level || 1} • {user?.title || 'Beginner'}
+                  </div>
                 </div>
                 <button className="icon-btn" onClick={handleLogout} style={{ width: 28, height: 28, minWidth: 28 }}>
                   <LogOut size={13} />
@@ -242,8 +260,56 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const { activeModal, openModal, closeModal } = useUIStore();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ courses: any[]; users: any[] }>({ courses: [], users: [] });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  const role = user?.role || user?.roles?.[0] || 'employee';
+  const canQuickAdd = ['super_admin', 'admin', 'trainer'].includes(role);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCmdOpen((open) => !open);
+      }
+      if (e.key === 'Escape' && cmdOpen) {
+        setCmdOpen(false);
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, [cmdOpen]);
+
+  useEffect(() => {
+    if (!cmdOpen) {
+      setSearchQuery('');
+      setSearchResults({ courses: [], users: [] });
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
+        setIsSearching(true);
+        api.get(`/search?q=${encodeURIComponent(searchQuery)}`)
+          .then(res => {
+            setSearchResults(res.data || { courses: [], users: [] });
+          })
+          .catch(() => {})
+          .finally(() => setIsSearching(false));
+      } else {
+        setSearchResults({ courses: [], users: [] });
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, cmdOpen]);
+
+  const isProfileModalOpen = activeModal === 'profile';
   const initials = getInitials(user?.firstName, user?.lastName, user?.fullName);
   const fullName = user?.fullName || `${user?.firstName || 'AGMK'} ${user?.lastName || 'User'}`.trim();
   const shortName = user?.firstName ? `${user.firstName} ${user.lastName?.[0] || ''}.` : fullName;
@@ -264,6 +330,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
     assessments: t('nav.assessments'), certifications: t('nav.certifications'),
     leaderboard: t('nav.leaderboard'),
     schedule: t('nav.schedule'), settings: t('nav.settings'),
+    security: t('nav.security'), 'admin/security': t('nav.adminSecurity'),
     notifications: t('nav.notifications'), admin: t('nav.admin'),
     ai: t('nav.ai'), webinars: t('nav.webinars'),
     library: t('nav.library'),
@@ -315,9 +382,32 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
         </div>
 
         {/* Quick Add */}
-        <button className="icon-btn quick-add-btn">
-          <Plus size={17} />
-        </button>
+        {canQuickAdd && (
+          <div className="profile-wrap">
+            <button className="icon-btn quick-add-btn" onClick={() => setQuickAddOpen(!quickAddOpen)}>
+              <Plus size={17} />
+            </button>
+            {quickAddOpen && (
+              <div className="profile-dropdown" style={{ right: 0, width: 220 }} onClick={() => setQuickAddOpen(false)}>
+                <div className="pd-header" style={{ padding: '12px 16px', paddingBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)' }}>Tezkor yaratish</div>
+                </div>
+                <div className="pd-item" onClick={() => navigate('/admin/courses/new')}>
+                  <BookOpen size={14} color="var(--blue-400)" />
+                  <span>Yangi kurs</span>
+                </div>
+                <div className="pd-item" onClick={() => navigate('/admin/exams/new')}>
+                  <FileText size={14} color="var(--purple-400)" />
+                  <span>Yangi imtihon</span>
+                </div>
+                <div className="pd-item" onClick={() => navigate('/admin/webinars/new')}>
+                  <Video size={14} color="var(--green-400)" />
+                  <span>Yangi vebinar</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Profile */}
         <div className="profile-wrap">
@@ -325,7 +415,15 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
             className="profile-btn"
             onClick={() => setProfileOpen(!profileOpen)}
           >
-            <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{initials}</div>
+            <div className="avatar" style={{ width: 32, height: 32, fontSize: 12, overflow: 'hidden' }}>
+              {(user as any)?.avatarName ? (
+                <img src={(user as any).avatarName} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (user as any)?.avatar ? (
+                <img src={(user as any).avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
+            </div>
             <div className="profile-info">
               <span className="profile-name">{shortName}</span>
             </div>
@@ -335,7 +433,15 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
           {profileOpen && (
             <div className="profile-dropdown" onClick={() => setProfileOpen(false)}>
               <div className="pd-header">
-                <div className="avatar avatar-lg">{initials}</div>
+                <div className="avatar avatar-lg" style={{ overflow: 'hidden' }}>
+                  {(user as any)?.avatarName ? (
+                    <img src={(user as any).avatarName} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (user as any)?.avatar ? (
+                    <img src={(user as any).avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    initials
+                  )}
+                </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{fullName}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{user?.email || 'user@agmk.uz'}</div>
@@ -344,11 +450,11 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
               </div>
               <hr className="divider" style={{ margin: '8px 0' }} />
               {[
-                { icon: User, label: t('layout.profile') },
-                { icon: Settings, label: t('nav.settings') },
-                { icon: HelpCircle, label: t('layout.help') },
+                { icon: User, label: t('layout.profile'), onClick: () => openModal('profile') },
+                { icon: Settings, label: t('nav.settings'), onClick: () => navigate('/settings') },
+                { icon: HelpCircle, label: t('layout.help'), onClick: () => {} },
               ].map((m, i) => (
-                <div key={i} className="pd-item">
+                <div key={i} className="pd-item" onClick={m.onClick}>
                   <m.icon size={14} />
                   <span>{m.label}</span>
                 </div>
@@ -363,23 +469,106 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
         </div>
       </header>
 
+      {/* Profile Modal */}
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => closeModal()} />
+
       {/* Command Palette */}
       {cmdOpen && (
         <div className="cmd-overlay" onClick={() => setCmdOpen(false)}>
           <div className="cmd-palette" onClick={e => e.stopPropagation()}>
             <div className="cmd-input-wrap">
               <Search size={16} color="var(--text-muted)" />
-              <input autoFocus className="cmd-input" placeholder={t('layout.cmdPlaceholder')} />
-              <button className="cmd-esc" onClick={() => setCmdOpen(false)}>{t('layout.cmdEsc')}</button>
+              <input 
+                autoFocus 
+                className="cmd-input" 
+                placeholder={t('layout.cmdPlaceholder') || 'Qidirish yoki buyruq...'} 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <button className="cmd-esc" onClick={() => setCmdOpen(false)}>{t('layout.cmdEsc') || 'ESC'}</button>
             </div>
             <div className="cmd-results">
-              {['Dashboard', 'Kurslar', 'Xodimlar', 'Tahlil', 'Sertifikatlar'].map((r, i) => (
-                <div key={i} className="cmd-result-item" onClick={() => setCmdOpen(false)}>
-                  <LayoutDashboard size={14} color="var(--text-tertiary)" />
-                  <span>{r}</span>
-                  <span className="cmd-result-type">{t('layout.pageLabel')}</span>
-                </div>
-              ))}
+              {(() => {
+                const staticPages = NAV.flatMap(sec => sec.items).filter(item => {
+                  if (!searchQuery) return false;
+                  return t(item.label).toLowerCase().includes(searchQuery.toLowerCase());
+                }).slice(0, 5);
+                
+                const showSuggestions = !searchQuery;
+
+                return (
+                  <>
+                    {showSuggestions && (
+                      <div className="cmd-result-group">
+                        <div className="cmd-group-label" style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Tavsiyalar
+                        </div>
+                        {['dashboard', 'courses', 'library'].map((pageId, i) => {
+                          const item = NAV.flatMap(s => s.items).find(x => x.id === pageId);
+                          if (!item) return null;
+                          return (
+                            <div key={i} className="cmd-result-item" onClick={() => { setActivePage(item.id); setCmdOpen(false); }}>
+                              <item.icon size={14} color="var(--text-tertiary)" />
+                              <span>{t(item.label)}</span>
+                              <span className="cmd-result-type">{t('layout.pageLabel') || 'Sahifa'}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {!showSuggestions && staticPages.length > 0 && (
+                      <div className="cmd-result-group">
+                        <div className="cmd-group-label" style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Sahifalar</div>
+                        {staticPages.map((page, i) => (
+                          <div key={`page-${i}`} className="cmd-result-item" onClick={() => { setActivePage(page.id); setCmdOpen(false); }}>
+                            <page.icon size={14} color="var(--text-tertiary)" />
+                            <span>{t(page.label)}</span>
+                            <span className="cmd-result-type">{t('layout.pageLabel') || 'Sahifa'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!showSuggestions && searchResults.courses?.length > 0 && (
+                      <div className="cmd-result-group">
+                        <div className="cmd-group-label" style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Kurslar</div>
+                        {searchResults.courses.map((c, i) => (
+                          <div key={`course-${i}`} className="cmd-result-item" onClick={() => { navigate(`/courses/${c.id}`); setCmdOpen(false); }}>
+                            <BookOpen size={14} color="var(--text-tertiary)" />
+                            <span>{lang === 'ru' ? (c.titleRu || c.title) : c.title}</span>
+                            <span className="cmd-result-type">Kurs</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!showSuggestions && searchResults.users?.length > 0 && (
+                      <div className="cmd-result-group">
+                        <div className="cmd-group-label" style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Xodimlar</div>
+                        {searchResults.users.map((u, i) => (
+                          <div key={`user-${i}`} className="cmd-result-item" onClick={() => { navigate(`/admin/users`); setCmdOpen(false); }}>
+                            <User size={14} color="var(--text-tertiary)" />
+                            <span>{u.fullName}</span>
+                            <span className="cmd-result-type">{u.position || u.employeeId}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!showSuggestions && searchQuery.length >= 2 && !isSearching && searchResults.courses?.length === 0 && searchResults.users?.length === 0 && staticPages.length === 0 && (
+                      <div className="cmd-no-results" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>Natija topilmadi</div>
+                    )}
+                    
+                    {isSearching && (
+                      <div className="cmd-no-results" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+                        <div className="spinner" style={{ width: 16, height: 16, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />
+                        Qidirilmoqda...
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

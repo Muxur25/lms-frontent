@@ -1,13 +1,41 @@
-import { useState, useEffect } from 'react';
-import { Shield, Monitor, Smartphone, Tablet, Clock, MapPin, AlertTriangle, KeyRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  KeyRound,
+  MapPin,
+  Monitor,
+  RefreshCcw,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  Trash2,
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
 
+const unwrapArray = (response: any) => {
+  const payload = response?.data?.data ?? response?.data ?? response;
+  return Array.isArray(payload) ? payload : [];
+};
+
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+};
+
 export default function SecurityDashboardPage() {
+  const { t } = useTranslation();
+  const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options });
   const [sessions, setSessions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchSecurityData();
@@ -16,183 +44,602 @@ export default function SecurityDashboardPage() {
   const fetchSecurityData = async () => {
     try {
       setLoading(true);
+      setError('');
       const [sessRes, histRes] = await Promise.all([
         apiClient.get('/security/sessions'),
-        apiClient.get('/security/history')
+        apiClient.get('/security/history'),
       ]);
-      setSessions(sessRes.data || []);
-      setHistory(histRes.data || []);
-    } catch (err) {
-      console.error('Error fetching security data', err);
+      setSessions(unwrapArray(sessRes));
+      setHistory(unwrapArray(histRes));
+    } catch {
+      const message = tr('securityCenter.loadError', "Xavfsizlik ma'lumotlarini yuklab bo'lmadi.");
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleRemoveSession = async (id: string) => {
-    customConfirm('Are you sure you want to remove this device? You will be logged out on that device immediately.', async () => {
+    customConfirm(tr('securityCenter.confirmRemove', 'Ushbu qurilma sessiyasini tugatmoqchimisiz?'), async () => {
       try {
         await apiClient.delete(`/security/sessions/${id}`);
-        setSessions(sessions.filter(s => s.id !== id));
-        toast.success('Device removed successfully');
-      } catch (err) {
-        toast.error('Failed to remove device');
+        setSessions((items) => items.filter((session) => session.id !== id));
+        toast.success(tr('securityCenter.removed', 'Sessiya tugatildi'));
+      } catch {
+        toast.error(tr('securityCenter.removeError', "Sessiyani tugatib bo'lmadi"));
       }
     });
   };
 
   const handleLogoutAll = async () => {
-    customConfirm('Are you sure you want to log out of ALL devices?', async () => {
+    customConfirm(tr('securityCenter.confirmLogoutAll', 'Barcha qurilmalardagi sessiyalarni tugatmoqchimisiz?'), async () => {
       try {
-        await apiClient.delete(`/security/sessions`);
-        toast.success('All devices removed. You may need to log in again.');
+        await apiClient.delete('/security/sessions');
+        toast.success(tr('securityCenter.logoutAllSuccess', 'Barcha sessiyalar tugatildi'));
         window.location.reload();
-      } catch (err) {
-        toast.error('Failed to remove all devices');
+      } catch {
+        toast.error(tr('securityCenter.logoutAllError', "Sessiyalarni tugatib bo'lmadi"));
       }
     });
   };
 
-  const getIcon = (type: string) => {
-    if (type?.toLowerCase() === 'mobile') return <Smartphone size={24} className="text-blue-500" />;
-    if (type?.toLowerCase() === 'tablet') return <Tablet size={24} className="text-purple-500" />;
-    return <Monitor size={24} className="text-emerald-500" />;
+  const deviceCounts = useMemo(() => {
+    const mobile = sessions.filter((s) => s.device?.deviceType?.toLowerCase() === 'mobile').length;
+    const tablet = sessions.filter((s) => s.device?.deviceType?.toLowerCase() === 'tablet').length;
+    return { mobile, tablet, desktop: Math.max(sessions.length - mobile - tablet, 0) };
+  }, [sessions]);
+
+  const getDeviceIcon = (type: string) => {
+    if (type?.toLowerCase() === 'mobile') return <Smartphone size={21} />;
+    if (type?.toLowerCase() === 'tablet') return <Tablet size={21} />;
+    return <Monitor size={21} />;
   };
 
-  if (loading) {
-    return <div className="p-8 text-center text-gray-400">Loading security data...</div>;
-  }
-
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Shield className="text-blue-500" /> Security Center
-          </h1>
-          <p className="text-gray-400 mt-1">Manage your active devices, sessions, and login history.</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 flex items-center gap-2">
-            <Shield size={16} />
-            <span className="font-medium text-sm">Security Score: 96%</span>
-          </div>
-        </div>
-      </div>
+    <main className="user-security-shell">
+      <style>{userSecurityStyles}</style>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Active Devices */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Monitor size={18} /> Active Devices ({sessions.length}/3)
-            </h2>
-            <button onClick={handleLogoutAll} className="text-sm text-red-400 hover:text-red-300 transition-colors">
-              Log out of all devices
-            </button>
+      <section className="user-security-hero">
+        <div className="hero-copy">
+          <div className="hero-kicker safe">
+            <ShieldCheck size={15} />
+            {tr('securityCenter.noAlerts', "So'nggi davrda shubhali faollik aniqlanmadi.")}
+          </div>
+          <h1>{tr('securityCenter.title', 'Xavfsizlik markazi')}</h1>
+          <p>{tr('securityCenter.subtitle', 'Faol qurilmalar, sessiyalar va kirish tarixini boshqaring.')}</p>
+        </div>
+        <button onClick={fetchSecurityData} className="security-refresh-action">
+          <RefreshCcw size={16} />
+          {t('common.refresh', 'Yangilash')}
+        </button>
+      </section>
+
+      {error && (
+        <div className="user-security-alert">
+          <AlertTriangle size={18} />
+          {error}
+        </div>
+      )}
+
+      <section className="user-metric-grid">
+        <MetricCard icon={Monitor} label={tr('securityCenter.activeSessionsMetric', 'Faol sessiyalar')} value={loading ? '-' : sessions.length} tone="blue" />
+        <MetricCard icon={Monitor} label={tr('securityCenter.desktopMetric', 'Desktop')} value={loading ? '-' : deviceCounts.desktop} tone="cyan" />
+        <MetricCard icon={Smartphone} label={tr('securityCenter.mobileMetric', 'Mobile')} value={loading ? '-' : deviceCounts.mobile + deviceCounts.tablet} tone="violet" />
+        <MetricCard icon={Clock} label={tr('securityCenter.historyMetric', 'Kirishlar tarixi')} value={loading ? '-' : history.length} tone="amber" />
+      </section>
+
+      <section className="security-dashboard-grid">
+        <div className="user-security-panel devices-panel">
+          <div className="panel-toolbar">
+            <div>
+              <h2>{tr('securityCenter.activeDevices', 'Faol qurilmalar ({{count}})', { count: sessions.length })}</h2>
+              <p>{tr('securityCenter.activeDevicesSub', 'Qurilmalar, IP manzillar va oxirgi faollik')}</p>
+            </div>
+            {sessions.length > 1 && (
+              <button onClick={handleLogoutAll} className="danger-action subtle">
+                <Trash2 size={15} />
+                {tr('securityCenter.logoutAll', 'Barcha qurilmalardan chiqish')}
+              </button>
+            )}
           </div>
 
-          <div className="grid gap-4">
-            {sessions.map((s, idx) => (
-              <div key={s.id} className="bg-[var(--surface-1)] border border-[var(--border-1)] rounded-xl p-5 flex items-center justify-between group hover:border-[var(--border-2)] transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-[var(--surface-2)] rounded-xl">
-                    {getIcon(s.device?.deviceType)}
+          <div className="device-list">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, index) => <div key={index} className="security-skeleton tall" />)
+            ) : sessions.length === 0 ? (
+              <EmptyState icon={<Monitor size={26} />} title={tr('securityCenter.emptySessions', 'Faol sessiyalar topilmadi.')} />
+            ) : sessions.map((session, index) => (
+              <article key={session.id} className="device-card">
+                <div className="device-icon">{getDeviceIcon(session.device?.deviceType)}</div>
+                <div className="device-body">
+                  <div className="device-title-row">
+                    <h3>{session.device?.os || tr('securityCenter.unknownDevice', "Noma'lum qurilma")}</h3>
+                    {index === 0 && <span className="safe-pill">{tr('securityCenter.thisDevice', 'HOZIRGI QURILMA')}</span>}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-white flex items-center gap-2">
-                      {s.device?.os} • {s.device?.browser}
-                      {idx === 0 && <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">THIS DEVICE</span>}
-                    </h3>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
-                      <span className="flex items-center gap-1"><MapPin size={12} /> {s.device?.ipAddress}</span>
-                      <span className="flex items-center gap-1"><Clock size={12} /> Last active: {new Date(s.lastActivity).toLocaleString()}</span>
-                    </div>
+                  <p>{session.device?.browser || tr('securityCenter.unknownBrowser', "Noma'lum brauzer")}</p>
+                  <div className="device-meta">
+                    <span><MapPin size={13} />{session.device?.ipAddress || '-'}</span>
+                    <span><Clock size={13} />{formatDate(session.lastActivity)}</span>
                   </div>
                 </div>
-                {idx !== 0 && (
-                  <button onClick={() => handleRemoveSession(s.id)} className="px-4 py-2 text-sm font-medium text-gray-300 bg-[var(--surface-2)] hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-colors border border-[var(--border-1)]">
-                    Remove
+                {index !== 0 && (
+                  <button onClick={() => handleRemoveSession(session.id)} className="danger-icon-action" aria-label={tr('securityCenter.remove', "O'chirish")}>
+                    <Trash2 size={17} />
                   </button>
                 )}
-              </div>
+              </article>
             ))}
           </div>
         </div>
 
-        {/* Security Settings & Alerts */}
-        <div className="space-y-6">
-          <div className="bg-[var(--surface-1)] border border-[var(--border-1)] rounded-xl p-5">
-            <h2 className="font-semibold text-white flex items-center gap-2 mb-4">
-              <KeyRound size={16} /> Account Security
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-white">Two-Factor Auth</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Not enabled</div>
-                </div>
-                <button className="text-sm text-blue-400 hover:text-blue-300">Setup</button>
-              </div>
-              <div className="w-full h-px bg-[var(--border-1)]" />
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-white">Password</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Last changed 2 months ago</div>
-                </div>
-                <button className="text-sm text-blue-400 hover:text-blue-300">Change</button>
-              </div>
-            </div>
-          </div>
+        <aside className="security-side-stack">
+          <article className="side-panel">
+            <div className="side-icon blue"><KeyRound size={21} /></div>
+            <h2>{tr('securityCenter.accountSecurity', 'Hisob xavfsizligi')}</h2>
+            <p>{tr('securityCenter.accountSecurityText', "Parolni yangilash va shaxsiy ma'lumotlar sozlamalar bo'limida boshqariladi.")}</p>
+          </article>
+          <article className="side-panel warning">
+            <div className="side-icon amber"><AlertTriangle size={21} /></div>
+            <h2>{tr('securityCenter.alerts', 'Xavfsizlik ogohlantirishlari')}</h2>
+            <p>{tr('securityCenter.noAlerts', "So'nggi davrda shubhali faollik aniqlanmadi.")}</p>
+          </article>
+        </aside>
+      </section>
 
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-5">
-            <h2 className="font-semibold text-amber-400 flex items-center gap-2 mb-2">
-              <AlertTriangle size={16} /> Security Alerts
-            </h2>
-            <p className="text-sm text-amber-500/80">No suspicious activity detected in the last 30 days.</p>
+      <section className="user-security-panel">
+        <div className="panel-toolbar">
+          <div>
+            <h2>{tr('securityCenter.loginHistory', 'Kirish tarixi')}</h2>
+            <p>{tr('securityCenter.loginHistorySub', "Oxirgi muvaffaqiyatli kirishlar ro'yxati")}</p>
           </div>
         </div>
-      </div>
 
-      {/* Login History */}
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold text-white mb-4">Login History</h2>
-        <div className="bg-[var(--surface-1)] border border-[var(--border-1)] rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border-1)] bg-[var(--surface-2)] text-gray-400">
-                <th className="px-6 py-4 font-medium">Browser & OS</th>
-                <th className="px-6 py-4 font-medium">IP Address</th>
-                <th className="px-6 py-4 font-medium">Time</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-1)] text-gray-300">
-              {history.slice(0, 10).map((h) => (
-                <tr key={h.id} className="hover:bg-[var(--surface-2)] transition-colors">
-                  <td className="px-6 py-4 flex items-center gap-3">
-                    {getIcon(h.deviceType)}
-                    <span>{h.os} • {h.browser}</span>
-                  </td>
-                  <td className="px-6 py-4">{h.ipAddress}</td>
-                  <td className="px-6 py-4 text-gray-400">{new Date(h.loginAt).toLocaleString()}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      Success
-                    </span>
-                  </td>
+        {loading ? (
+          <div className="security-skeleton-list">
+            {Array.from({ length: 4 }).map((_, index) => <div key={index} className="security-skeleton" />)}
+          </div>
+        ) : history.length === 0 ? (
+          <EmptyState icon={<Clock size={26} />} title={tr('securityCenter.emptyHistory', 'Kirish tarixi mavjud emas.')} />
+        ) : (
+          <div className="history-table-wrap">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>{tr('securityCenter.browserOs', 'Brauzer va OS')}</th>
+                  <th>{t('settings.ipAddress', 'IP Manzil')}</th>
+                  <th>{t('common.time', 'Vaqt')}</th>
+                  <th>{t('common.status', 'Holat')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {history.length === 0 && (
-            <div className="p-8 text-center text-gray-500">No login history available.</div>
-          )}
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {history.slice(0, 10).map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="history-device">
+                        <span>{getDeviceIcon(item.deviceType)}</span>
+                        <strong>{item.os || '-'} / {item.browser || '-'}</strong>
+                      </div>
+                    </td>
+                    <td>{item.ipAddress || '-'}</td>
+                    <td>{formatDate(item.loginAt)}</td>
+                    <td>
+                      <span className="success-badge">
+                        <CheckCircle2 size={13} />
+                        {tr('securityCenter.success', 'Muvaffaqiyatli')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
 
+function MetricCard({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string | number; tone: string }) {
+  return (
+    <article className={`user-metric-card tone-${tone}`}>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="metric-icon"><Icon size={22} /></div>
+    </article>
+  );
+}
+
+function EmptyState({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div className="user-empty">
+      <div>{icon}</div>
+      <strong>{title}</strong>
     </div>
   );
 }
+
+const userSecurityStyles = `
+.user-security-shell {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+.user-security-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 90%, #ffffff 10%), var(--surface-1));
+  border-radius: 18px;
+  padding: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  box-shadow: 0 18px 60px rgba(0,0,0,.14);
+}
+.user-security-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, #22c55e, #3b82f6, #06b6d4);
+}
+.hero-copy { position: relative; min-width: 0; }
+.hero-kicker {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.hero-kicker.safe {
+  border: 1px solid rgba(34,197,94,.24);
+  background: rgba(34,197,94,.1);
+  color: #34d399;
+}
+.user-security-hero h1 {
+  margin: 14px 0 0;
+  color: var(--text-primary);
+  font-size: clamp(26px, 3vw, 38px);
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+.user-security-hero p {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: var(--text-tertiary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.security-refresh-action {
+  min-height: 44px;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.security-refresh-action:hover {
+  background: var(--surface-3);
+  border-color: var(--border-3);
+}
+.user-security-alert {
+  border: 1px solid rgba(239,68,68,.24);
+  background: rgba(239,68,68,.1);
+  color: #fca5a5;
+  border-radius: 14px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.user-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.user-metric-card {
+  border: 1px solid var(--border-1);
+  background: var(--surface-1);
+  border-radius: 16px;
+  padding: 18px;
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.user-metric-card span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.user-metric-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 950;
+}
+.metric-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.tone-blue .metric-icon { color: #60a5fa; }
+.tone-cyan .metric-icon { color: #22d3ee; }
+.tone-violet .metric-icon { color: #a78bfa; }
+.tone-amber .metric-icon { color: #f59e0b; }
+.security-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+}
+.user-security-panel {
+  border: 1px solid var(--border-1);
+  background: var(--surface-1);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.panel-toolbar {
+  border-bottom: 1px solid var(--border-1);
+  background: var(--surface-2);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.panel-toolbar h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 950;
+}
+.panel-toolbar p {
+  margin: 5px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.device-list {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.device-card {
+  border: 1px solid var(--border-1);
+  background: var(--surface-2);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+.device-card:hover { border-color: var(--border-2); }
+.device-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(34,197,94,.24);
+  background: rgba(34,197,94,.1);
+  color: #34d399;
+  display: grid;
+  place-items: center;
+}
+.device-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.device-title-row h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 950;
+}
+.device-body p {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.device-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.device-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.safe-pill,
+.success-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 9px;
+  border: 1px solid rgba(34,197,94,.24);
+  background: rgba(34,197,94,.1);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 900;
+}
+.danger-action {
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(239,68,68,.22);
+  background: rgba(239,68,68,.08);
+  color: #f87171;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.danger-action.subtle {
+  border-color: var(--border-2);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+.danger-icon-action {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(239,68,68,.22);
+  background: rgba(239,68,68,.08);
+  color: #f87171;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.security-side-stack {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+.side-panel {
+  border: 1px solid var(--border-1);
+  background: var(--surface-1);
+  border-radius: 18px;
+  padding: 20px;
+}
+.side-panel.warning {
+  border-color: rgba(245,158,11,.22);
+  background: rgba(245,158,11,.08);
+}
+.side-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.side-icon.blue { color: #60a5fa; }
+.side-icon.amber { color: #f59e0b; }
+.side-panel h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 950;
+}
+.side-panel p {
+  margin: 10px 0 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.history-table-wrap { overflow-x: auto; }
+.history-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.history-table th {
+  padding: 14px 18px;
+  color: var(--text-tertiary);
+  background: var(--surface-1);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 900;
+}
+.history-table td {
+  padding: 16px 18px;
+  border-top: 1px solid var(--border-1);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.history-table tr:hover td { background: var(--surface-2); }
+.history-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.history-device span {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(96,165,250,.24);
+  background: rgba(96,165,250,.1);
+  color: #60a5fa;
+  display: grid;
+  place-items: center;
+}
+.history-device strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.security-skeleton-list { display: grid; gap: 12px; padding: 16px; }
+.security-skeleton {
+  height: 68px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 220% 100%;
+  animation: userSecurityPulse 1.2s linear infinite;
+}
+.security-skeleton.tall { height: 88px; }
+.user-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+}
+.user-empty strong { color: var(--text-secondary); font-size: 14px; }
+@keyframes userSecurityPulse { to { background-position: -220% 0; } }
+@media (max-width: 1080px) {
+  .user-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .security-dashboard-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .user-security-shell { padding: 16px; }
+  .user-security-hero { align-items: stretch; flex-direction: column; padding: 22px; }
+  .user-metric-grid { grid-template-columns: 1fr; }
+  .panel-toolbar { align-items: stretch; flex-direction: column; }
+  .device-card { grid-template-columns: auto minmax(0, 1fr); }
+  .danger-icon-action { grid-column: 1 / -1; width: 100%; }
+}
+`;

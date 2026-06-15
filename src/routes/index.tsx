@@ -5,7 +5,6 @@ import AppLayout from '@/layouts/AppLayout';
 import AuthLayout from '@/layouts/AuthLayout';
 import { ProtectedRoute } from '@/features/auth/ui/ProtectedRoute';
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary';
-import { Placeholder } from '@/components/Placeholder';
 
 // Lazy loaded pages for performance optimization
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -17,6 +16,7 @@ const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
 const Employees = lazy(() => import('@/pages/Employees'));
 const Certifications = lazy(() => import('@/pages/Certifications'));
+const Achievements = lazy(() => import('@/pages/Achievements'));
 const AiAssistant = lazy(() => import('@/pages/AiAssistant'));
 const Webinars = lazy(() => import('@/pages/Webinars'));
 const Library = lazy(() => import('@/pages/Library'));
@@ -28,6 +28,11 @@ const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
 const VerifyCertificate = lazy(() => import('@/pages/VerifyCertificate'));
+const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
+const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
+const SecurityDashboardPage = lazy(() => import('@/pages/SecurityDashboardPage'));
+const AdminSecurityPage = lazy(() => import('@/pages/AdminSecurityPage'));
+const ComingSoon = lazy(() => import('@/pages/ComingSoon'));
 
 // Suspense Loader component
 const PageLoader = () => (
@@ -94,6 +99,10 @@ export const router = createBrowserRouter([
         element: <Suspense fallback={<PageLoader />}><Certifications /></Suspense> 
       },
       { 
+        path: 'achievements', 
+        element: <Suspense fallback={<PageLoader />}><Achievements /></Suspense> 
+      },
+      { 
         path: 'analytics', 
         element: <Suspense fallback={<PageLoader />}><Analytics /></Suspense> 
       },
@@ -116,6 +125,39 @@ export const router = createBrowserRouter([
       { path: 'leaderboard', element: <Suspense fallback={<PageLoader />}><Leaderboard /></Suspense> },
       { path: 'notifications', element: <Suspense fallback={<PageLoader />}><Notifications /></Suspense> },
       { path: 'settings', element: <Suspense fallback={<PageLoader />}><Settings /></Suspense> },
+      { path: 'security', element: <Suspense fallback={<PageLoader />}><SecurityDashboardPage /></Suspense> },
+      {
+        path: 'admin/security',
+        element: (
+          <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+            <Suspense fallback={<PageLoader />}><AdminSecurityPage /></Suspense>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/courses/new',
+        element: (
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'trainer']}>
+            <Suspense fallback={<PageLoader />}><ComingSoon /></Suspense>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/exams/new',
+        element: (
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'trainer']}>
+            <Suspense fallback={<PageLoader />}><ComingSoon /></Suspense>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/webinars/new',
+        element: (
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'trainer']}>
+            <Suspense fallback={<PageLoader />}><ComingSoon /></Suspense>
+          </ProtectedRoute>
+        ),
+      },
       // Catch all 404 inside layout
       { path: '*', element: <NotFound /> }
     ]
@@ -127,8 +169,8 @@ export const router = createBrowserRouter([
     children: [
       { path: 'login', element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },
       { path: 'register', element: <Suspense fallback={<PageLoader />}><Register /></Suspense> },
-      { path: 'forgot-password', element: <Placeholder title="Parolni tiklash" emoji="🔑" /> },
+      { path: 'forgot-password', element: <Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense> },
     ]
   },
-  { path: '/unauthorized', element: <Placeholder title="Ruxsat etilmagan" emoji="⛔" /> }
+  { path: '/unauthorized', element: <Suspense fallback={<PageLoader />}><Unauthorized /></Suspense> }
 ]);

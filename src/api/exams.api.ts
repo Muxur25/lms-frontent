@@ -108,36 +108,20 @@ export const examsApi = {
 
   // Attempt Workflow
   startAttempt: async (testId: string, password?: string) => {
-    try {
-      const res = await apiClient.post<any>('/exams/start', { testId, ...(password ? { password } : {}) });
-      return extractData(res) as StartAttemptResponse;
-    } catch (err: any) {
-      console.error('[startAttempt] ERROR details:', err.response?.data);
-      throw err;
-    }
+    const res = await apiClient.post<any>('/exams/start', { testId, ...(password ? { password } : {}) });
+    return extractData(res) as StartAttemptResponse;
   },
 
   saveAnswer: async (attemptId: string, questionId: string, selectedAnswers: number[]) => {
     const payload = { attemptId, questionId, selectedAnswers };
-    try {
-      const res = await apiClient.patch<any>('/exams/attempt/save-answer', payload);
-      return extractData(res);
-    } catch (err: any) {
-      console.error('[saveAnswer] 400 details:', err.response?.data);
-      throw err;
-    }
+    const res = await apiClient.patch<any>('/exams/attempt/save-answer', payload);
+    return extractData(res);
   },
 
   submitAttempt: async (attemptId: string) => {
     const payload = { attemptId };
-    try {
-      const res = await apiClient.post<any>('/exams/attempt/submit', payload);
-      return extractData(res);
-    } catch (err: any) {
-      const d = err.response?.data;
-      console.error('[submitAttempt] ERROR:', JSON.stringify(d));
-      throw err;
-    }
+    const res = await apiClient.post<any>('/exams/attempt/submit', payload);
+    return extractData(res);
   },
 
   getMyAttempts: async () => {

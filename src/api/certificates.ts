@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '@/shared/lib/api-config';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = getApiBaseUrl();
 
 const api = axios.create({ baseURL: `${API_BASE}/certificates` });
 
@@ -86,7 +87,7 @@ export interface CertAnalytics {
 /** Get current user's certificates */
 export const getMyCertificates = async (): Promise<Certificate[]> => {
   const { data } = await api.get('/my');
-  return data;
+  return data?.data || data || [];
 };
 
 /** Get all certificates (admin) */
@@ -96,31 +97,31 @@ export const getAllCertificates = async (params?: {
   userId?: string;
 }): Promise<Certificate[]> => {
   const { data } = await api.get('/all', { params });
-  return data;
+  return data?.data || data || [];
 };
 
 /** Verify a certificate (public) */
 export const verifyCertificate = async (certId: string): Promise<VerifyResult> => {
   const { data } = await api.get(`/verify/${encodeURIComponent(certId)}`);
-  return data;
+  return data?.data || data;
 };
 
 /** Get analytics */
 export const getCertificateAnalytics = async (): Promise<CertAnalytics> => {
   const { data } = await api.get('/analytics');
-  return data;
+  return data?.data || data;
 };
 
 /** Get templates */
 export const getCertificateTemplates = async (): Promise<CertificateTemplate[]> => {
   const { data } = await api.get('/templates');
-  return data;
+  return data?.data || data || [];
 };
 
 /** Get download history */
 export const getDownloadHistory = async (): Promise<any[]> => {
   const { data } = await api.get('/downloads');
-  return data;
+  return data?.data || data || [];
 };
 
 /** Track download/print/share */
@@ -131,17 +132,17 @@ export const trackCertificateAction = async (id: string, action: string): Promis
 /** Revoke certificate (admin) */
 export const revokeCertificate = async (id: string, reason: string): Promise<Certificate> => {
   const { data } = await api.patch(`/${id}/revoke`, { reason });
-  return data;
+  return data?.data || data;
 };
 
 /** Restore certificate (super_admin) */
 export const restoreCertificate = async (id: string): Promise<Certificate> => {
   const { data } = await api.patch(`/${id}/restore`);
-  return data;
+  return data?.data || data;
 };
 
 /** Get one certificate */
 export const getCertificateById = async (id: string): Promise<Certificate> => {
   const { data } = await api.get(`/${id}`);
-  return data;
+  return data?.data || data;
 };

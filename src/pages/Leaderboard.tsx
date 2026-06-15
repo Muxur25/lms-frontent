@@ -6,17 +6,20 @@ import {
   Crown,
   History,
   Loader2,
-  Medal,
   RefreshCw,
   Star,
   Target,
   Trophy,
   UserRound,
+  Sparkles,
+  TrendingUp,
+  Building2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '@/store/auth.store';
 import {
   useLeaderboardStore,
+  type DepartmentLeaderboardRanking,
   type LeaderboardRanking,
   type LeaderboardTimeFilter,
   type UserPoints,
@@ -40,23 +43,28 @@ export default function Leaderboard() {
   const socket = useSocket();
   const {
     rankings,
+    departmentRankings,
     myRanking,
     history,
     timeFilter,
     loading,
+    departmentLoading,
     historyLoading,
     error,
+    departmentError,
     setTimeFilter,
     fetchRankings,
+    fetchDepartmentRankings,
     fetchMyRanking,
     fetchMyHistory,
     subscribeToEvents,
     unsubscribeFromEvents,
   } = useLeaderboardStore();
-  const [activeTab, setActiveTab] = useState<'leaders' | 'history'>('leaders');
+  const [activeTab, setActiveTab] = useState<'leaders' | 'departments' | 'history'>('leaders');
 
   useEffect(() => {
     fetchRankings();
+    fetchDepartmentRankings();
     fetchMyRanking();
     fetchMyHistory();
 
@@ -67,7 +75,7 @@ export default function Leaderboard() {
     return () => {
       if (socket) unsubscribeFromEvents(socket);
     };
-  }, [user?.id, socket]);
+  }, [user?.id, socket, fetchRankings, fetchDepartmentRankings, fetchMyRanking, fetchMyHistory, subscribeToEvents, unsubscribeFromEvents]);
 
   const topThree = useMemo(() => rankings.slice(0, 3), [rankings]);
   const rest = useMemo(() => rankings.slice(3), [rankings]);
@@ -82,6 +90,7 @@ export default function Leaderboard() {
 
   const reloadAll = () => {
     fetchRankings();
+    fetchDepartmentRankings();
     fetchMyRanking();
     fetchMyHistory();
   };
@@ -99,15 +108,21 @@ export default function Leaderboard() {
     });
 
   return (
-    <div className="leaderboard-page fade-in">
-      <section className="leaderboard-hero">
-        <div className="leaderboard-hero-copy">
-          <div className="leaderboard-kicker">
-            <Trophy size={16} />
+    <div className="leaderboard-root blur-fade">
+      {/* Dynamic Animated Background elements for the whole page */}
+      <div className="leaderboard-bg-glow glow-1"></div>
+      <div className="leaderboard-bg-glow glow-2"></div>
+
+      {/* Hero Section */}
+      <section className="leaderboard-hero-premium">
+        <div className="hero-mesh-bg"></div>
+        <div className="hero-content">
+          <div className="hero-badge">
+            <Sparkles size={14} className="hero-badge-icon" />
             <span>{t('leaderboard.kicker', 'AGMK bilim reytingi')}</span>
           </div>
-          <h1>{t('leaderboard.title', 'Peshqadamlar reytingi')}</h1>
-          <p>
+          <h1 className="hero-title">{t('leaderboard.title', 'Peshqadamlar reytingi')}</h1>
+          <p className="hero-subtitle">
             {t(
               'leaderboard.subtitle',
               "Kurslar, imtihonlar va sertifikatlar bo'yicha real ballar asosida shakllangan reyting.",
@@ -115,42 +130,58 @@ export default function Leaderboard() {
           </p>
         </div>
 
-        <div className="leaderboard-me-card">
-          <div className="leaderboard-me-top">
-            <span>{t('leaderboard.myPosition', 'Mening natijam')}</span>
-            <strong>#{currentUserRanking?.rank || 0}</strong>
+        <div className="hero-me-card">
+          <div className="me-card-glass"></div>
+          <div className="me-card-content">
+            <div className="me-top-row">
+              <span className="me-label">{t('leaderboard.myPosition', 'Mening natijam')}</span>
+              <div className="me-rank-badge">#{currentUserRanking?.rank || '-'}</div>
+            </div>
+            <div className="me-score-wrap">
+              <span className="me-score-value">{formatNumber(currentUserRanking?.totalPoints || 0, locale)}</span>
+              <span className="me-score-label">{t('leaderboard.totalPoints', 'jami ball')}</span>
+            </div>
+            <div className="me-bottom-row">
+              <StarRating stars={currentUserRanking?.stars || 1} />
+              <div className="me-trend">
+                <TrendingUp size={14} /> +{formatNumber(currentUserRanking?.periodPoints || 0, locale)} {filterLabel(timeFilter).toLowerCase()}
+              </div>
+            </div>
           </div>
-          <div className="leaderboard-me-score">
-            <span>{formatNumber(currentUserRanking?.totalPoints || 0, locale)}</span>
-            <small>{t('leaderboard.totalPoints', 'jami ball')}</small>
-          </div>
-          <StarRating stars={currentUserRanking?.stars || 1} />
         </div>
       </section>
 
-      <section className="leaderboard-toolbar">
-        <div className="leaderboard-tabs" role="tablist">
+      {/* Toolbar & Filters */}
+      <section className="leaderboard-toolbar-premium">
+        <div className="segmented-control" role="tablist">
           <button
-            className={clsx(activeTab === 'leaders' && 'is-active')}
+            className={clsx('segment-btn', activeTab === 'leaders' && 'active')}
             onClick={() => setActiveTab('leaders')}
           >
-            <Trophy size={17} />
+            <Trophy size={16} />
             <span>{t('leaderboard.rankings', 'Reyting')}</span>
           </button>
           <button
-            className={clsx(activeTab === 'history' && 'is-active')}
+            className={clsx('segment-btn', activeTab === 'departments' && 'active')}
+            onClick={() => setActiveTab('departments')}
+          >
+            <Building2 size={16} />
+            <span>{t('leaderboard.departments', 'Bo\'limlar')}</span>
+          </button>
+          <button
+            className={clsx('segment-btn', activeTab === 'history' && 'active')}
             onClick={() => setActiveTab('history')}
           >
-            <History size={17} />
+            <History size={16} />
             <span>{t('leaderboard.myHistory', 'Tarix')}</span>
           </button>
         </div>
 
-        <div className="leaderboard-filters" aria-label={t('leaderboard.period', 'Davr')}>
+        <div className="filter-pills" aria-label={t('leaderboard.period', 'Davr')}>
           {FILTERS.map((filter) => (
             <button
               key={filter}
-              className={clsx(timeFilter === filter && 'is-active')}
+              className={clsx('filter-pill', timeFilter === filter && 'active')}
               onClick={() => setTimeFilter(filter)}
             >
               {filterLabel(filter)}
@@ -158,271 +189,691 @@ export default function Leaderboard() {
           ))}
         </div>
 
-        <button className="leaderboard-refresh" onClick={reloadAll} disabled={loading || historyLoading}>
-          {loading || historyLoading ? <Loader2 className="spin" size={17} /> : <RefreshCw size={17} />}
+        <button className="btn-refresh-premium" onClick={reloadAll} disabled={loading || departmentLoading || historyLoading}>
+          {loading || departmentLoading || historyLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
           <span>{t('leaderboard.refresh', 'Yangilash')}</span>
         </button>
       </section>
 
       {error && (
-        <div className="leaderboard-alert">
+        <div className="alert-premium error">
           <span>{error}</span>
           <button onClick={reloadAll}>{t('leaderboard.retry', 'Qayta urinish')}</button>
         </div>
       )}
 
-      <section className="leaderboard-stats">
-        <MetricCard icon={UserRound} label={t('leaderboard.stats.participants', 'Ishtirokchilar')} value={rankings.length} />
-        <MetricCard icon={Target} label={t('leaderboard.stats.periodPoints', 'Davrdagi ball')} value={totalPeriodPoints} />
-        <MetricCard icon={Award} label={t('leaderboard.stats.myStars', 'Mening darajam')} value={currentUserRanking?.stars || 1} suffix="/5" />
-        <MetricCard icon={CalendarDays} label={t('leaderboard.stats.period', 'Davr')} textValue={filterLabel(timeFilter)} />
+      {/* Metrics Row */}
+      <section className="metrics-grid-premium">
+        <MetricCardPremium icon={UserRound} label={t('leaderboard.stats.participants', 'Ishtirokchilar')} value={rankings.length} color="blue" />
+        <MetricCardPremium icon={Target} label={t('leaderboard.stats.periodPoints', 'Davrdagi ball')} value={totalPeriodPoints} color="emerald" />
+        <MetricCardPremium icon={Award} label={t('leaderboard.stats.myStars', 'Mening darajam')} value={currentUserRanking?.stars || 1} suffix="/5" color="amber" />
+        <MetricCardPremium icon={CalendarDays} label={t('leaderboard.stats.period', 'Davr')} textValue={filterLabel(timeFilter)} color="purple" />
       </section>
 
-      {activeTab === 'leaders' ? (
-        <main className="leaderboard-content">
-          {loading ? (
-            <LoadingState label={t('leaderboard.loading', 'Reyting yuklanmoqda...')} />
-          ) : rankings.length ? (
-            <>
-              <section className="leaderboard-podium" aria-label={t('leaderboard.topThree', 'Top 3')}>
-                {topThree[1] && <PodiumCard ranking={topThree[1]} place={2} locale={locale} />}
-                {topThree[0] && <PodiumCard ranking={topThree[0]} place={1} locale={locale} />}
-                {topThree[2] && <PodiumCard ranking={topThree[2]} place={3} locale={locale} />}
-              </section>
+      {/* Main Content Area */}
+      <div className="main-content-area">
+        {activeTab === 'leaders' ? (
+          <main className="leaders-view">
+            {loading ? (
+              <LoadingStatePremium label={t('leaderboard.loading', 'Reyting yuklanmoqda...')} />
+            ) : rankings.length ? (
+              <>
+                <section className="podium-premium" aria-label={t('leaderboard.topThree', 'Top 3')}>
+                  {topThree[1] && <PodiumCardPremium ranking={topThree[1]} place={2} locale={locale} delay={0.1} />}
+                  {topThree[0] && <PodiumCardPremium ranking={topThree[0]} place={1} locale={locale} delay={0} />}
+                  {topThree[2] && <PodiumCardPremium ranking={topThree[2]} place={3} locale={locale} delay={0.2} />}
+                </section>
 
-              <section className="leaderboard-list-panel">
-                <div className="leaderboard-panel-head">
-                  <div>
-                    <h2>{t('leaderboard.participants', 'Ishtirokchilar')}</h2>
-                    <p>{t('leaderboard.participantsSub', 'Ball, bo\'lim va yulduz darajasi bo\'yicha tartiblangan ro\'yxat')}</p>
+                <section className="list-panel-premium">
+                  <div className="panel-header">
+                    <div>
+                      <h2>{t('leaderboard.participants', 'Ishtirokchilar')}</h2>
+                      <p>{t('leaderboard.participantsSub', 'Ball, bo\'lim va yulduz darajasi bo\'yicha tartiblangan ro\'yxat')}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="leaderboard-list">
-                  {rest.map((ranking) => (
-                    <RankingRow
-                      key={ranking.id}
-                      ranking={ranking}
-                      isMe={ranking.userId === user?.id}
-                      locale={locale}
-                    />
-                  ))}
-                </div>
-              </section>
-            </>
-          ) : (
-            <EmptyState
-              icon={Trophy}
-              title={t('leaderboard.emptyTitle', 'Reyting hali shakllanmagan')}
-              text={t('leaderboard.emptyText', 'Kurs yoki imtihon yakunlanganda ballar shu yerda ko\'rinadi.')}
-            />
-          )}
-        </main>
-      ) : (
-        <HistoryPanel history={history} loading={historyLoading} locale={locale} />
-      )}
+                  <div className="list-body">
+                    {rest.map((ranking, idx) => (
+                      <RankingRowPremium
+                        key={ranking.id}
+                        ranking={ranking}
+                        isMe={ranking.userId === user?.id}
+                        locale={locale}
+                        index={idx}
+                      />
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : (
+              <EmptyStatePremium
+                icon={Trophy}
+                title={t('leaderboard.emptyTitle', 'Reyting hali shakllanmagan')}
+                text={t('leaderboard.emptyText', 'Kurs yoki imtihon yakunlanganda ballar shu yerda ko\'rinadi.')}
+              />
+            )}
+          </main>
+        ) : activeTab === 'departments' ? (
+          <DepartmentsPanelPremium
+            departments={departmentRankings}
+            loading={departmentLoading}
+            error={departmentError}
+            onRetry={() => fetchDepartmentRankings()}
+            locale={locale}
+          />
+        ) : (
+          <HistoryPanelPremium history={history} loading={historyLoading} locale={locale} />
+        )}
+      </div>
 
       <style>{`
-        .leaderboard-page { display: flex; flex-direction: column; gap: 20px; padding-bottom: 28px; }
-        .leaderboard-hero { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: stretch; background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; padding: 24px; box-shadow: var(--shadow-sm); }
-        .leaderboard-hero-copy { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-        .leaderboard-kicker { width: fit-content; display: inline-flex; align-items: center; gap: 8px; color: var(--green-400); background: rgba(22, 163, 74, 0.11); border: 1px solid rgba(22, 163, 74, 0.24); border-radius: 999px; padding: 7px 11px; font-size: 13px; font-weight: 800; margin-bottom: 14px; }
-        .leaderboard-hero h1 { margin: 0; color: var(--text-primary); font-size: 34px; line-height: 1.1; font-weight: 900; letter-spacing: 0; }
-        .leaderboard-hero p { margin: 12px 0 0; max-width: 760px; color: var(--text-secondary); line-height: 1.6; font-size: 15px; }
-        .leaderboard-me-card { background: var(--surface-1); border: 1px solid var(--border-1); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
-        .leaderboard-me-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-weight: 700; }
-        .leaderboard-me-top strong { color: var(--green-400); font-size: 22px; }
-        .leaderboard-me-score span { display: block; color: var(--text-primary); font-size: 38px; line-height: 1; font-weight: 900; }
-        .leaderboard-me-score small { color: var(--text-tertiary); font-size: 12px; text-transform: uppercase; font-weight: 800; }
-
-        .leaderboard-toolbar { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
-        .leaderboard-tabs, .leaderboard-filters { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; min-width: 0; }
-        .leaderboard-tabs button, .leaderboard-filters button, .leaderboard-refresh, .leaderboard-alert button { border: 0; border-radius: 6px; min-height: 36px; padding: 0 12px; color: var(--text-secondary); background: transparent; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
-        .leaderboard-tabs button.is-active, .leaderboard-filters button.is-active { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow-sm); }
-        .leaderboard-filters { justify-self: center; overflow-x: auto; max-width: 100%; }
-        .leaderboard-refresh { background: var(--green-500); color: white; border: 1px solid var(--green-500); }
-        .leaderboard-refresh:disabled { opacity: 0.66; cursor: wait; }
-        .spin { animation: leaderboard-spin 0.8s linear infinite; }
-        @keyframes leaderboard-spin { to { transform: rotate(360deg); } }
-
-        .leaderboard-alert { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.28); border-radius: 8px; }
-        .leaderboard-alert button { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
-
-        .leaderboard-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-        .leaderboard-metric { min-height: 96px; background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; padding: 15px; display: flex; align-items: center; gap: 13px; box-shadow: var(--shadow-sm); }
-        .leaderboard-metric-icon { width: 42px; height: 42px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--green-400); background: rgba(22, 163, 74, 0.11); flex: 0 0 auto; }
-        .leaderboard-metric span { color: var(--text-tertiary); font-size: 12px; font-weight: 800; }
-        .leaderboard-metric strong { display: block; margin-top: 4px; color: var(--text-primary); font-size: 26px; line-height: 1; font-weight: 900; overflow-wrap: anywhere; }
-
-        .leaderboard-content { display: flex; flex-direction: column; gap: 18px; }
-        .leaderboard-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
-        .leaderboard-podium-card { position: relative; overflow: hidden; background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm); min-height: 230px; display: flex; flex-direction: column; justify-content: space-between; }
-        .leaderboard-podium-card.place-1 { min-height: 275px; border-top: 3px solid #eab308; }
-        .leaderboard-podium-card.place-2 { min-height: 245px; border-top: 3px solid #94a3b8; }
-        .leaderboard-podium-card.place-3 { min-height: 220px; border-top: 3px solid #f59e0b; }
-        .leaderboard-place-badge { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--surface-1); border: 1px solid var(--border-1); color: var(--text-primary); }
-        .leaderboard-podium-name { margin-top: 16px; color: var(--text-primary); font-size: 18px; font-weight: 900; overflow-wrap: anywhere; }
-        .leaderboard-podium-dept { color: var(--text-tertiary); font-size: 13px; margin-top: 5px; }
-        .leaderboard-podium-score { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-top: 18px; }
-        .leaderboard-podium-score strong { color: var(--text-primary); font-size: 28px; line-height: 1; }
-        .leaderboard-podium-score span { color: var(--text-tertiary); font-size: 12px; font-weight: 800; }
-
-        .leaderboard-list-panel, .leaderboard-history-panel { background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-sm); }
-        .leaderboard-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--border-1); background: var(--surface-1); }
-        .leaderboard-panel-head h2 { margin: 0; color: var(--text-primary); font-size: 18px; font-weight: 900; }
-        .leaderboard-panel-head p { margin: 5px 0 0; color: var(--text-tertiary); font-size: 13px; }
-        .leaderboard-list { display: flex; flex-direction: column; }
-        .leaderboard-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid var(--border-1); background: var(--bg-2); }
-        .leaderboard-row:last-child { border-bottom: 0; }
-        .leaderboard-row.is-me { background: rgba(22, 163, 74, 0.08); box-shadow: inset 3px 0 0 var(--green-500); }
-        .leaderboard-rank { color: var(--text-tertiary); font-size: 18px; font-weight: 900; }
-        .leaderboard-user { display: flex; align-items: center; gap: 12px; min-width: 0; }
-        .leaderboard-avatar { width: 44px; height: 44px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-1); border: 1px solid var(--border-1); color: var(--green-400); font-weight: 900; flex: 0 0 auto; }
-        .leaderboard-user strong { display: block; color: var(--text-primary); font-size: 15px; overflow-wrap: anywhere; }
-        .leaderboard-user small { display: block; margin-top: 3px; color: var(--text-tertiary); font-size: 12px; }
-        .leaderboard-row-score { display: flex; align-items: center; gap: 18px; }
-        .leaderboard-score { text-align: right; }
-        .leaderboard-score strong { display: block; color: var(--text-primary); font-size: 18px; }
-        .leaderboard-score span { color: var(--text-tertiary); font-size: 11px; font-weight: 800; text-transform: uppercase; }
-        .leaderboard-stars { display: flex; align-items: center; gap: 3px; color: var(--text-muted); }
-        .leaderboard-stars .filled { color: #f59e0b; fill: #f59e0b; }
-
-        .leaderboard-history-list { display: flex; flex-direction: column; }
-        .leaderboard-history-row { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 13px; align-items: center; padding: 15px 18px; border-bottom: 1px solid var(--border-1); }
-        .leaderboard-history-row:last-child { border-bottom: 0; }
-        .leaderboard-history-icon { width: 42px; height: 42px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--green-400); background: rgba(22, 163, 74, 0.11); }
-        .leaderboard-history-row strong { color: var(--text-primary); font-size: 15px; }
-        .leaderboard-history-row small { display: block; color: var(--text-tertiary); margin-top: 4px; }
-        .leaderboard-history-points { color: var(--green-400); font-size: 20px; font-weight: 900; white-space: nowrap; }
-
-        .leaderboard-state { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; color: var(--text-tertiary); background: var(--bg-2); border: 1px solid var(--border-1); border-radius: 8px; padding: 24px; }
-        .leaderboard-state h3 { margin: 0; color: var(--text-primary); font-size: 20px; }
-        .leaderboard-state p { margin: 0; max-width: 420px; line-height: 1.5; }
-
-        @media (max-width: 1120px) {
-          .leaderboard-hero { grid-template-columns: 1fr; }
-          .leaderboard-toolbar { grid-template-columns: 1fr; }
-          .leaderboard-tabs, .leaderboard-filters, .leaderboard-refresh { width: 100%; }
-          .leaderboard-refresh { min-height: 40px; }
-          .leaderboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .leaderboard-root {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 28px;
+          padding-bottom: 40px;
+          min-height: 100vh;
         }
-        @media (max-width: 760px) {
-          .leaderboard-hero { padding: 18px; }
-          .leaderboard-hero h1 { font-size: 27px; }
-          .leaderboard-stats { grid-template-columns: 1fr; }
-          .leaderboard-podium { grid-template-columns: 1fr; }
-          .leaderboard-podium-card, .leaderboard-podium-card.place-1, .leaderboard-podium-card.place-2, .leaderboard-podium-card.place-3 { min-height: auto; }
-          .leaderboard-row { grid-template-columns: 48px minmax(0, 1fr); }
-          .leaderboard-row-score { grid-column: 2; justify-content: space-between; }
-          .leaderboard-stars { display: none; }
-          .leaderboard-history-row { grid-template-columns: 42px minmax(0, 1fr); }
-          .leaderboard-history-points { grid-column: 2; }
-          .leaderboard-tabs button, .leaderboard-filters button { flex: 1; padding: 0 8px; }
-          .leaderboard-filters { justify-self: stretch; }
+
+        /* Ambient Background Glows */
+        .leaderboard-bg-glow {
+          position: fixed;
+          border-radius: 50%;
+          filter: blur(120px);
+          z-index: -1;
+          opacity: 0.4;
+          pointer-events: none;
+          animation: floatGlow 20s ease-in-out infinite alternate;
+        }
+        .leaderboard-bg-glow.glow-1 {
+          top: -10%; left: -5%; width: 50vw; height: 50vw;
+          background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
+        }
+        .leaderboard-bg-glow.glow-2 {
+          bottom: -10%; right: -5%; width: 60vw; height: 60vw;
+          background: radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%);
+          animation-delay: -10s;
+        }
+        @keyframes floatGlow {
+          0% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        /* Premium Hero Section */
+        .leaderboard-hero-premium {
+          position: relative;
+          display: grid;
+          grid-template-columns: 1fr 380px;
+          gap: 24px;
+          align-items: stretch;
+          border-radius: 24px;
+          padding: 32px;
+          overflow: hidden;
+          background: var(--surface-1);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .hero-mesh-bg {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+          z-index: 0;
+          opacity: 0.8;
+        }
+        .hero-content {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .hero-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.2);
+          color: #3b82f6;
+          font-size: 13px;
+          font-weight: 800;
+          width: fit-content;
+          margin-bottom: 20px;
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+        }
+        .hero-title {
+          margin: 0 0 12px 0;
+          font-size: 42px;
+          font-weight: 900;
+          line-height: 1.1;
+          letter-spacing: -1.5px;
+          background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .hero-subtitle {
+          margin: 0;
+          font-size: 16px;
+          line-height: 1.6;
+          color: var(--text-secondary);
+          max-width: 480px;
+        }
+
+        /* Hero 'Me' Card */
+        .hero-me-card {
+          position: relative;
+          border-radius: 20px;
+          padding: 24px;
+          overflow: hidden;
+          z-index: 1;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
+          transform: translateY(0);
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .hero-me-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+        }
+        .me-card-glass {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          z-index: 0;
+        }
+        .me-card-content {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          justify-content: space-between;
+        }
+        .me-top-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .me-label {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .me-rank-badge {
+          background: linear-gradient(135deg, #10b981, #059669);
+          color: white;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-weight: 900;
+          font-size: 18px;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .me-score-value {
+          display: block;
+          font-size: 48px;
+          font-weight: 900;
+          line-height: 1;
+          color: var(--text-primary);
+          letter-spacing: -2px;
+          margin-top: 16px;
+        }
+        .me-score-label {
+          display: block;
+          font-size: 13px;
+          color: var(--text-tertiary);
+          font-weight: 800;
+          text-transform: uppercase;
+          margin-top: 6px;
+        }
+        .me-bottom-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 20px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .me-trend {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 13px;
+          font-weight: 800;
+          color: #10b981;
+          background: rgba(16, 185, 129, 0.1);
+          padding: 4px 10px;
+          border-radius: 8px;
+        }
+
+        /* Toolbar */
+        .leaderboard-toolbar-premium {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          padding: 8px;
+          background: var(--surface-1);
+          border-radius: 16px;
+          border: 1px solid var(--border-1);
+          box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        .segmented-control {
+          display: flex;
+          background: var(--bg-2);
+          padding: 4px;
+          border-radius: 12px;
+          border: 1px solid var(--border-1);
+        }
+        .segment-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: none;
+          background: transparent;
+          color: var(--text-secondary);
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .segment-btn.active {
+          background: var(--surface-1);
+          color: var(--text-primary);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .filter-pills {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          flex: 1;
+          justify-content: center;
+        }
+        .filter-pill {
+          padding: 8px 16px;
+          border-radius: 99px;
+          border: 1px solid var(--border-1);
+          background: var(--bg-2);
+          color: var(--text-secondary);
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+        .filter-pill.active {
+          background: rgba(59, 130, 246, 0.1);
+          color: #3b82f6;
+          border-color: rgba(59, 130, 246, 0.3);
+        }
+        .filter-pill:hover:not(.active) {
+          border-color: var(--text-tertiary);
+          color: var(--text-primary);
+        }
+        .btn-refresh-premium {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 20px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border: none;
+          font-weight: 800;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .btn-refresh-premium:hover:not(:disabled) {
+          box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+          transform: translateY(-1px);
+        }
+        .btn-refresh-premium:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+        .alert-premium {
+          padding: 16px 20px; border-radius: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #ef4444;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .alert-premium button { background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+
+        /* Metrics Grid */
+        .metrics-grid-premium {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+        }
+        .metric-card-premium {
+          background: var(--surface-1);
+          border-radius: 20px;
+          padding: 20px;
+          border: 1px solid var(--border-1);
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .metric-card-premium:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+        }
+        .metric-icon-wrap {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .metric-info {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          z-index: 1;
+        }
+        .metric-val {
+          font-size: 24px;
+          font-weight: 900;
+          color: var(--text-primary);
+          line-height: 1;
+        }
+        .metric-lbl {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--text-tertiary);
+        }
+
+        /* 3D Podium */
+        .podium-premium {
+          display: grid;
+          grid-template-columns: 1fr 1.2fr 1fr;
+          gap: 20px;
+          align-items: end;
+          margin: 40px 0 60px 0;
+          padding: 0 20px;
+        }
+        .podium-card {
+          position: relative;
+          border-radius: 24px;
+          padding: 32px 24px 24px 24px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          background: var(--surface-1);
+          border: 1px solid var(--border-1);
+          transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          animation: slideUpFade 0.6s ease forwards;
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        @keyframes slideUpFade {
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .podium-card:hover {
+          transform: translateY(-12px) scale(1.02) !important;
+          z-index: 10;
+        }
+        .podium-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 24px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+          pointer-events: none;
+        }
+        .podium-rank-badge {
+          position: absolute;
+          top: -24px;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          font-weight: 900;
+          color: white;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+          border: 4px solid var(--bg-1);
+          z-index: 2;
+        }
+        /* Gold */
+        .podium-card.place-1 { height: 320px; border-color: rgba(250, 204, 21, 0.3); box-shadow: 0 20px 40px rgba(250, 204, 21, 0.08); z-index: 3; }
+        .podium-card.place-1 .podium-rank-badge { background: linear-gradient(135deg, #fde047, #eab308); color: #713f12; }
+        .podium-card.place-1 .podium-score { color: #eab308; }
+        /* Silver */
+        .podium-card.place-2 { height: 280px; border-color: rgba(148, 163, 184, 0.3); box-shadow: 0 20px 40px rgba(148, 163, 184, 0.08); z-index: 2; }
+        .podium-card.place-2 .podium-rank-badge { background: linear-gradient(135deg, #cbd5e1, #94a3b8); color: #1e293b; }
+        .podium-card.place-2 .podium-score { color: #94a3b8; }
+        /* Bronze */
+        .podium-card.place-3 { height: 250px; border-color: rgba(245, 158, 11, 0.3); box-shadow: 0 20px 40px rgba(245, 158, 11, 0.08); z-index: 1; }
+        .podium-card.place-3 .podium-rank-badge { background: linear-gradient(135deg, #fcd34d, #f59e0b); color: #78350f; }
+        .podium-card.place-3 .podium-score { color: #f59e0b; }
+
+        .podium-avatar {
+          width: 72px;
+          height: 72px;
+          border-radius: 20px;
+          background: var(--bg-2);
+          border: 2px solid var(--border-1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          font-weight: 900;
+          color: var(--text-secondary);
+          margin-top: 10px;
+          margin-bottom: 16px;
+        }
+        .podium-name { font-size: 18px; font-weight: 900; color: var(--text-primary); line-height: 1.2; margin-bottom: 4px; }
+        .podium-dept { font-size: 13px; font-weight: 600; color: var(--text-tertiary); margin-bottom: auto; }
+        .podium-score-wrap { margin-top: 20px; text-align: center; }
+        .podium-score { font-size: 32px; font-weight: 900; line-height: 1; letter-spacing: 0; }
+        .podium-score-lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-tertiary); margin-top: 4px; }
+
+        /* List Panel */
+        .list-panel-premium {
+          background: var(--surface-1);
+          border-radius: 24px;
+          border: 1px solid var(--border-1);
+          overflow: hidden;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        .panel-header {
+          padding: 24px 32px;
+          border-bottom: 1px solid var(--border-1);
+          background: rgba(255,255,255,0.02);
+        }
+        .panel-header h2 { margin: 0 0 4px 0; font-size: 20px; font-weight: 900; }
+        .panel-header p { margin: 0; font-size: 14px; color: var(--text-tertiary); }
+        .list-body { display: flex; flex-direction: column; }
+        .row-premium {
+          display: grid;
+          grid-template-columns: 60px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 20px;
+          padding: 20px 32px;
+          border-bottom: 1px solid var(--border-1);
+          background: transparent;
+          transition: background 0.2s, transform 0.2s;
+          animation: slideUpFade 0.4s ease forwards;
+          opacity: 0;
+        }
+        .row-premium:hover {
+          background: var(--bg-2);
+        }
+        .row-premium:last-child { border-bottom: none; }
+        .row-premium.is-me {
+          background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%);
+          position: relative;
+        }
+        .row-premium.is-me::before {
+          content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+          background: #3b82f6; border-radius: 0 4px 4px 0;
+          box-shadow: 0 0 10px #3b82f6;
+        }
+        .row-rank {
+          font-size: 20px; font-weight: 900; color: var(--text-tertiary);
+        }
+        .row-user {
+          display: flex; align-items: center; gap: 16px;
+        }
+        .row-avatar {
+          width: 48px; height: 48px; border-radius: 14px; background: var(--bg-2);
+          border: 1px solid var(--border-1); display: flex; align-items: center; justify-content: center;
+          font-size: 18px; font-weight: 900; color: var(--text-secondary);
+        }
+        .row-user-info strong { display: block; font-size: 16px; font-weight: 800; color: var(--text-primary); }
+        .row-user-info small { display: block; font-size: 13px; color: var(--text-tertiary); margin-top: 4px; }
+        .row-stats {
+          display: flex; align-items: center; gap: 32px;
+        }
+        .row-score { text-align: right; }
+        .row-score strong { display: block; font-size: 22px; font-weight: 900; color: var(--text-primary); line-height: 1; }
+        .row-score span { display: block; font-size: 11px; font-weight: 800; color: var(--text-tertiary); text-transform: uppercase; margin-top: 6px; }
+
+        .leaderboard-stars { display: flex; gap: 4px; }
+        .leaderboard-stars svg { color: var(--border-1); fill: transparent; }
+        .leaderboard-stars svg.filled { color: #f59e0b; fill: #f59e0b; filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.4)); }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+          .leaderboard-hero-premium { grid-template-columns: 1fr; }
+          .metrics-grid-premium { grid-template-columns: repeat(2, 1fr); }
+          .podium-premium { gap: 12px; }
+        }
+        @media (max-width: 768px) {
+          .podium-premium { display: flex; flex-direction: column; align-items: center; gap: 32px; margin: 32px 0; }
+          .podium-card { width: 100%; max-width: 320px; height: auto !important; min-height: 200px; }
+          .podium-card:hover { transform: translateY(-4px) scale(1.02) !important; }
+          .row-premium { grid-template-columns: 40px 1fr; padding: 16px 20px; }
+          .row-stats { grid-column: 1 / -1; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-1); }
+          .leaderboard-toolbar-premium { flex-direction: column; align-items: stretch; }
+          .filter-pills { overflow-x: auto; padding-bottom: 8px; justify-content: flex-start; }
+          .hero-title { font-size: 32px; }
         }
       `}</style>
     </div>
   );
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  suffix = '',
-  textValue,
-}: {
-  icon: any;
-  label: string;
-  value?: number;
-  suffix?: string;
-  textValue?: string;
-}) {
+// ─── Subcomponents ───
+
+function MetricCardPremium({ icon: Icon, label, value, suffix = '', textValue, color }: { icon: any; label: string; value?: number; suffix?: string; textValue?: string; color: string }) {
+  const colorMap: Record<string, string> = {
+    blue: '#3b82f6',
+    emerald: '#10b981',
+    amber: '#f59e0b',
+    purple: '#8b5cf6',
+  };
+  const hex = colorMap[color] || colorMap.blue;
   return (
-    <div className="leaderboard-metric">
-      <span className="leaderboard-metric-icon"><Icon size={20} /></span>
-      <div>
-        <span>{label}</span>
-        <strong>{textValue || `${formatNumber(value || 0)}${suffix}`}</strong>
+    <div className="metric-card-premium">
+      <div className="metric-icon-wrap" style={{ background: `${hex}15`, color: hex }}>
+        <Icon size={24} />
+      </div>
+      <div className="metric-info">
+        <span className="metric-lbl">{label}</span>
+        <span className="metric-val">{textValue || `${formatNumber(value || 0)}${suffix}`}</span>
       </div>
     </div>
   );
 }
 
-function PodiumCard({ ranking, place, locale }: { ranking: LeaderboardRanking; place: 1 | 2 | 3; locale: string }) {
-  const Icon = place === 1 ? Crown : Medal;
+function PodiumCardPremium({ ranking, place, locale, delay }: { ranking: LeaderboardRanking; place: 1 | 2 | 3; locale: string; delay: number }) {
+  const { t } = useTranslation();
   return (
-    <article className={`leaderboard-podium-card place-${place}`}>
-      <div>
-        <span className="leaderboard-place-badge"><Icon size={24} /></span>
-        <div className="leaderboard-podium-name">{ranking.userFullName}</div>
-        <div className="leaderboard-podium-dept">{ranking.userDepartment || 'AGMK'}</div>
-      </div>
-      <div>
+    <article className={`podium-card place-${place}`} style={{ animationDelay: `${delay}s` }}>
+      <div className="podium-rank-badge">{place === 1 ? <Crown size={28} /> : `#${place}`}</div>
+      <div className="podium-avatar">{getInitial(ranking.userFullName)}</div>
+      <div className="podium-name">{ranking.userFullName}</div>
+      <div className="podium-dept">{ranking.userDepartment || 'AGMK'}</div>
+
+      <div className="podium-score-wrap">
         <StarRating stars={ranking.stars} />
-        <div className="leaderboard-podium-score">
-          <div>
-            <strong>{formatNumber(ranking.totalPoints, locale)}</strong>
-            <span>ball</span>
-          </div>
-          <span>#{ranking.rank}</span>
-        </div>
+        <div className="podium-score" style={{ marginTop: '16px' }}>{formatNumber(ranking.totalPoints, locale)}</div>
+        <div className="podium-score-lbl">{t('leaderboard.totalScoreLabel', 'Umumiy ball')}</div>
       </div>
     </article>
   );
 }
 
-function RankingRow({ ranking, isMe, locale }: { ranking: LeaderboardRanking; isMe: boolean; locale: string }) {
+function RankingRowPremium({ ranking, isMe, locale, index }: { ranking: LeaderboardRanking; isMe: boolean; locale: string; index: number }) {
+  const { t } = useTranslation();
   return (
-    <article className={clsx('leaderboard-row', isMe && 'is-me')}>
-      <div className="leaderboard-rank">#{ranking.rank}</div>
-      <div className="leaderboard-user">
-        <span className="leaderboard-avatar">{getInitial(ranking.userFullName)}</span>
-        <div>
+    <article className={clsx('row-premium', isMe && 'is-me')} style={{ animationDelay: `${0.1 + index * 0.05}s` }}>
+      <div className="row-rank">#{ranking.rank}</div>
+      <div className="row-user">
+        <div className="row-avatar">{getInitial(ranking.userFullName)}</div>
+        <div className="row-user-info">
           <strong>{ranking.userFullName}</strong>
           <small>{ranking.userDepartment || 'AGMK'}</small>
         </div>
       </div>
-      <div className="leaderboard-row-score">
+      <div className="row-stats">
         <StarRating stars={ranking.stars} />
-        <div className="leaderboard-score">
+        <div className="row-score">
           <strong>{formatNumber(ranking.totalPoints, locale)}</strong>
-          <span>ball</span>
+          <span>{t('leaderboard.pointsLabel', 'Ball')}</span>
         </div>
       </div>
     </article>
   );
 }
 
-function HistoryPanel({ history, loading, locale }: { history: UserPoints[]; loading: boolean; locale: string }) {
+function HistoryPanelPremium({ history, loading, locale }: { history: UserPoints[]; loading: boolean; locale: string }) {
   const { t } = useTranslation();
 
   if (loading) {
-    return <LoadingState label={t('leaderboard.historyLoading', 'Tarix yuklanmoqda...')} />;
+    return <LoadingStatePremium label={t('leaderboard.historyLoading', 'Tarix yuklanmoqda...')} />;
   }
 
   return (
-    <section className="leaderboard-history-panel">
-      <div className="leaderboard-panel-head">
+    <section className="list-panel-premium">
+      <div className="panel-header">
         <div>
           <h2>{t('leaderboard.pointsHistory', 'Ballar tarixi')}</h2>
           <p>{t('leaderboard.historySub', 'Oxirgi ball berilgan amallar')}</p>
         </div>
       </div>
       {history.length ? (
-        <div className="leaderboard-history-list">
-          {history.map((item) => (
-            <article key={item.id} className="leaderboard-history-row">
-              <span className="leaderboard-history-icon"><Award size={20} /></span>
-              <div>
+        <div className="list-body">
+          {history.map((item, idx) => (
+            <article key={item.id} className="row-premium" style={{ animationDelay: `${0.05 * idx}s` }}>
+              <div className="metric-icon-wrap" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                <Award size={20} />
+              </div>
+              <div className="row-user-info">
                 <strong>{t(`leaderboard.sources.${item.sourceType}`, SOURCE_LABELS[item.sourceType] || item.sourceType)}</strong>
                 <small>{formatDateTime(item.createdAt, locale)}</small>
               </div>
-              <div className="leaderboard-history-points">+{formatNumber(item.pointsAwarded, locale)}</div>
+              <div className="row-score">
+                <strong style={{ color: '#10b981' }}>+{formatNumber(item.pointsAwarded, locale)}</strong>
+                <span>{t('leaderboard.pointsLabel', 'Ball')}</span>
+              </div>
             </article>
           ))}
         </div>
       ) : (
-        <EmptyState
+        <EmptyStatePremium
           icon={History}
           title={t('leaderboard.historyEmptyTitle', "Tarix bo'sh")}
           text={t('leaderboard.historyEmptyText', "Sizda hozircha ballar tarixi yo'q.")}
@@ -436,27 +887,29 @@ function StarRating({ stars }: { stars: number }) {
   return (
     <div className="leaderboard-stars" aria-label={`${stars}/5`}>
       {Array.from({ length: 5 }).map((_, index) => (
-        <Star key={index} size={15} className={index < stars ? 'filled' : ''} />
+        <Star key={index} size={16} className={index < stars ? 'filled' : ''} />
       ))}
     </div>
   );
 }
 
-function LoadingState({ label }: { label: string }) {
+function LoadingStatePremium({ label }: { label: string }) {
   return (
-    <div className="leaderboard-state">
-      <Loader2 className="spin" size={30} />
-      <span>{label}</span>
+    <div style={{ padding: '100px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+      <Loader2 className="spin" size={40} style={{ margin: '0 auto 16px auto', color: '#3b82f6' }} />
+      <div style={{ fontSize: 16, fontWeight: 600 }}>{label}</div>
     </div>
   );
 }
 
-function EmptyState({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
+function EmptyStatePremium({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
   return (
-    <div className="leaderboard-state">
-      <Icon size={38} />
-      <h3>{title}</h3>
-      <p>{text}</p>
+    <div style={{ padding: '80px 20px', textAlign: 'center', background: 'var(--surface-1)', borderRadius: '24px', border: '1px dashed var(--border-1)' }}>
+      <div style={{ width: 80, height: 80, borderRadius: '24px', background: 'var(--bg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto', color: 'var(--text-muted)' }}>
+        <Icon size={40} />
+      </div>
+      <h3 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text-primary)', marginBottom: 12 }}>{title}</h3>
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>{text}</p>
     </div>
   );
 }
@@ -479,4 +932,71 @@ function formatDateTime(value: string, locale: string) {
 
 function getInitial(name: string) {
   return (name || 'A').trim().charAt(0).toUpperCase();
+}
+
+function DepartmentsPanelPremium({
+  departments,
+  loading,
+  error,
+  onRetry,
+  locale,
+}: {
+  departments: DepartmentLeaderboardRanking[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+
+  if (loading) return <LoadingStatePremium label={t('leaderboard.departmentsLoading', "Bo'limlar reytingi yuklanmoqda...")} />;
+  if (error) {
+    return (
+      <div className="alert-premium error">
+        <span>{t('leaderboard.departmentsLoadError', "Bo'limlar reytingini yuklab bo'lmadi")}</span>
+        <button onClick={onRetry}>{t('leaderboard.retry', 'Qayta urinish')}</button>
+      </div>
+    );
+  }
+  if (!departments.length) {
+    return (
+      <EmptyStatePremium
+        icon={Building2}
+        title={t('leaderboard.departmentsEmptyTitle', "Bo'limlar reytingi bo'sh")}
+        text={t('leaderboard.departmentsEmptyText', "Hali hech qaysi bo'lim yetarli ball to'plamadi.")}
+      />
+    );
+  }
+  return (
+    <section className="list-panel-premium">
+      <div className="panel-header">
+        <div>
+          <h2>{t('leaderboard.departmentsPanelTitle', "Bo'limlar kesimida")}</h2>
+          <p>{t('leaderboard.departmentsPanelSub', "O'zlashtirish va faollik bo'yicha kuchli bo'limlar")}</p>
+        </div>
+      </div>
+      <div className="list-body">
+        {departments.map((dept, idx) => (
+          <div key={dept.departmentId || idx} className="ranking-row" style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '16px 24px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-1)', borderRadius: 12, marginBottom: 8 }}>
+            <div style={{ width: '40px', fontWeight: 800, fontSize: '18px', color: idx < 3 ? '#fbbf24' : 'var(--text-tertiary)', textAlign: 'center' }}>
+              #{dept.rank}
+            </div>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+              <Building2 size={24} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)', marginBottom: 4 }}>{dept.displayName}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <UserRound size={14} /> {t('leaderboard.participantsCount', '{{value}} ishtirokchi', { value: formatNumber(dept.participants, locale) })}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-primary)' }}>{formatNumber(dept.points, locale)}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0 }}>{t('leaderboard.totalPointsLabel', 'Jami ball')}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }

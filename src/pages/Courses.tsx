@@ -31,6 +31,11 @@ const COLOR_PRESETS = [
   { name: 'Green', value: '#22c55e' },
 ];
 
+const hasPositiveNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+};
+
 export default function Courses() {
   const { t, i18n } = useTranslation();
   const [filter, setFilter] = useState('all');
@@ -40,7 +45,11 @@ export default function Courses() {
   const [error, setError] = useState<string | null>(null);
   
   const user = useAuthStore((state) => state.user);
-  const canCreate = user?.role === 'super_admin' || user?.role === 'hr_manager' || user?.role === 'trainer';
+  const canCreate =
+    user?.role === 'super_admin' ||
+    user?.role === 'admin' ||
+    user?.role === 'hr_manager' ||
+    user?.role === 'trainer';
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,8 +61,8 @@ export default function Courses() {
     catRu: 'IT',
     level: "Boshlang'ich",
     levelRu: 'Начальный',
-    lessons: 10,
-    duration: '10 soat',
+    lessons: 1,
+    duration: '',
     color: '#3b82f6',
     instructor: '',
     status: 'draft',
@@ -72,28 +81,21 @@ export default function Courses() {
   }, [user]);
 
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
     setLoading(true);
-    apiClient.get('/courses', { params: { language: languageFilter } })
+    setError(null);
+    apiClient.get('/courses', { params: { language: languageFilter }, signal: controller.signal })
       .then(res => {
-        if (isMounted) {
-          const fetchedData = res.data?.data || res.data || [];
-          setCourses(Array.isArray(fetchedData) ? fetchedData : []);
-          setLoading(false);
-        }
+        const fetchedData = res.data?.data || res.data || [];
+        setCourses(Array.isArray(fetchedData) ? fetchedData : []);
       })
-      .catch(err => {
-        if (isMounted) {
-          console.error('Error fetching courses:', err);
-          setError(t('common.error') || 'Xatolik yuz berdi');
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [t, languageFilter]);
+      .catch((err: any) => {
+        if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return;
+        setError(t('common.error', 'Xatolik yuz berdi'));
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [languageFilter]);
 
   const handleCategoryChange = (catId: string) => {
     const found = CATEGORIES.find(c => c.id === catId);
@@ -153,10 +155,13 @@ export default function Courses() {
         ...prev,
         title: '',
         description: '',
+        lessons: 1,
+        duration: '',
         status: 'draft',
       }));
     } catch (err) {
-      console.error('Error creating course:', err);
+      const message = err instanceof Error ? err.message : (t('common.error') || 'Xatolik yuz berdi');
+      setErrors({ submit: message });
     } finally {
       setSubmitting(false);
     }
@@ -165,13 +170,25 @@ export default function Courses() {
   const tabs = [
     { id: 'all', label: t('courses.all') },
     { id: 'active', label: t('courses.active') },
-    { id: 'draft', label: t('courses.draft') },
+    ...(canCreate ? [{ id: 'draft', label: t('courses.draft') }] : []),
   ];
 
+  const isActiveStatus = (status: string) =>
+    status === 'active' || status === 'published';
+
   const filtered = courses.filter(c => {
-    const title = c.title || '';
-    const matchFilter = filter === 'all' || c.status === filter;
-    const matchSearch = title.toLowerCase().includes(search.toLowerCase());
+    // Extra client-side safety: non-creators never see drafts
+    if (!canCreate && c.status === 'draft') return false;
+
+    const title = isRu ? (c.titleRu || c.title || '') : (c.title || '');
+    const category = isRu ? (c.catRu || c.cat || '') : (c.cat || '');
+    const matchSearch = `${title} ${category}`.toLowerCase().includes(search.toLowerCase());
+
+    let matchFilter = true;
+    if (filter === 'active') matchFilter = isActiveStatus(c.status);
+    else if (filter === 'draft') matchFilter = c.status === 'draft';
+    // 'all' → matchFilter stays true
+
     return matchFilter && matchSearch;
   });
 
@@ -181,7 +198,7 @@ export default function Courses() {
         <div className="page-header fade-in">
           <div>
             <div className="page-title">{t('courses.title')}</div>
-            <div className="page-sub">Yuklanmoqda...</div>
+            <div className="page-sub">{t('courses.loading', 'Yuklanmoqda...')}</div>
           </div>
           {canCreate && (
             <button className="btn btn-primary" disabled><Plus size={15} /> {t('courses.newCourse')}</button>
@@ -213,8 +230,8 @@ export default function Courses() {
       <div style={{ textAlign: 'center', padding: '60px 20px' }} className="fade-in">
         <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
         <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{error}</h3>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Ma'lumotlarni yuklashda xatolik yuz berdi. Tizim bilan ulanishni tekshiring.</p>
-        <button className="btn btn-primary" onClick={() => { setLoading(true); setError(null); window.location.reload(); }}>Qayta yuklash</button>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>{t('courses.errorText', "Ma'lumotlarni yuklashda xatolik yuz berdi. Tizim bilan ulanishni tekshiring.")}</p>
+        <button className="btn btn-primary" onClick={() => { setLoading(true); setError(null); window.location.reload(); }}>{t('courses.retry', 'Qayta yuklash')}</button>
       </div>
     );
   }
@@ -224,7 +241,9 @@ export default function Courses() {
       <div className="page-header fade-in">
         <div>
           <div className="page-title">{t('courses.title')}</div>
-          <div className="page-sub">{courses.length} ta kurs mavjud</div>
+          <div className="page-sub">
+            {filtered.length} {t('courses.available', 'ta kurs mavjud')}
+          </div>
         </div>
         {canCreate && (
           <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
@@ -271,8 +290,21 @@ export default function Courses() {
         </div>
       </div>
 
+      {filtered.length === 0 ? (
+        <div className="card fade-in fade-in-2" style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <BookOpen size={42} color="var(--text-muted)" style={{ marginBottom: 14 }} />
+          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
+            {isRu ? 'Курсы не найдены' : 'Kurslar topilmadi'}
+          </div>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 420, margin: '0 auto' }}>
+            {isRu ? 'Измените поиск, фильтр или язык, чтобы увидеть доступные курсы.' : 'Mavjud kurslarni ko‘rish uchun qidiruv, filtr yoki tilni o‘zgartiring.'}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-3 fade-in fade-in-2">
-        {filtered.map(course => (
+        {filtered.map(course => {
+          const showRating = hasPositiveNumber(course.rating);
+          return (
           <div key={course.id} className="course-card">
             <div className="course-thumb" style={{ background: `linear-gradient(135deg, ${course.color}30, ${course.color}10)` }}>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -281,17 +313,23 @@ export default function Courses() {
                 </div>
               </div>
               <div style={{ position: 'absolute', top: 12, left: 12 }}>
-                <span className={clsx('badge', course.status === 'active' ? 'badge-green' : 'badge-amber')}>
-                  {course.status === 'active' ? t('courses.active') : t('courses.draft')}
+                <span className={clsx('badge', isActiveStatus(course.status) ? 'badge-green' : 'badge-amber')}>
+                  {isActiveStatus(course.status) ? t('courses.active') : t('courses.draft')}
                 </span>
               </div>
-              <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.5)', borderRadius: 8, padding: '4px 8px', fontSize: 11, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Star size={10} color="#f59e0b" fill="#f59e0b" /> {course.rating || 5.0}
-              </div>
+              {showRating && (
+                <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.5)', borderRadius: 8, padding: '4px 8px', fontSize: 11, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Star size={10} color="#f59e0b" fill="#f59e0b" /> {Number(course.rating).toFixed(1)}
+                </div>
+              )}
             </div>
             <div className="course-body">
-              <div className="course-category" style={{ color: course.color }}>{course.cat}</div>
-              <div className="course-title">{course.title}</div>
+              <div className="course-category" style={{ color: course.color }}>
+                {isRu ? (course.catRu || course.cat) : course.cat}
+              </div>
+              <div className="course-title">
+                {isRu ? (course.titleRu || course.title) : course.title}
+              </div>
               <div className="course-meta">
                 <span><Users size={11} /> {course.enrolled || 0}</span>
                 <span><Clock size={11} /> {course.duration}</span>
@@ -314,8 +352,9 @@ export default function Courses() {
               </div>
             </div>
           </div>
-        ))}
+        );})}
       </div>
+      )}
 
       {/* Course Creation Modal */}
       {isModalOpen && createPortal(
@@ -391,10 +430,10 @@ export default function Courses() {
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="input-group">
-                <label className="input-label">{formData.language === 'ru' ? 'Название курса *' : 'Kurs nomi *'}</label>
+                <label className="input-label">{t('courses_page.createTitleLabel', formData.language === 'ru' ? 'Название курса *' : 'Kurs nomi *')}</label>
                 <input 
                   className="input" 
-                  placeholder={formData.language === 'ru' ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari'}
+                  placeholder={t('courses_page.createTitlePlaceholder', formData.language === 'ru' ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari')}
                   value={formData.title}
                   onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 />
@@ -402,11 +441,11 @@ export default function Courses() {
               </div>
 
               <div className="input-group">
-                <label className="input-label">{formData.language === 'ru' ? 'Описание курса *' : 'Kurs tavsifi *'}</label>
+                <label className="input-label">{t('courses_page.createDescLabel', formData.language === 'ru' ? 'Описание курса *' : 'Kurs tavsifi *')}</label>
                 <textarea 
                   className="input" 
                   rows={3}
-                  placeholder={formData.language === 'ru' ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...'}
+                  placeholder={t('courses_page.createDescPlaceholder', formData.language === 'ru' ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...')}
                   value={formData.description}
                   style={{ resize: 'none' }}
                   onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -468,7 +507,7 @@ export default function Courses() {
                   <label className="input-label">{t('courses_page.instructorLabel')}</label>
                   <input 
                     className="input"
-                    placeholder="Masalan: B. Rahimov"
+                    placeholder={t('courses_page.instructorPlaceholder', 'Masalan: B. Rahimov')}
                     value={formData.instructor}
                     onChange={e => setFormData(prev => ({ ...prev, instructor: e.target.value }))}
                   />
@@ -519,6 +558,11 @@ export default function Courses() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 10 }}>
+                {errors.submit && (
+                  <span style={{ alignSelf: 'center', marginRight: 'auto', color: 'var(--red-400)', fontSize: 12 }}>
+                    {errors.submit}
+                  </span>
+                )}
                 <button 
                   type="button" 
                   className="btn btn-secondary" 

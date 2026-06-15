@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
 import { PDFViewer } from '@/components/BookReader';
 import toast from 'react-hot-toast';
+import { getApiOrigin } from '@/shared/lib/api-config';
 
 export interface QuizQuestion {
   id: string;
@@ -52,29 +53,11 @@ interface Module {
   items: LessonItem[];
 }
 
-
-
-const materials = [
-  { name: 'React Hooks Cheatsheet.pdf', size: '2.4 MB', type: 'PDF' },
-  { name: 'useEffect Examples.zip', size: '1.1 MB', type: 'ZIP' },
-  { name: 'Amaliy mashq topshiriq.docx', size: '0.8 MB', type: 'DOC' },
-];
-
-const mockReviews = [
-  { name: 'Kamola Y.', text: 'Juda zo\'r kurs, barchasiga tushundim.', avatar: 'KY', color: '#8b5cf6' },
-  { name: 'Bobur R.', text: 'Ajoyib ustoz!', avatar: 'BR', color: '#22c55e' },
-];
-
 const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
 
 /* ── Helpers ─────────────────────────────────── */
 function nextId() {
   return Date.now().toString();
-}
-
-function getApiOrigin() {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-  return apiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
 }
 
 function normalizeMediaUrl(url?: string) {
@@ -84,6 +67,23 @@ function normalizeMediaUrl(url?: string) {
   if (value.startsWith('/')) return `${getApiOrigin()}${value}`;
   return `${getApiOrigin()}/${value}`;
 }
+
+const hasPositiveNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+};
+
+const getCourseDiscussionAuthor = (item: any) => {
+  const fullName = item.user?.fullName || [item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ');
+  return fullName || item.authorName || 'User';
+};
+
+const getInitialsFromName = (name: string) => name
+  .split(' ')
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part[0]?.toUpperCase())
+  .join('') || 'U';
 
 function getYoutubeEmbedUrl(url?: string) {
   const value = url?.trim();
@@ -342,7 +342,7 @@ function isPdfUrl(url?: string) {
 function getRequestUrl(url: string) {
   let clean = url;
   try {
-    const origin = new URL(import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1').origin;
+    const origin = getApiOrigin();
     if (clean.startsWith(origin)) clean = clean.slice(origin.length);
   } catch {}
   if (clean.startsWith('/api/v1')) clean = clean.slice(7);
@@ -459,7 +459,7 @@ function CourseAssignmentViewer({
             <p>{pdfError}</p>
           </div>
         ) : pdfData ? (
-          <PDFViewer data={pdfData} downloadable isRu={isRu} scale={scale} />
+          <PDFViewer data={pdfData} downloadable scale={scale} />
         ) : null}
       </div>
     </div>
@@ -712,10 +712,12 @@ export default function CoursePage() {
   const handleLessonComplete = async (lessonId: string | number, score?: number) => {
     if (!course?.id) return;
     try {
-      await apiClient.post(`/courses/${course.id}/progress`, {
+      const res = await apiClient.post(`/courses/${course.id}/progress`, {
         lessonId,
         ...(typeof score === 'number' ? { score } : {}),
       });
+      const updatedEnrollment = res.data?.data || res.data;
+      const nextProgress = Number(updatedEnrollment?.progress ?? updatedEnrollment?.enrollment?.progress);
       setCourseModules(prev => prev.map(m => {
         let changed = false;
         const newItems = m.items.map(i => {
@@ -730,7 +732,9 @@ export default function CoursePage() {
         }
         return m;
       }));
-      setCourse((prev: any) => ({ ...prev, progress: Math.min((prev.progress || 0) + 5, 100) }));
+      if (Number.isFinite(nextProgress)) {
+        setCourse((prev: any) => ({ ...prev, progress: Math.min(nextProgress, 100), enrollment: updatedEnrollment }));
+      }
     } catch (err) {
       console.error(err);
     }
@@ -1580,6 +1584,9 @@ function CourseOverview({
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
   const [editingModId, setEditingModId] = useState<string | number | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<{ title: string; reason: string } | null>(null);
+  const [courseDiscussions, setCourseDiscussions] = useState<any[]>([]);
+  const [discussionLoading, setDiscussionLoading] = useState(false);
+  const [discussionError, setDiscussionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -1588,14 +1595,36 @@ function CourseOverview({
         const first = res?.recommendations?.[0];
         if (mounted && first) setAiSuggestion({ title: first.title, reason: first.reason });
       })
-      .catch(() => { /* statik fallback */ });
+      .catch(() => undefined);
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'reviews' || !course?.id) return;
+    let mounted = true;
+    setDiscussionLoading(true);
+    setDiscussionError(null);
+    apiClient.get(`/courses/${course.id}/discussions`)
+      .then((res) => {
+        if (!mounted) return;
+        const data = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+        setCourseDiscussions(data);
+      })
+      .catch(() => {
+        if (mounted) setDiscussionError(isRu ? 'Muhokamalarni yuklab bo‘lmadi' : 'Muhokamalarni yuklab bo‘lmadi');
+      })
+      .finally(() => {
+        if (mounted) setDiscussionLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [activeTab, course?.id, isRu]);
   const [activeQuizBuilder, setActiveQuizBuilder] = useState<{ modId: string | number; lessonId: string | number; item: LessonItem } | null>(null);
 
   const desc = course.description || '';
   const level = course.level || '';
   const cat = course.cat || '';
+  const ratingVisible = hasPositiveNumber(course.rating);
+  const courseMaterials = Array.isArray(course.materials) ? course.materials : [];
 
   return (
     <div>
@@ -1621,7 +1650,9 @@ function CourseOverview({
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', marginBottom: 28, lineHeight: 1.6, maxWidth: 600 }}>{desc}</p>
           
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 28, fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star size={14} color="#f59e0b" fill="#f59e0b" /> <strong style={{ color: '#fff' }}>{course.rating || 5.0}</strong> {isRu ? 'Рейтинг' : 'Reyting'}</span>
+            {ratingVisible && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star size={14} color="#f59e0b" fill="#f59e0b" /> <strong style={{ color: '#fff' }}>{Number(course.rating).toFixed(1)}</strong> {isRu ? 'Рейтинг' : 'Reyting'}</span>
+            )}
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Users size={14} color="var(--blue-400)" /> <strong style={{ color: '#fff' }}>{course.enrolled || 0}</strong> {isRu ? 'учеников' : "o'quvchi"}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} color="var(--violet-400)" /> <strong style={{ color: '#fff' }}>{course.duration}</strong></span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><BookOpen size={14} color="var(--green-400)" /> <strong style={{ color: '#fff' }}>{course.lessons}</strong> {isRu ? 'уроков' : 'dars'}</span>
@@ -1668,7 +1699,7 @@ function CourseOverview({
         {[
           { id: 'overview', label: isRu ? 'Общий' : 'Umumiy' },
           { id: 'modules', label: isRu ? 'Уроки' : 'Darslar' },
-          { id: 'reviews', label: isRu ? 'Отзывы' : 'Sharhlar' },
+          { id: 'reviews', label: isRu ? 'Обсуждения' : 'Muhokamalar' },
         ].map(tab => (
           <button key={tab.id} className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius: 10 }} onClick={() => setActiveTab(tab.id as any)}>
             {tab.label}
@@ -2008,22 +2039,41 @@ function CourseOverview({
 
           {activeTab === 'reviews' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {mockReviews.map((c, i) => (
-                <div key={i} className="card">
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div className="avatar" style={{ width: 38, height: 38, fontSize: 13, background: `${c.color}25`, color: c.color }}>{c.avatar}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</span>
-                        <div style={{ display: 'flex', gap: 2 }}>
-                          {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={11} color="#f59e0b" fill="#f59e0b" />)}
+              {discussionLoading && (
+                <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-secondary)' }}>
+                  <Loader size={16} className="spin" />
+                  {isRu ? 'Загрузка обсуждений...' : 'Muhokamalar yuklanmoqda...'}
+                </div>
+              )}
+              {discussionError && (
+                <div className="card" style={{ color: 'var(--red-400)', fontSize: 13 }}>{discussionError}</div>
+              )}
+              {!discussionLoading && !discussionError && courseDiscussions.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
+                  <MessageSquare size={34} color="var(--text-muted)" style={{ marginBottom: 10 }} />
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{isRu ? 'Обсуждений пока нет' : 'Hozircha muhokamalar yo‘q'}</div>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {isRu ? 'Комментарии появятся здесь после публикации участниками курса.' : 'Kurs ishtirokchilari fikr yozganda ular shu yerda ko‘rinadi.'}
+                  </p>
+                </div>
+              )}
+              {courseDiscussions.map((item, i) => {
+                const author = getCourseDiscussionAuthor(item);
+                return (
+                  <div key={item.id || i} className="card">
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <div className="avatar" style={{ width: 38, height: 38, fontSize: 13, background: 'rgba(59,130,246,0.16)', color: 'var(--blue-400)' }}>{getInitialsFromName(author)}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>{author}</span>
+                          {item.createdAt && <time style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(item.createdAt).toLocaleDateString()}</time>}
                         </div>
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.message}</p>
                       </div>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{c.text}</p>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2038,23 +2088,34 @@ function CourseOverview({
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
               {aiSuggestion
-                ? `${aiSuggestion.reason} — "${aiSuggestion.title}" kursini tavsiya qilamiz.`
-                : 'Ushbu kursni tugatsangiz, "Node.js va API" kursini boshlashni tavsiya qilamiz — 94% mos keladi.'}
+                ? `${aiSuggestion.reason} - "${aiSuggestion.title}" kursini tavsiya qilamiz.`
+                : (isRu ? 'AI-рекомендации пока недоступны.' : 'AI tavsiyalar hozircha mavjud emas.')}
             </p>
-            <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+            <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }} disabled={!aiSuggestion}>
               <Sparkles size={13} /> Ko'rish
             </button>
           </div>
 
           <div className="card">
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Materiallar</div>
-            {materials.map((m, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < materials.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
-                <FileText size={14} color="var(--blue-400)" />
-                <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
-                <button className="btn btn-ghost btn-sm btn-icon"><Download size={12} /></button>
+            {courseMaterials.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
+                <FileText size={14} />
+                {isRu ? 'Материалов пока нет' : 'Hozircha materiallar yo‘q'}
               </div>
-            ))}
+            ) : (
+              courseMaterials.map((m: any, i: number) => (
+                <div key={m.id || m.url || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < courseMaterials.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
+                  <FileText size={14} color="var(--blue-400)" />
+                  <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                  {m.url && (
+                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => window.open(normalizeMediaUrl(m.url), '_blank')}>
+                      <Download size={12} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

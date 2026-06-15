@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video, Calendar, Users, PlayCircle, Clock, Plus, X, Upload, Link2, Image, Pencil, Trash2 } from 'lucide-react';
+import { AlertCircle, Video, Calendar, Users, PlayCircle, Clock, Plus, X, Upload, Link2, Image, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { webinarsApi } from '@/api/webinars.api';
 import type { Webinar } from '@/api/webinars.api';
@@ -9,28 +9,31 @@ import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
 
-/* Disabled webinar fixture removed from runtime.
-  { id: 'm1', title: 'Ochiq konlarni qazishda xavfsizlik', titleRu: 'Безопасность при открытой добыче', speaker: 'Alisher Rahimov', scheduledAt: new Date(Date.now() + 86400000).toISOString(), durationMinutes: 90, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1542621334-a254cf47733d?auto=format&fit=crop&q=80&w=800', joinCount: 120 },
-  { id: 'm2', title: "Yangi uskunalar bilan ishlash bo'yicha brifing", titleRu: 'Брифинг по работе с новым оборудованием', speaker: 'Rustam Karimov', scheduledAt: new Date(Date.now() + 3 * 86400000).toISOString(), durationMinutes: 45, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=800', joinCount: 85 },
-  { id: 'm3', title: 'Korporativ etika va menejment', titleRu: 'Корпоративная этика и менеджмент', speaker: "Nodira To'rayeva", scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(), durationMinutes: 60, meetingLink: '#', imageUrl: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=800', joinCount: 250 },
-*/
+const tr = (
+  t: (key: string, options?: Record<string, unknown>) => string,
+  key: string,
+  defaultValue: string,
+  values?: Record<string, string | number>,
+) => t(key, { defaultValue, ...(values || {}) });
 
-function formatDate(iso: string | Date) {
+function formatDate(iso: string | Date, lng: string) {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso).slice(0, 16).replace('T', ' ');
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
-  const time = d.toLocaleTimeString('uz', { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString(lng === 'ru' ? 'ru' : 'uz', { hour: '2-digit', minute: '2-digit' });
   return `${dd}.${mm}.${yyyy}, ${time}`;
 }
 
-function formatDuration(min?: number) {
+function formatDuration(min: number, t: any) {
   if (!min) return '';
-  if (min < 60) return `${min} daq`;
+  if (min < 60) return `${min} ${t('webinars.durationUnit.minute', { defaultValue: 'daq' })}`;
   const h = Math.floor(min / 60), m = min % 60;
-  return m ? `${h} soat ${m} daq` : `${h} soat`;
+  const hourStr = t('webinars.durationUnit.hour', { defaultValue: 'soat' });
+  const minStr = t('webinars.durationUnit.minute', { defaultValue: 'daq' });
+  return m ? `${h} ${hourStr} ${m} ${minStr}` : `${h} ${hourStr}`;
 }
 
 const EMPTY_FORM = { title: '', titleRu: '', speaker: '', scheduledAt: '', durationMinutes: 60, meetingLink: '', imageUrl: '' };
@@ -43,11 +46,8 @@ export default function Webinars() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [, setJoined] = useState<Set<string>>(new Set());
-  const [registered, setRegistered] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('webinar_registered') || '[]')); } catch { return new Set(); }
-  });
   const { user } = useAuthStore();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
   const socket = useSocket();
 
@@ -91,19 +91,19 @@ export default function Webinars() {
   // status helper
   const getStatus = (w: Webinar) => {
     const start = new Date(w.scheduledAt).getTime();
-    const end = start + 15 * 60000; // 15 min after start
+    const end = start + (w.durationMinutes ?? 60) * 60000 + 15 * 60000;
     if (now > end) return 'ended';
     if (now >= start) return 'live';
     if (now >= start - 5 * 60000) return 'starting'; // 5 min before
     return 'upcoming';
   };
 
-  // sort: registered first → live → upcoming → ended
+  // sort: server registration first, then live and upcoming sessions
   const sortedWebinars = [...webinars]
     .filter(w => getStatus(w) !== 'ended')
     .sort((a, b) => {
-      const aReg = registered.has(a.id) ? 0 : 1;
-      const bReg = registered.has(b.id) ? 0 : 1;
+      const aReg = a.isRegistered ? 0 : 1;
+      const bReg = b.isRegistered ? 0 : 1;
       if (aReg !== bReg) return aReg - bReg;
       const aLive = getStatus(a) === 'live' ? 0 : 1;
       const bLive = getStatus(b) === 'live' ? 0 : 1;
@@ -121,7 +121,7 @@ export default function Webinars() {
       })
       .catch((error) => {
         setWebinars([]);
-        setLoadError(error?.response?.data?.message || 'Vebinarlarni yuklashda xatolik yuz berdi');
+        setLoadError(error?.response?.data?.message || tr(t, 'webinars.loadError', 'Vebinarlarni yuklashda xatolik yuz berdi'));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -129,12 +129,9 @@ export default function Webinars() {
   const handleRegister = async (w: Webinar) => {
     try {
       const updated = await webinarsApi.join(w.id);
-      const next = new Set(registered).add(w.id);
-      setRegistered(next);
-      localStorage.setItem('webinar_registered', JSON.stringify([...next]));
-      setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, joinCount: updated.joinCount } : x));
+      setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, ...updated, isRegistered: true } : x));
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Vebinarga yozilishda xatolik yuz berdi', { position: 'bottom-right' });
+      toast.error(error?.response?.data?.message || tr(t, 'webinars.registerError', 'Vebinarga yozilishda xatolik yuz berdi'), { position: 'bottom-right' });
     }
   };
 
@@ -144,10 +141,18 @@ export default function Webinars() {
   };
 
   const handleDelete = (w: Webinar) => {
-    customConfirm(`"${isRu ? (w.titleRu || w.title) : (w.title || w.titleRu)}" vebinarini o'chirish?`, async () => {
-      await webinarsApi.delete(w.id);
-      setWebinars(prev => prev.filter(x => x.id !== w.id));
-      toast.success('Vebinar o\'chirildi', { position: 'bottom-right' });
+    const title = isRu ? (w.titleRu || w.title) : (w.title || w.titleRu);
+    const confirmMsg = isRu
+      ? `${tr(t, 'webinars.confirmDelete', 'удалить вебинар?')} "${title}"?`
+      : `"${title}" ${tr(t, 'webinars.confirmDelete', "vebinarini o'chirish?")}`;
+    customConfirm(confirmMsg, async () => {
+      try {
+        await webinarsApi.delete(w.id);
+        setWebinars(prev => prev.filter(x => x.id !== w.id));
+        toast.success(tr(t, 'webinars.deleted', "Vebinar o'chirildi"), { position: 'bottom-right' });
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || tr(t, 'webinars.deleteError', 'Vebinarni o‘chirishda xatolik yuz berdi'), { position: 'bottom-right' });
+      }
     });
   };
 
@@ -170,8 +175,10 @@ export default function Webinars() {
       setEditingWebinar(null);
       setShowModal(false);
       setForm(EMPTY_FORM);
-      toast.success('Vebinar yangilandi', { position: 'bottom-right' });
-    } catch (err) { console.error(err); }
+      toast.success(tr(t, 'webinars.updated', 'Vebinar yangilandi'), { position: 'bottom-right' });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || tr(t, 'webinars.updateError', 'Vebinarni yangilashda xatolik yuz berdi'), { position: 'bottom-right' });
+    }
     finally { setSaving(false); }
   };
 
@@ -192,8 +199,7 @@ export default function Webinars() {
       setForm(p => ({ ...p, imageUrl: url }));
       setImgPreview(URL.createObjectURL(file));
     } catch (e: any) {
-      console.error('Upload error:', e);
-      toast.error(e?.response?.data?.message || 'Rasm yuklashda xatolik yuz berdi', { position: 'bottom-right' });
+      toast.error(e?.response?.data?.message || tr(t, 'webinars.uploadError', 'Rasm yuklashda xatolik yuz berdi'), { position: 'bottom-right' });
     } finally {
       setUploading(false);
     }
@@ -215,9 +221,9 @@ export default function Webinars() {
       setShowModal(false);
       setImgPreview('');
       setForm(EMPTY_FORM);
-      toast.success('Vebinar yaratildi! 🎉', { position: 'bottom-right' });
-    } catch (err) {
-      console.error(err);
+      toast.success(tr(t, 'webinars.created', 'Vebinar yaratildi! 🎉'), { position: 'bottom-right' });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || tr(t, 'webinars.createError', 'Vebinar yaratishda xatolik yuz berdi'), { position: 'bottom-right' });
     } finally {
       setSaving(false);
     }
@@ -236,8 +242,8 @@ export default function Webinars() {
                   <Video size={18} color="#fff" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>{editingWebinar ? 'Vebinarni tahrirlash' : 'Yangi vebinar'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{editingWebinar ? 'Ma\'lumotlarni yangilash' : 'Jonli efir rejalashtirish'}</div>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)' }}>{editingWebinar ? tr(t, 'webinars.edit', 'Vebinarni tahrirlash') : tr(t, 'webinars.create', 'Yangi vebinar')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{editingWebinar ? tr(t, 'webinars.updateInfo', "Ma'lumotlarni yangilash") : tr(t, 'webinars.scheduleLive', 'Jonli efir rejalashtirish')}</div>
                 </div>
               </div>
               <button onClick={() => { setShowModal(false); setImgPreview(''); setForm(EMPTY_FORM); }} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-1)', border: '1px solid var(--border-1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
@@ -252,45 +258,45 @@ export default function Webinars() {
                 {/* Title */}
                 <div className="form-grid-2">
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Nomi (UZ)</label>
-                    <input className="input" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Vebinar nomi" style={{ width: '100%' }} />
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.nameUz', 'Nomi (UZ)')}</label>
+                    <input className="input" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={tr(t, 'webinars.nameUzPlaceholder', 'Vebinar nomi')} style={{ width: '100%' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Nomi (RU)</label>
-                    <input className="input" value={form.titleRu} onChange={e => setForm(p => ({ ...p, titleRu: e.target.value }))} placeholder="Название" style={{ width: '100%' }} />
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.nameRu', 'Nomi (RU)')}</label>
+                    <input className="input" value={form.titleRu} onChange={e => setForm(p => ({ ...p, titleRu: e.target.value }))} placeholder={tr(t, 'webinars.nameRuPlaceholder', 'Название')} style={{ width: '100%' }} />
                   </div>
                 </div>
 
                 {/* Speaker */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Spiker</label>
-                  <input className="input" value={form.speaker} onChange={e => setForm(p => ({ ...p, speaker: e.target.value }))} placeholder="F.I.O." style={{ width: '100%' }} />
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.speaker', 'Spiker')}</label>
+                  <input className="input" value={form.speaker} onChange={e => setForm(p => ({ ...p, speaker: e.target.value }))} placeholder={tr(t, 'webinars.speakerPlaceholder', 'F.I.O.')} style={{ width: '100%' }} />
                 </div>
 
                 {/* Date + Duration */}
                 <div className="form-grid-2-140">
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Vaqti *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.scheduledAt', 'Vaqti')} *</label>
                     <input className="input" type="datetime-local" required value={form.scheduledAt} onChange={e => setForm(p => ({ ...p, scheduledAt: e.target.value }))} style={{ width: '100%' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Davomiylik (daq)</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.duration', 'Davomiylik (daq)')}</label>
                     <input className="input" type="number" min={1} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: Number(e.target.value) }))} style={{ width: '100%' }} />
                   </div>
                 </div>
 
                 {/* Meeting link */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>Meeting link *</label>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.meetingLink', 'Meeting link')} *</label>
                   <div style={{ position: 'relative' }}>
                     <Link2 size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                    <input className="input" required value={form.meetingLink} onChange={e => setForm(p => ({ ...p, meetingLink: e.target.value }))} placeholder="https://meet.google.com/ yoki zoom.us/j/..." style={{ width: '100%', paddingLeft: 36 }} />
+                    <input className="input" required value={form.meetingLink} onChange={e => setForm(p => ({ ...p, meetingLink: e.target.value }))} placeholder={tr(t, 'webinars.meetingLinkPlaceholder', 'https://meet.google.com/ yoki zoom.us/j/...')} style={{ width: '100%', paddingLeft: 36 }} />
                   </div>
                 </div>
 
                 {/* Image */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>Muqova rasmi</label>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>{tr(t, 'webinars.coverImage', 'Muqova rasmi')}</label>
                   {/* Tabs */}
                   <div style={{ display: 'flex', gap: 4, marginBottom: 10, background: 'var(--surface-1)', borderRadius: 10, padding: 4 }}>
                     {(['url', 'upload'] as const).map(tab => (
@@ -298,7 +304,7 @@ export default function Webinars() {
                         style={{ flex: 1, padding: '6px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, transition: 'all 0.2s',
                           background: imgTab === tab ? 'var(--surface-3)' : 'transparent',
                           color: imgTab === tab ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                        {tab === 'url' ? <><Link2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />URL</> : <><Upload size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Yuklash</>}
+                        {tab === 'url' ? <><Link2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />{tr(t, 'webinars.urlTab', 'URL')}</> : <><Upload size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />{tr(t, 'webinars.uploadTab', 'Yuklash')}</>}
                       </button>
                     ))}
                   </div>
@@ -307,18 +313,18 @@ export default function Webinars() {
                     <input className="input" value={form.imageUrl} onChange={e => { setForm(p => ({ ...p, imageUrl: e.target.value })); setImgPreview(e.target.value); }} placeholder="https://..." style={{ width: '100%' }} />
                   ) : (
                     <div
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
-                      style={{ border: '2px dashed var(--border-2)', borderRadius: 12, padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s', background: 'var(--surface-1)' }}
+                       onClick={() => fileInputRef.current?.click()}
+                       onDragOver={e => e.preventDefault()}
+                       onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
+                       style={{ border: '2px dashed var(--border-2)', borderRadius: 12, padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s', background: 'var(--surface-1)' }}
                     >
                       {uploading ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Yuklanmoqda...</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{tr(t, 'webinars.uploading', 'Yuklanmoqda...')}</div>
                       ) : (
                         <>
                           <Image size={24} color="var(--text-muted)" style={{ marginBottom: 8 }} />
-                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>Rasm tanlash yoki bu yerga tashlang</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>PNG, JPG, WEBP</div>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{tr(t, 'webinars.dragDrop', 'Rasm tanlash yoki bu yerga tashlang')}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{tr(t, 'webinars.imageFormats', 'PNG, JPG, WEBP')}</div>
                         </>
                       )}
                     </div>
@@ -341,9 +347,9 @@ export default function Webinars() {
               {/* Footer */}
               <div style={{ padding: '16px 28px', borderTop: '1px solid var(--border-1)', display: 'flex', gap: 10 }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', boxShadow: '0 8px 20px rgba(59,130,246,0.25)' }} disabled={saving || uploading}>
-                  {saving ? 'Saqlanmoqda...' : editingWebinar ? <><Pencil size={15} /> Saqlash</> : <><Plus size={15} /> Vebinar yaratish</>}
+                  {saving ? tr(t, 'webinars.saving', 'Saqlanmoqda...') : editingWebinar ? <><Pencil size={15} /> {tr(t, 'webinars.updateSave', 'Saqlash')}</> : <><Plus size={15} /> {tr(t, 'webinars.create', 'Yangi vebinar yaratish')}</>}
                 </button>
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); setEditingWebinar(null); setImgPreview(''); setForm(EMPTY_FORM); }}>Bekor</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); setEditingWebinar(null); setImgPreview(''); setForm(EMPTY_FORM); }}>{tr(t, 'webinars.cancelShort', 'Bekor')}</button>
               </div>
             </form>
           </div>
@@ -354,32 +360,33 @@ export default function Webinars() {
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Video color="var(--blue-400)" size={24} />
-            Jonli Vebinarlar
+            {tr(t, 'webinars.title', 'Jonli Vebinarlar')}
           </h1>
-          <p className="page-sub" style={{ marginTop: 6 }}>Mutaxassislar bilan jonli darslar va brifinglar</p>
+          <p className="page-sub" style={{ marginTop: 6 }}>{tr(t, 'webinars.subtitle', 'Mutaxassislar bilan jonli darslar va brifinglar')}</p>
         </div>
         {isAdmin && (
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <Plus size={16} /> Yangi vebinar yaratish
+            <Plus size={16} /> {tr(t, 'webinars.create', 'Yangi vebinar yaratish')}
           </button>
         )}
       </div>
 
       {loading && (
         <div className="card" style={{ padding: 24, color: 'var(--text-secondary)' }}>
-          Vebinarlar yuklanmoqda...
+          {tr(t, 'webinars.loading', 'Vebinarlar yuklanmoqda...')}
         </div>
       )}
 
       {!loading && loadError && (
-        <div className="card" style={{ padding: 24, borderColor: 'rgba(239,68,68,0.35)', color: 'var(--red-400)' }}>
+        <div className="card" style={{ padding: 24, borderColor: 'rgba(239,68,68,0.35)', color: 'var(--red-400)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <AlertCircle size={18} />
           {loadError}
         </div>
       )}
 
       {!loading && !loadError && sortedWebinars.length === 0 && (
         <div className="card" style={{ padding: 24, color: 'var(--text-secondary)' }}>
-          Hozircha rejalashtirilgan vebinarlar yo'q.
+          {tr(t, 'webinars.empty', "Hozircha rejalashtirilgan vebinarlar yo'q.")}
         </div>
       )}
 
@@ -389,7 +396,7 @@ export default function Webinars() {
           const status = getStatus(w);
           const isLive = status === 'live';
           const isStarting = status === 'starting';
-          const isReg = registered.has(w.id);
+          const isReg = Boolean(w.isRegistered);
           return (
           <div key={w.id} className="course-card">
             <div className="course-thumb" style={{ height: 160, position: 'relative', overflow: 'hidden' }}>
@@ -398,9 +405,9 @@ export default function Webinars() {
                 : <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#1e3a8a,#3b82f6)' }} />
               }
               <div style={{ position: 'absolute', top: 12, left: 12, background: isLive ? 'rgba(239,68,68,0.9)' : isStarting ? 'rgba(245,158,11,0.9)' : 'rgba(59,130,246,0.85)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                {isLive ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />JONLI</> : isStarting ? '5 DAQIQADA' : 'REJALASHTIRILGAN'}
+                {isLive ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />{tr(t, 'webinars.live', 'JONLI')}</> : isStarting ? tr(t, 'webinars.starting', '5 DAQIQADA') : tr(t, 'webinars.scheduled', 'REJALASHTIRILGAN')}
               </div>
-              {isReg && !isLive && <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(34,197,94,0.9)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 4 }}>YOZILGAN</div>}
+              {isReg && !isLive && <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(34,197,94,0.9)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 4 }}>{tr(t, 'webinars.registered_badge', 'YOZILGAN')}</div>}
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg-2), transparent)' }} />
             </div>
             <div className="course-body" style={{ padding: 20 }}>
@@ -428,29 +435,29 @@ export default function Webinars() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
-                  <Calendar size={14} /> {formatDate(w.scheduledAt)}
+                  <Calendar size={14} /> {formatDate(w.scheduledAt, i18n.language)}
                 </div>
                 {w.durationMinutes && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    <Clock size={14} /> {formatDuration(w.durationMinutes)}
+                    <Clock size={14} /> {formatDuration(w.durationMinutes, t)}
                   </div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
-                  <Users size={14} /> {w.joinCount} ishtirokchilar
+                  <Users size={14} /> {w.joinCount} {tr(t, 'webinars.participants', 'ishtirokchilar')}
                 </div>
               </div>
 
               {isLive || isStarting ? (
                 <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', background: isLive ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#f59e0b,#d97706)' }} onClick={() => handleJoin(w)}>
-                  <PlayCircle size={16} /> {isLive ? "Qo'shilish" : "Qo'shilish (tez boshlanadi)"}
+                  <PlayCircle size={16} /> {isLive ? tr(t, 'webinars.join', "Qo'shilish") : tr(t, 'webinars.joinSoon', "Qo'shilish (tez boshlanadi)")}
                 </button>
               ) : isReg ? (
                 <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', color: 'var(--green-400)', borderColor: 'var(--green-500)' }} disabled>
-                  ✓ Yozilgansiz
+                  {tr(t, 'webinars.registered', '✓ Yozilgansiz')}
                 </button>
               ) : (
                 <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', color: 'var(--blue-400)', borderColor: 'var(--blue-500)' }} onClick={() => handleRegister(w)}>
-                  <Users size={16} /> Yozilish
+                  <Users size={16} /> {tr(t, 'webinars.register', 'Yozilish')}
                 </button>
               )}
             </div>

@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, Download, FileText, Info, Calendar, Eye, Tag, Lock, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
+import { getApiBaseUrl } from '@/shared/lib/api-config';
+
+const tr = (
+  t: (key: string, options?: Record<string, unknown>) => string,
+  key: string,
+  defaultValue: string,
+  values?: Record<string, string | number>,
+) => t(key, { defaultValue, ...(values || {}) });
 
 // ─── URL Helpers ────────────────────────────────────────────────────────────
 
-const API_BASE = () => import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE = () => getApiBaseUrl();
 
 const isLocalFile = (url: string): boolean => {
   if (!url) return false;
@@ -48,13 +57,13 @@ interface Book {
 interface BookReaderProps {
   book: Book;
   onClose: () => void;
-  isRu: boolean;
   onDownload: (e: React.MouseEvent, book: Book) => void;
 }
 
 // ─── BookReader ───────────────────────────────────────────────────────────────
 
-export default function BookReader({ book, onClose, isRu, onDownload }: BookReaderProps) {
+export default function BookReader({ book, onClose, onDownload }: BookReaderProps) {
+  const { t } = useTranslation();
   const [fileBlob, setFileBlob] = useState<Uint8Array | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -178,8 +187,8 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
               cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0,
             }}
           >
-            <ChevronLeft size={15} />
-            {isRu ? 'Назад' : 'Ortga'}
+             <ChevronLeft size={15} />
+             {tr(t, 'library.back', 'Ortga')}
           </button>
           <div style={{ borderLeft: '1px solid rgba(255,255,255,0.12)', height: 24 }} />
           <div style={{ minWidth: 0 }}>
@@ -203,27 +212,27 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
               padding: '4px', background: 'rgba(255,255,255,0.03)',
               border: '1px solid rgba(255,255,255,0.05)', borderRadius: 10, marginRight: 8
             }}>
-              <button onClick={() => zoom(-1)} style={zoomBtnStyle} title={isRu ? 'Уменьшить' : 'Kichraytirish'}>
+               <button onClick={() => zoom(-1)} style={zoomBtnStyle} title={tr(t, 'library.readerZoomOut', 'Kichraytirish')}>
                 <ZoomOut size={14} />
               </button>
               <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600, minWidth: 46, textAlign: 'center' }}>
                 {Math.round(scale * 100)}%
               </span>
-              <button onClick={() => zoom(1)} style={zoomBtnStyle} title={isRu ? 'Увеличить' : 'Kattalashtirish'}>
+               <button onClick={() => zoom(1)} style={zoomBtnStyle} title={tr(t, 'library.readerZoomIn', 'Kattalashtirish')}>
                 <ZoomIn size={14} />
               </button>
               <button onClick={() => setScale(1.0)} style={{ ...zoomBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>
                 100%
               </button>
-              <button onClick={() => setScale(2.2)} style={{ ...zoomBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', color: '#22d3ee', borderColor: 'rgba(6,182,212,0.3)' }}>
-                {isRu ? 'Крупно' : 'Katta'}
-              </button>
+               <button onClick={() => setScale(2.2)} style={{ ...zoomBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', color: '#22d3ee', borderColor: 'rgba(6,182,212,0.3)' }}>
+                 {tr(t, 'library.readerZoomLarge', 'Katta')}
+               </button>
             </div>
           )}
 
           <button
             onClick={() => setSidebarOpen(o => !o)}
-            title={isRu ? 'Информация о документе' : "Hujjat ma'lumotlari"}
+            title={tr(t, 'library.readerInfo', "Hujjat ma'lumotlari")}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 34, height: 34,
@@ -247,8 +256,8 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
                 fontWeight: 600, fontSize: 13, cursor: 'pointer',
               }}
             >
-              <Download size={14} />
-              {isRu ? 'Скачать' : 'Yuklab olish'}
+               <Download size={14} />
+               {tr(t, 'library.download', 'Yuklab olish')}
             </button>
           )}
         </div>
@@ -261,18 +270,17 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0f172a' }}>
           {loading ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#94a3b8' }}>
-              <Loader2 size={40} className="animate-spin" style={{ color: '#22d3ee' }} />
-              <span style={{ fontSize: 14 }}>{isRu ? 'Загрузка документа...' : 'Hujjat yuklanmoqda...'}</span>
+               <Loader2 size={40} className="animate-spin" style={{ color: '#22d3ee' }} />
+               <span style={{ fontSize: 14 }}>{tr(t, 'library.readerLoading', 'Hujjat yuklanmoqda...')}</span>
             </div>
           ) : isPdf && fileBlob ? (
             <PDFViewer
               data={fileBlob}
               downloadable={book.downloadable}
-              isRu={isRu}
               scale={scale}
             />
           ) : (
-            <NonPDFCard book={book} isRu={isRu} onDownload={onDownload} />
+            <NonPDFCard book={book} onDownload={onDownload} />
           )}
         </div>
 
@@ -291,39 +299,37 @@ export default function BookReader({ book, onClose, isRu, onDownload }: BookRead
           }}
         >
           <div style={{ width: 300, height: '100%', overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+             <h3 style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Info size={15} style={{ color: '#22d3ee' }} />
-              {isRu ? 'Детали документа' : 'Hujjat tafsilotlari'}
+              {tr(t, 'library.readerDetails', 'Hujjat tafsilotlari')}
             </h3>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <SidebarRow icon={<Calendar size={15} />} label={isRu ? 'Дата добавления' : 'Yuklangan sana'} value={formatDate(book.createdAt)} />
-              <SidebarRow icon={<Eye size={15} />} label={isRu ? 'Просмотры' : "Ko'rishlar"} value={`${book.views || 0} ${isRu ? 'раз' : 'marta'}`} />
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <SidebarRow icon={<Calendar size={15} />} label={tr(t, 'library.readerDate', 'Yuklangan sana')} value={formatDate(book.createdAt)} />
+              <SidebarRow icon={<Eye size={15} />} label={tr(t, 'library.readerViews', "Ko'rishlar")} value={`${book.views || 0} ${tr(t, 'library.viewsCount', 'marta')}`} />
               <SidebarRow
                 icon={<Tag size={15} />}
-                label={isRu ? 'Права доступа' : 'Yuklab olish huquqi'}
-                value={book.downloadable ? (isRu ? 'Разрешено' : 'Ruxsat bor') : (isRu ? 'Только чтение' : "Faqat o'qish")}
+                label={tr(t, 'library.readerAccess', 'Yuklab olish huquqi')}
+                value={book.downloadable ? tr(t, 'library.readerAllowed', 'Ruxsat bor') : tr(t, 'library.readerReadOnly', "Faqat o'qish")}
                 valueColor={book.downloadable ? '#34d399' : '#f87171'}
               />
             </div>
 
             {book.description && (
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 16 }}>
-                <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
-                  {isRu ? 'Описание' : 'Tafsif'}
+                 <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
+                  {tr(t, 'library.readerDescription', 'Tafsif')}
                 </div>
                 <p style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, margin: 0 }}>{book.description}</p>
               </div>
             )}
 
             <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#cbd5e1', marginBottom: 6 }}>
-                🛡️ {isRu ? 'Конфиденциально' : 'Maxfiylik'}
+               <div style={{ fontSize: 12, fontWeight: 700, color: '#cbd5e1', marginBottom: 6 }}>
+                🛡️ {tr(t, 'library.readerConfidential', 'Maxfiylik')}
               </div>
-              <p style={{ fontSize: 11, color: '#475569', lineHeight: 1.5, margin: 0 }}>
-                {isRu
-                  ? 'Этот документ предназначен только для внутреннего использования.'
-                  : "Ushbu hujjat faqatgina AGMK xodimlari uchun mo'ljallangan."}
+               <p style={{ fontSize: 11, color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                {tr(t, 'library.readerConfidentialDesc', "Ushbu hujjat faqatgina AGMK xodimlari uchun mo'ljallangan.")}
               </p>
             </div>
           </div>
@@ -349,7 +355,8 @@ function SidebarRow({ icon, label, value, valueColor }: { icon: React.ReactNode;
 
 // ─── Non-PDF Card ─────────────────────────────────────────────────────────────
 
-function NonPDFCard({ book, isRu, onDownload }: { book: Book; isRu: boolean; onDownload: (e: React.MouseEvent, book: Book) => void }) {
+function NonPDFCard({ book, onDownload }: { book: Book; onDownload: (e: React.MouseEvent, book: Book) => void }) {
+  const { t } = useTranslation();
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{
@@ -364,7 +371,7 @@ function NonPDFCard({ book, isRu, onDownload }: { book: Book; isRu: boolean; onD
         <div>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>{book.title}</h3>
           <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6 }}>
-            {isRu ? 'Просмотр этого формата не поддерживается в браузере.' : "Ushbu format brauzerda ko'rib bo'lmaydi."}
+            {tr(t, 'library.readerFormatError', "Ushbu format brauzerda ko'rib bo'lmaydi.")}
           </p>
         </div>
         {book.downloadable ? (
@@ -375,7 +382,7 @@ function NonPDFCard({ book, isRu, onDownload }: { book: Book; isRu: boolean; onD
             fontWeight: 600, fontSize: 14, cursor: 'pointer', width: '100%', justifyContent: 'center'
           }}>
             <Download size={16} />
-            {isRu ? 'Скачать файл' : 'Faylni yuklab olish'}
+            {tr(t, 'library.readerDownloadFile', 'Faylni yuklab olish')}
           </button>
         ) : (
           <div style={{
@@ -384,7 +391,7 @@ function NonPDFCard({ book, isRu, onDownload }: { book: Book; isRu: boolean; onD
             borderRadius: 10, color: '#f87171', fontSize: 13
           }}>
             <Lock size={15} />
-            {isRu ? 'Скачивание ограничено' : 'Yuklab olish cheklangan'}
+            {tr(t, 'library.readerDownloadLimited', 'Yuklab olish cheklangan')}
           </div>
         )}
       </div>
@@ -397,15 +404,15 @@ function NonPDFCard({ book, isRu, onDownload }: { book: Book; isRu: boolean; onD
 interface PDFViewerProps {
   data: Uint8Array;
   downloadable: boolean;
-  isRu: boolean;
   scale: number;
 }
 
-export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
+export function PDFViewer({ data, downloadable, scale }: PDFViewerProps) {
+  const { t } = useTranslation();
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
   // Block keyboard shortcuts for protected docs
   useEffect(() => {
@@ -413,17 +420,17 @@ export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && ['p', 'P', 's', 'S'].includes(e.key)) {
         e.preventDefault();
-        toast.error(isRu ? 'Печать и скачивание ограничены.' : "Chop etish va yuklab olish cheklangan.");
+        toast.error(tr(t, 'library.readerPrintLimited', "Chop etish va yuklab olish cheklangan."));
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [downloadable, isRu]);
+  }, [downloadable, t]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setError(null);
+    setHasError(false);
     setPdfDoc(null);
 
     const initPdf = async () => {
@@ -434,25 +441,24 @@ export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
         // Set worker path dynamically
         if (!pdfjs.GlobalWorkerOptions.workerSrc) {
           pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-            'pdfjs-dist/build/pdf.worker.min.js',
+            'pdfjs-dist/build/pdf.worker.min.mjs',
             import.meta.url
           ).toString();
         }
 
         const task = pdfjs.getDocument({ data: data.slice(0) });
         const doc = await task.promise;
-        if (cancelled) { doc.destroy(); return; }
+        if (cancelled) {
+          await doc.cleanup().catch(() => {});
+          return;
+        }
 
         setPdfDoc(doc);
         setNumPages(doc.numPages);
       } catch (err: any) {
         console.error('PDFViewer: failed to load PDF', err);
         if (!cancelled) {
-          setError(
-            isRu
-              ? 'PDF не загрузился. Возможно, файл поврежден.'
-              : "PDF yuklanmadi. Fayl buzilgan bo'lishi mumkin.",
-          );
+          setHasError(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -461,23 +467,25 @@ export function PDFViewer({ data, downloadable, isRu, scale }: PDFViewerProps) {
 
     initPdf();
     return () => { cancelled = true; };
-  }, [data, isRu]);
+  }, [data]);
 
 
   if (loading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#94a3b8' }}>
         <Loader2 size={40} className="animate-spin" style={{ color: '#22d3ee' }} />
-        <span style={{ fontSize: 14 }}>{isRu ? 'Загрузка PDF...' : 'PDF yuklanmoqda...'}</span>
+        <span style={{ fontSize: 14 }}>{tr(t, 'library.readerLoadingPdf', 'PDF yuklanmoqda...')}</span>
       </div>
     );
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#f87171', padding: 24 }}>
         <FileText size={48} style={{ color: '#475569' }} />
-        <p style={{ textAlign: 'center', fontSize: 14, maxWidth: 400 }}>{error}</p>
+        <p style={{ textAlign: 'center', fontSize: 14, maxWidth: 400 }}>
+          {tr(t, 'library.readerPdfLoadError', "PDF yuklanmadi. Fayl buzilgan bo'lishi mumkin.")}
+        </p>
       </div>
     );
   }

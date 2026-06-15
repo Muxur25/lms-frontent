@@ -6,10 +6,9 @@ import {
 import { useAuthStore } from '../store/auth.store';
 import { useUIStore } from '../store/useUIStore';
 import { useTranslation } from 'react-i18next';
-import { getInitials } from '../shared/lib/auth-user';
 import { api } from '../services/api';
 
-type TabType = 'profile' | 'security' | 'notifications' | 'system' | 'sessions';
+type TabType = 'security' | 'notifications' | 'system' | 'sessions';
 
 type DeviceInfo = {
   id: string;
@@ -32,20 +31,16 @@ type SessionInfo = {
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore();
-  const { theme, setTheme, language, setLanguage } = useUIStore();
+  const { theme, setTheme, language, setLanguage, openModal } = useUIStore();
   const { t, i18n } = useTranslation();
 
   // Active Tab State
-  const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [activeTab, setActiveTab] = useState<TabType>('security');
 
   // Feedback Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Form Fields States
-  const [firstName, setFirstName] = useState(user?.firstName || '');
-  const [lastName, setLastName] = useState(user?.lastName || '');
-  const [position, setPosition] = useState(user?.position || '');
-  
+
   // Security Form States
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -68,9 +63,10 @@ export default function Settings() {
   // Sync state if user changes
   useEffect(() => {
     if (user) {
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
-      setPosition(user.position || '');
+      setEmailNotifs(user.notificationPreferences?.email ?? true);
+      setPushNotifs(user.notificationPreferences?.push ?? true);
+      setWeeklyDigests(user.notificationPreferences?.weeklyDigest ?? false);
+      setExamReminders(user.notificationPreferences?.examReminders ?? true);
     }
   }, [user]);
 
@@ -132,27 +128,6 @@ export default function Settings() {
       : <Laptop size={20} />;
   };
 
-  // Submit Profile Changes
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await api.patch('/users/me', {
-        firstName,
-        lastName,
-        position
-      });
-      const updatedData = res.data?.user || res.data;
-      updateUser({
-        firstName: updatedData.firstName || firstName,
-        lastName: updatedData.lastName || lastName,
-        fullName: updatedData.fullName || `${firstName} ${lastName}`.trim(),
-        position: updatedData.position || position
-      });
-      showToast(t('settings.profileSuccess'), 'success');
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Xatolik yuz berdi', 'error');
-    }
-  };
 
   // Submit Security Changes
   const handleSecuritySubmit = async (e: React.FormEvent) => {
@@ -176,14 +151,31 @@ export default function Settings() {
       setConfirmPassword('');
       showToast(t('settings.passwordSuccess'), 'success');
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Xatolik yuz berdi', 'error');
+      showToast(err?.response?.data?.message || err?.message || 'Xatolik yuz berdi', 'error');
     }
   };
 
   // Submit Notifications Changes
-  const handleNotificationsSubmit = (e: React.FormEvent) => {
+  const handleNotificationsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast(t('settings.notifSuccess'), 'success');
+    const notificationPreferences = {
+      email: emailNotifs,
+      push: pushNotifs,
+      weeklyDigest: weeklyDigests,
+      examReminders,
+    };
+
+    try {
+      const res = await api.patch('/users/me', { notificationPreferences });
+      const payload: any = res;
+      const updatedData = payload.user || payload.data?.user || payload.data;
+      updateUser({
+        notificationPreferences: updatedData.notificationPreferences || notificationPreferences,
+      });
+      showToast(t('settings.notifSuccess'), 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err?.message || 'Xatolik yuz berdi', 'error');
+    }
   };
 
   // Submit System Changes
@@ -217,7 +209,6 @@ export default function Settings() {
     }
   };
 
-  const initials = getInitials(firstName, lastName, `${firstName} ${lastName}`);
   const otherSessions = sessions.filter((sess) => !sess.current);
 
   return (
@@ -263,7 +254,13 @@ export default function Settings() {
           ].map((item) => (
             <button 
               key={item.id} 
-              onClick={() => setActiveTab(item.id as TabType)}
+              onClick={() => {
+                if (item.id === 'profile') {
+                  openModal('profile');
+                } else {
+                  setActiveTab(item.id as TabType);
+                }
+              }}
               style={{ 
                 display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', 
                 background: activeTab === item.id ? 'var(--surface-2)' : 'var(--bg-2)', 
@@ -284,62 +281,6 @@ export default function Settings() {
         {/* Tab Content Cards */}
         <div className="card" style={{ padding: 28 }}>
           
-          {/* PROFILE TAB */}
-          {activeTab === 'profile' && (
-            <div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text-primary)' }}>{t('settings.profileTitle')}</h3>
-              
-              <div style={{ display: 'flex', gap: 24, marginBottom: 32, alignItems: 'center', paddingBottom: 32, borderBottom: '1px solid var(--border-1)' }}>
-                <div style={{ 
-                  width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(to top right, var(--blue-500), var(--violet-500))', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, color: '#fff', 
-                  boxShadow: '0 8px 32px rgba(59,130,246,0.3)', flexShrink: 0
-                }}>
-                  {initials}
-                </div>
-                <div>
-                  <button className="btn btn-secondary" style={{ marginBottom: 8 }} type="button">{t('settings.avatarUpdate')}</button>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{t('settings.avatarDesc')}</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleProfileSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div className="grid grid-2">
-                  <div className="input-group">
-                    <label className="input-label">{t('settings.firstName')}</label>
-                    <input type="text" className="input" value={firstName} onChange={e => setFirstName(e.target.value)} required />
-                  </div>
-                  <div className="input-group">
-                    <label className="input-label">{t('settings.lastName')}</label>
-                    <input type="text" className="input" value={lastName} onChange={e => setLastName(e.target.value)} required />
-                  </div>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('settings.email')}</label>
-                  <input type="email" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.email || ''} disabled />
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{t('settings.emailNote')}</p>
-                </div>
-
-                <div className="grid grid-2">
-                  <div className="input-group">
-                    <label className="input-label">{t('settings.position')}</label>
-                    <input type="text" className="input" value={position} onChange={e => setPosition(e.target.value)} />
-                  </div>
-                  <div className="input-group">
-                    <label className="input-label">{t('settings.department')}</label>
-                    <input type="text" className="input" style={{ background: 'var(--surface-1)', color: 'var(--text-muted)', cursor: 'not-allowed' }} value={user?.department || 'AGMK Korporatsiyasi'} disabled />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => { setFirstName(user?.firstName || ''); setLastName(user?.lastName || ''); setPosition(user?.position || ''); }}>{t('settings.cancel')}</button>
-                  <button type="submit" className="btn btn-primary">{t('settings.save')}</button>
-                </div>
-              </form>
-            </div>
-          )}
-
           {/* SECURITY TAB */}
           {activeTab === 'security' && (
             <div>

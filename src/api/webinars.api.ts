@@ -10,6 +10,7 @@ export interface Webinar {
   meetingLink: string;
   speaker?: string;
   joinCount: number;
+  isRegistered?: boolean;
 }
 
 const unwrap = (r: any): any => r.data?.data ?? r.data;

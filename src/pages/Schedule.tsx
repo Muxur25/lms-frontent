@@ -230,7 +230,10 @@ export default function Schedule() {
             </div>
           </div>
           <div className="schedule-weekdays">
-            {['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'].map((day) => (
+            {(locale === 'ru-RU'
+              ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+              : ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya']
+            ).map((day) => (
               <span key={day}>{day}</span>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore } from '@/store/notification.store';
+import { getRealtimeUrl } from '@/shared/lib/api-config';
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -16,10 +17,9 @@ export function useSocket() {
       fetchNotifications();
       const token = localStorage.getItem('access_token');
       if (token) {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-        const socketUrl = apiUrl.replace(/\/api\/v\d+$/, '');
+        const socketUrl = getRealtimeUrl();
 
-        socketInstance = io(`${socketUrl}/realtime`, {
+        socketInstance = io(socketUrl, {
           auth: { token },
           transports: ['websocket'],
         });

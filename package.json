@@ -7,12 +7,20 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "node test-dashboard-current-courses.mjs",
+    "test:e2e:ai": "node test-ai-recommendations.mjs",
+    "test:e2e:events": "node test-dashboard-events.mjs",
+    "test:e2e:course-status": "node test-dashboard-course-status.mjs",
+    "test:e2e:department-ranking": "node test-dashboard-department-ranking.mjs",
+    "test:e2e:leaderboard": "node test-leaderboard.mjs",
+    "test:e2e:certifications": "node test-certifications-kpi.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/react-query": "^5.100.11",
     "axios": "^1.16.1",
+    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "framer-motion": "^12.39.0",
     "html2canvas": "^1.4.1",
@@ -34,6 +42,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.3.0",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^24.12.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

@@ -8,6 +8,9 @@ export interface LeaderboardRanking {
   userId: string;
   userFullName: string;
   userDepartment?: string;
+  departmentId?: string | null;
+  departmentName?: string;
+  organizationCode?: string | null;
   userAvatar?: string;
   totalPoints: number;
   periodPoints: number;
@@ -15,6 +18,16 @@ export interface LeaderboardRanking {
   stars: number;
   completedCourses?: number;
   lastUpdated?: string;
+}
+
+export interface DepartmentLeaderboardRanking {
+  rank: number;
+  departmentId: string;
+  departmentName: string;
+  displayName: string;
+  organizationCode: string;
+  participants: number;
+  points: number;
 }
 
 export interface UserPoints {
@@ -29,15 +42,19 @@ export interface UserPoints {
 
 interface LeaderboardState {
   rankings: LeaderboardRanking[];
+  departmentRankings: DepartmentLeaderboardRanking[];
   history: UserPoints[];
   myRanking: LeaderboardRanking | null;
   timeFilter: LeaderboardTimeFilter;
   loading: boolean;
+  departmentLoading: boolean;
   historyLoading: boolean;
   error: string | null;
+  departmentError: string | null;
 
   setTimeFilter: (filter: LeaderboardTimeFilter) => void;
   fetchRankings: (filter?: LeaderboardTimeFilter) => Promise<void>;
+  fetchDepartmentRankings: (filter?: LeaderboardTimeFilter) => Promise<void>;
   fetchMyRanking: () => Promise<void>;
   fetchMyHistory: () => Promise<void>;
   subscribeToEvents: (socket: any, userId: string) => void;
@@ -51,6 +68,9 @@ const normalizeRanking = (item: any, index = 0): LeaderboardRanking => ({
   userId: item.userId,
   userFullName: item.userFullName || item.fullName || 'AGMK xodimi',
   userDepartment: item.userDepartment || item.department || item.departmentName || '',
+  departmentId: item.departmentId || null,
+  departmentName: item.departmentName || item.department || '',
+  organizationCode: item.organizationCode || null,
   userAvatar: item.userAvatar || item.avatar || '',
   totalPoints: Number(item.totalPoints || item.points || 0),
   periodPoints: Number(item.periodPoints || item.points || item.totalPoints || 0),
@@ -59,6 +79,20 @@ const normalizeRanking = (item: any, index = 0): LeaderboardRanking => ({
   completedCourses: Number(item.completedCourses || item.coursesCount || 0),
   lastUpdated: item.lastUpdated || item.updatedAt,
 });
+
+const normalizeDepartmentRanking = (item: any, index = 0): DepartmentLeaderboardRanking => {
+  const departmentName = item.departmentName || item.name || item.department || '';
+  const organizationCode = item.organizationCode || '';
+  return {
+    rank: Number(item.rank || index + 1),
+    departmentId: item.departmentId || `${organizationCode}:${departmentName}` || `department-${index}`,
+    departmentName,
+    displayName: item.displayName || (organizationCode && departmentName ? `${organizationCode} · ${departmentName}` : departmentName),
+    organizationCode,
+    participants: Number(item.participants || 0),
+    points: Number(item.points || item.totalPoints || 0),
+  };
+};
 
 const normalizeHistory = (item: any): UserPoints => ({
   id: item.id,
@@ -72,16 +106,20 @@ const normalizeHistory = (item: any): UserPoints => ({
 
 export const useLeaderboardStore = create<LeaderboardState>((set, get) => ({
   rankings: [],
+  departmentRankings: [],
   history: [],
   myRanking: null,
   timeFilter: 'all_time',
   loading: false,
+  departmentLoading: false,
   historyLoading: false,
   error: null,
+  departmentError: null,
 
   setTimeFilter: (filter) => {
     set({ timeFilter: filter });
     get().fetchRankings(filter);
+    get().fetchDepartmentRankings(filter);
   },
 
   fetchRankings: async (filter) => {
@@ -99,6 +137,24 @@ export const useLeaderboardStore = create<LeaderboardState>((set, get) => ({
       set({
         error: err?.response?.data?.message || err?.message || 'Failed to fetch leaderboard',
         loading: false,
+      });
+    }
+  },
+
+  fetchDepartmentRankings: async (filter) => {
+    const timeFilter = filter || get().timeFilter;
+    set({ departmentLoading: true, departmentError: null });
+    try {
+      const payload = await apiClient
+        .get('/leaderboard/departments', { params: { timeFilter } })
+        .then(unwrap);
+      const departmentRankings = Array.isArray(payload) ? payload.map(normalizeDepartmentRanking) : [];
+      set({ departmentRankings, departmentLoading: false });
+    } catch (err: any) {
+      console.error('Failed to fetch department rankings', err);
+      set({
+        departmentError: err?.response?.data?.message || err?.message || 'Failed to fetch department rankings',
+        departmentLoading: false,
       });
     }
   },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Award, Download, CheckCircle, Clock, AlertCircle, Shield, Sparkles, Star,
@@ -7,7 +7,6 @@ import {
   Share2, QrCode, AlertTriangle, Layers, RotateCcw, Printer,
 } from 'lucide-react';
 import { useCertificateStore } from '@/store/certificate.store';
-import { useExamStore } from '@/store/exam.store';
 import { useAuthStore } from '@/store/auth.store';
 import { type Certificate } from '@/api/certificates';
 import {
@@ -45,12 +44,24 @@ const STATUS_MAP = {
 };
 
 const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#6b7280', '#3b82f6', '#8b5cf6'];
+const EXPIRING_WINDOW_MS = 30 * 86400000;
+
+type CertificateKpis = {
+  total: number;
+  active: number;
+  expiring: number;
+  avgScore: number;
+};
 
 const certFallbacks: Record<string, string> = {
   'certifications.eyebrow': 'Sertifikatlar',
   'certifications.title': 'Sertifikat boshqaruvi',
   'certifications.subtitle': 'QR tekshiruvi, analitika va sertifikatlarni boshqarish.',
   'certifications.loading': 'Sertifikatlar yuklanmoqda...',
+  'certifications.retry': 'Qayta urinish',
+  'certifications.kpiLoading': 'Ko\'rsatkichlar yuklanmoqda...',
+  'certifications.kpiLoadError': 'Sertifikat ko\'rsatkichlarini yuklab bo\'lmadi.',
+  'certifications.kpiEmpty': 'Sertifikatlar hali shakllanmagan.',
   'certifications.score': 'Natija',
   'certifications.searchPlaceholder': 'Sertifikat qidirish...',
   'certifications.noCertsTitle': 'Sertifikatlar topilmadi',
@@ -128,6 +139,37 @@ const ct = (
   key: string,
   values?: Record<string, string | number>,
 ) => t(key, { defaultValue: certFallbacks[key] || key.split('.').pop() || key, ...(values || {}) });
+
+const isExpiredByDate = (cert: Certificate, now = Date.now()) => (
+  Boolean(cert.expiresAt && new Date(cert.expiresAt).getTime() <= now)
+);
+
+const isExpiringByDate = (cert: Certificate, now = Date.now()) => {
+  if (!cert.expiresAt || cert.status === 'revoked') return false;
+  const diff = new Date(cert.expiresAt).getTime() - now;
+  return diff > 0 && diff <= EXPIRING_WINDOW_MS;
+};
+
+const isActiveByDate = (cert: Certificate, now = Date.now()) => (
+  cert.status !== 'revoked' && !isExpiredByDate(cert, now) && !isExpiringByDate(cert, now)
+);
+
+const isValidForScore = (cert: Certificate, now = Date.now()) => (
+  cert.status !== 'revoked' && !isExpiredByDate(cert, now)
+);
+
+const calculateCertificateKpis = (certs: Certificate[]): CertificateKpis => {
+  const now = Date.now();
+  const validForScore = certs.filter((cert) => isValidForScore(cert, now));
+  return {
+    total: certs.length,
+    active: certs.filter((cert) => isActiveByDate(cert, now)).length,
+    expiring: certs.filter((cert) => isExpiringByDate(cert, now)).length,
+    avgScore: validForScore.length
+      ? Math.round(validForScore.reduce((sum, cert) => sum + Number(cert.score || 0), 0) / validForScore.length)
+      : 0,
+  };
+};
 
 
 // ─── PDF Print Helper ──────────────────────────────────────────────
@@ -763,14 +805,14 @@ function TabTemplates() {
 function TabExpiration({ certs }: { certs: Certificate[] }) {
   const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
-  const expiring = certs.filter(c => c.status === 'expiring_soon' && c.expiresAt)
+  const expiring = certs.filter(c => isExpiringByDate(c))
     .sort((a, b) => new Date(a.expiresAt!).getTime() - new Date(b.expiresAt!).getTime());
-  const expired = certs.filter(c => c.status === 'expired')
+  const expired = certs.filter(c => c.status !== 'revoked' && (c.status === 'expired' || isExpiredByDate(c)))
     .sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
 
   const ExpirationRow = ({ cert }: { cert: Certificate }) => {
     const daysLeft = cert.expiresAt ? Math.ceil((new Date(cert.expiresAt).getTime() - Date.now()) / 86400000) : null;
-    const isExpired = cert.status === 'expired';
+    const isExpired = cert.status === 'expired' || isExpiredByDate(cert);
     const color = isExpired ? '#ef4444' : daysLeft !== null && daysLeft <= 7 ? '#ef4444' : '#f59e0b';
 
     return (
@@ -923,70 +965,62 @@ export default function Certifications() {
   const isRu = i18n.language === 'ru';
   const { user } = useAuthStore();
   const isAdmin = ['super_admin', 'admin', 'hr_manager'].includes(user?.role || '');
+  const useOrgKpis = ['super_admin', 'admin', 'hr_manager', 'trainer', 'executive'].includes(user?.role || '');
 
   const [activeTab, setActiveTab] = useState<TabId>('my');
 
   // Certificate store
-  const { myCerts, loading, loadMyCerts } = useCertificateStore();
-
-  // Exam store for legacy fallback
-  const { exams, history: examHistory, loadExams, loadHistory } = useExamStore();
+  const {
+    myCerts,
+    analytics,
+    loading,
+    myCertsLoaded,
+    analyticsLoading,
+    analyticsLoaded,
+    analyticsError,
+    error,
+    loadMyCerts,
+    loadAnalytics,
+  } = useCertificateStore();
 
   useEffect(() => {
     loadMyCerts();
-    if (exams.length === 0) loadExams();
-    loadHistory();
-  }, []);
+  }, [loadMyCerts]);
 
-  // Merge: real DB certs + legacy (exam-based) certs that haven't been stored yet
-  const legacyMapped: Certificate[] = examHistory
-    .filter(h => h.status === 'submitted' && h.passed)
-    .reduce((acc: typeof examHistory, h) => {
-      const existing = acc.find(a => a.testId === h.testId);
-      if (!existing || h.score > existing.score) {
-        return [...acc.filter(a => a.testId !== h.testId), h];
-      }
-      return acc;
-    }, [])
-    .map(h => {
-      const exam = exams.find(e => e.id === h.testId);
-      const issuedAt = new Date(h.submittedAt || h.startedAt);
-      const expiresAt = new Date(issuedAt);
-      expiresAt.setFullYear(issuedAt.getFullYear() + 1);
-      const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / 86400000);
-      const status: Certificate['status'] = daysLeft <= 0 ? 'expired' : daysLeft <= 30 ? 'expiring_soon' : 'active';
-      return {
-        id: h.id,
-        certificateId: h.id.toUpperCase(),
-        userId: h.userId || '',
-        examTitle: exam?.title || 'Imtihon',
-        examTitleRu: exam?.titleRu || exam?.title || 'Экзамен',
-        holderName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.fullName || 'Xodim' : 'Xodim',
-        score: h.score,
-        category: exam?.category || 'Professional',
-        color: exam?.color || '#3b82f6',
-        issuedAt: issuedAt.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-        status,
-        downloadCount: 0,
-        verificationCount: 0,
-        examId: h.testId,
-      } as Certificate;
-    });
+  useEffect(() => {
+    if (useOrgKpis) {
+      loadAnalytics();
+    }
+  }, [loadAnalytics, useOrgKpis]);
 
-  // Real DB certs take priority; fill with legacy ones not yet in DB
-  const realIds = new Set(myCerts.map(c => c.examId).filter(Boolean));
-  const fillCerts = legacyMapped.filter(l => l.examId && !realIds.has(l.examId));
-  const displayCerts: Certificate[] = [...myCerts, ...fillCerts];
+  const displayCerts: Certificate[] = myCerts;
 
   const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin);
-
-  const avgScore = displayCerts.length > 0 ? Math.round(displayCerts.reduce((s, c) => s + c.score, 0) / displayCerts.length) : 0;
-  const counts = {
-    active: displayCerts.filter(c => c.status === 'active').length,
-    expiring: displayCerts.filter(c => c.status === 'expiring_soon').length,
-    expired: displayCerts.filter(c => c.status === 'expired').length,
+  const personalKpis = useMemo(() => calculateCertificateKpis(displayCerts), [displayCerts]);
+  const heroKpis: CertificateKpis = useOrgKpis && analytics
+    ? {
+        total: analytics.totals.total,
+        active: analytics.totals.active,
+        expiring: analytics.totals.expiring,
+        avgScore: analytics.avgScore,
+      }
+    : personalKpis;
+  const heroLoading = useOrgKpis ? analyticsLoading || !analyticsLoaded : loading || !myCertsLoaded;
+  const heroError = useOrgKpis ? analyticsError : error;
+  const heroEmpty = !heroLoading && !heroError && heroKpis.total === 0;
+  const retryHero = () => {
+    if (useOrgKpis) {
+      void loadAnalytics();
+    } else {
+      void loadMyCerts();
+    }
   };
+  const heroStats = [
+    { label: ct(t, 'certifications.analytics.total'), value: heroKpis.total, color: 'var(--text-primary)' },
+    { label: ct(t, 'certifications.analytics.avgScore'), value: `${heroKpis.avgScore}%`, color: '#8b5cf6' },
+    { label: ct(t, 'certifications.analytics.active'), value: heroKpis.active, color: '#22c55e' },
+    { label: ct(t, 'certifications.analytics.expiring'), value: heroKpis.expiring, color: '#f59e0b' },
+  ];
 
   return (
     <div className="cert-dashboard-root blur-fade">
@@ -1012,12 +1046,29 @@ export default function Certifications() {
 
         {/* Hero KPI Stats */}
         <div className="cert-hero-stats">
-          {[
-            { label: ct(t, 'certifications.analytics.total'), value: displayCerts.length, color: 'var(--text-primary)' },
-            { label: ct(t, 'certifications.analytics.avgScore'), value: `${avgScore}%`, color: '#8b5cf6' },
-            { label: ct(t, 'certifications.analytics.active'), value: counts.active, color: '#22c55e' },
-            { label: ct(t, 'certifications.analytics.expiring'), value: counts.expiring, color: '#f59e0b' },
-          ].map((s, i) => (
+          {heroLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ textAlign: 'center', padding: '14px 18px', background: 'var(--surface-1)', borderRadius: 16, border: '1px solid var(--border-1)', flex: 1, minWidth: 80 }}>
+                <div className="skeleton" style={{ width: 48, height: 26, margin: '0 auto 8px', borderRadius: 8 }} />
+                <div className="skeleton" style={{ width: 70, height: 10, margin: '0 auto', borderRadius: 5 }} />
+              </div>
+            ))
+          ) : heroError ? (
+            <div style={{ padding: '14px 18px', background: 'rgba(239,68,68,0.08)', borderRadius: 16, border: '1px solid rgba(239,68,68,0.22)', flex: 1, minWidth: 260, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#ef4444' }}>{ct(t, 'certifications.kpiLoadError')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{heroError}</div>
+              </div>
+              <button type="button" onClick={retryHero} className="cert-btn cert-btn-ghost" style={{ flexShrink: 0 }}>
+                <RefreshCw size={13} /> {ct(t, 'certifications.retry')}
+              </button>
+            </div>
+          ) : heroEmpty ? (
+            <div style={{ padding: '16px 20px', background: 'var(--surface-1)', borderRadius: 16, border: '1px solid var(--border-1)', flex: 1, minWidth: 260, textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>0</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{ct(t, 'certifications.kpiEmpty')}</div>
+            </div>
+          ) : heroStats.map((s, i) => (
             <div key={i} style={{ textAlign: 'center', padding: '14px 18px', background: 'var(--surface-1)', borderRadius: 16, border: '1px solid var(--border-1)', flex: 1, minWidth: 80 }}>
               <div style={{ fontSize: 24, fontWeight: 900, color: s.color, letterSpacing: '-0.5px' }}>{s.value}</div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{s.label}</div>

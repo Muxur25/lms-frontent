@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from '@/routes';
 import { Toaster } from 'react-hot-toast';
 import type { ReactNode } from 'react';
+import AchievementUnlockModal from '@/components/AchievementUnlockModal';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -28,6 +29,7 @@ export function AppProviders({ children }: { children?: ReactNode }) {
           border: '1px solid var(--border-3)'
         },
       }} />
+      <AchievementUnlockModal />
       {children || <RouterProvider router={router} />}
     </QueryClientProvider>
   );

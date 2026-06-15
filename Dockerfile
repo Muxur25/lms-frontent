@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Accept build-time env vars for Vite
 ARG VITE_API_URL=https://api.lms.agmk.uz/api/v1
-ARG VITE_WS_URL=wss://api.lms.agmk.uz/ws
+ARG VITE_WS_URL=wss://api.lms.agmk.uz/realtime
 ARG VITE_APP_VERSION=1.0.0
 
 # Set as environment for Vite build

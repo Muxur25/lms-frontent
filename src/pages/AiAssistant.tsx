@@ -29,8 +29,7 @@ export default function AiAssistant() {
         role: 'ai', 
         text: aiReply 
       }]);
-    } catch (err) {
-      console.error('AI chat error:', err);
+    } catch {
       setMessages(prev => [...prev, { 
         id: Date.now() + 1, 
         role: 'ai', 
