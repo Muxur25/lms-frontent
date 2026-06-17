@@ -17,29 +17,55 @@ import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/api/axios';
 import toast from 'react-hot-toast';
 import { customConfirm } from '@/shared/lib/toast-utils';
+import { useSocket } from '@/hooks/useSocket';
 
 const unwrapArray = (response: any) => {
   const payload = response?.data?.data ?? response?.data ?? response;
   return Array.isArray(payload) ? payload : [];
 };
 
-const formatDate = (value?: string) => {
+const formatDate = (value?: string, lang: string = 'uz') => {
   if (!value) return '-';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+  if (Number.isNaN(date.getTime())) return '-';
+
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const y = date.getFullYear();
+
+  if (lang === 'ru') {
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${y} г., ${h}:${min}`;
+  } else {
+    const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+    return `${date.getDate()}-${months[date.getMonth()]} ${y}-yil, soat ${h}:${min}`;
+  }
 };
 
 export default function SecurityDashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options });
   const [sessions, setSessions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const socket = useSocket();
 
   useEffect(() => {
     fetchSecurityData();
-  }, []);
+
+    if (socket) {
+      const handleSecurityUpdate = () => {
+        fetchSecurityData();
+      };
+      socket.on('security_update', handleSecurityUpdate);
+      return () => {
+        socket.off('security_update', handleSecurityUpdate);
+      };
+    }
+  }, [socket]);
 
   const fetchSecurityData = async () => {
     try {
@@ -87,13 +113,27 @@ export default function SecurityDashboardPage() {
   const deviceCounts = useMemo(() => {
     const mobile = sessions.filter((s) => s.device?.deviceType?.toLowerCase() === 'mobile').length;
     const tablet = sessions.filter((s) => s.device?.deviceType?.toLowerCase() === 'tablet').length;
-    return { mobile, tablet, desktop: Math.max(sessions.length - mobile - tablet, 0) };
+    const desktop = sessions.filter((s) => !s.device?.deviceType || !['mobile', 'tablet'].includes(s.device.deviceType.toLowerCase())).length;
+    return { mobile, tablet, desktop, unknown: 0 };
   }, [sessions]);
 
   const getDeviceIcon = (type: string) => {
     if (type?.toLowerCase() === 'mobile') return <Smartphone size={21} />;
     if (type?.toLowerCase() === 'tablet') return <Tablet size={21} />;
     return <Monitor size={21} />;
+  };
+
+  const getOsName = (os?: string, type?: string) => {
+    if (os && os.toLowerCase() !== 'unknown os') return os;
+    const t = type?.toLowerCase();
+    if (t === 'mobile') return tr('securityCenter.mobileDevice', 'Mobil qurilma');
+    if (t === 'tablet') return tr('securityCenter.tabletDevice', 'Planshet');
+    return tr('securityCenter.desktopDevice', 'Kompyuter');
+  };
+
+  const getBrowserName = (browser?: string) => {
+    if (browser && browser.toLowerCase() !== 'unknown browser') return browser;
+    return tr('securityCenter.webBrowser', 'Web Brauzer');
   };
 
   return (
@@ -122,10 +162,13 @@ export default function SecurityDashboardPage() {
         </div>
       )}
 
-      <section className="user-metric-grid">
+      <section className="user-metric-grid" style={{ gridTemplateColumns: deviceCounts.unknown > 0 ? 'repeat(5, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))' }}>
         <MetricCard icon={Monitor} label={tr('securityCenter.activeSessionsMetric', 'Faol sessiyalar')} value={loading ? '-' : sessions.length} tone="blue" />
         <MetricCard icon={Monitor} label={tr('securityCenter.desktopMetric', 'Desktop')} value={loading ? '-' : deviceCounts.desktop} tone="cyan" />
         <MetricCard icon={Smartphone} label={tr('securityCenter.mobileMetric', 'Mobile')} value={loading ? '-' : deviceCounts.mobile + deviceCounts.tablet} tone="violet" />
+        {deviceCounts.unknown > 0 && (
+          <MetricCard icon={AlertTriangle} label={tr('securityCenter.unknownMetric', "Noma'lum")} value={loading ? '-' : deviceCounts.unknown} tone="amber" />
+        )}
         <MetricCard icon={Clock} label={tr('securityCenter.historyMetric', 'Kirishlar tarixi')} value={loading ? '-' : history.length} tone="amber" />
       </section>
 
@@ -154,13 +197,13 @@ export default function SecurityDashboardPage() {
                 <div className="device-icon">{getDeviceIcon(session.device?.deviceType)}</div>
                 <div className="device-body">
                   <div className="device-title-row">
-                    <h3>{session.device?.os || tr('securityCenter.unknownDevice', "Noma'lum qurilma")}</h3>
+                    <h3>{getOsName(session.device?.os, session.device?.deviceType)}</h3>
                     {index === 0 && <span className="safe-pill">{tr('securityCenter.thisDevice', 'HOZIRGI QURILMA')}</span>}
                   </div>
-                  <p>{session.device?.browser || tr('securityCenter.unknownBrowser', "Noma'lum brauzer")}</p>
+                  <p>{getBrowserName(session.device?.browser)}</p>
                   <div className="device-meta">
                     <span><MapPin size={13} />{session.device?.ipAddress || '-'}</span>
-                    <span><Clock size={13} />{formatDate(session.lastActivity)}</span>
+                    <span><Clock size={13} />{formatDate(session.lastActivity, i18n.language)}</span>
                   </div>
                 </div>
                 {index !== 0 && (
@@ -213,26 +256,57 @@ export default function SecurityDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {history.slice(0, 10).map((item) => (
+                {history.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => (
                   <tr key={item.id}>
                     <td>
                       <div className="history-device">
                         <span>{getDeviceIcon(item.deviceType)}</span>
-                        <strong>{item.os || '-'} / {item.browser || '-'}</strong>
+                        <strong>{getOsName(item.os, item.deviceType)} / {getBrowserName(item.browser)}</strong>
                       </div>
                     </td>
                     <td>{item.ipAddress || '-'}</td>
-                    <td>{formatDate(item.loginAt)}</td>
+                    <td>{formatDate(item.loginAt, i18n.language)}</td>
                     <td>
-                      <span className="success-badge">
-                        <CheckCircle2 size={13} />
-                        {tr('securityCenter.success', 'Muvaffaqiyatli')}
-                      </span>
+                      {item.status === 'FAILED' ? (
+                        <span className="danger-badge">
+                          <AlertTriangle size={13} />
+                          {tr('securityCenter.failed', 'Xato parol')}
+                        </span>
+                      ) : (
+                        <span className="success-badge">
+                          <CheckCircle2 size={13} />
+                          {tr('securityCenter.success', 'Muvaffaqiyatli')}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {Math.ceil(history.length / itemsPerPage) > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, padding: '16px', borderTop: '1px solid var(--border-1)', alignItems: 'center' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  style={{ opacity: currentPage === 1 ? 0.5 : 1 }}
+                >
+                  {t('common.prev', 'Oldingi')}
+                </button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  {currentPage} / {Math.ceil(history.length / itemsPerPage)}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={currentPage === Math.ceil(history.length / itemsPerPage)}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  style={{ opacity: currentPage === Math.ceil(history.length / itemsPerPage) ? 0.5 : 1 }}
+                >
+                  {t('common.next', 'Keyingi')}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -496,6 +570,19 @@ const userSecurityStyles = `
   border: 1px solid rgba(34,197,94,.24);
   background: rgba(34,197,94,.1);
   color: #34d399;
+  font-size: 11px;
+  font-weight: 900;
+}
+.danger-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 9px;
+  border: 1px solid rgba(239,68,68,.24);
+  background: rgba(239,68,68,.1);
+  color: #f87171;
   font-size: 11px;
   font-weight: 900;
 }

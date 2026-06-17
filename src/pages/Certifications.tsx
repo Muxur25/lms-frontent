@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import toast from 'react-hot-toast';
+import QRCode from 'qrcode';
 import {
   Award, Download, CheckCircle, Clock, AlertCircle, Shield, Sparkles, Star,
   Eye, Trophy, TrendingUp, X, RefreshCw,
@@ -8,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useCertificateStore } from '@/store/certificate.store';
 import { useAuthStore } from '@/store/auth.store';
-import { type Certificate } from '@/api/certificates';
+import { type Certificate, type VerifyResult } from '@/api/certificates';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,6 +55,9 @@ type CertificateKpis = {
   avgScore: number;
 };
 
+type CertificateFilter = 'all' | 'active' | 'expiring_soon' | 'expired' | 'revoked';
+type ComputedCertificateStatus = Exclude<CertificateFilter, 'all'>;
+
 const certFallbacks: Record<string, string> = {
   'certifications.eyebrow': 'Sertifikatlar',
   'certifications.title': 'Sertifikat boshqaruvi',
@@ -77,14 +82,22 @@ const certFallbacks: Record<string, string> = {
   'certifications.statusMap.expiring_soon': 'Tugayapti',
   'certifications.statusMap.expired': 'Muddati o\'tgan',
   'certifications.statusMap.revoked': 'Bekor qilingan',
+  'certifications.statusMap.valid': 'Haqiqiy',
+  'certifications.statusMap.invalid': 'Topilmadi',
   'certifications.card.issued': 'Berilgan',
   'certifications.card.expires': 'Amal qiladi',
   'certifications.card.download': 'Yuklab olish',
   'certifications.card.view': 'Ko\'rish',
+  'certifications.card.revokedDownload': 'Bekor qilingan sertifikat yuklab olinmaydi',
+  'certifications.card.shareCopied': 'Tekshirish havolasi nusxalandi',
+  'certifications.card.shareFailed': 'Havolani nusxalab bo\'lmadi',
+  'certifications.card.downloadFailed': 'Sertifikatni yuklab bo\'lmadi',
+  'certifications.card.searchEmpty': 'Qidiruv yoki filtr bo\'yicha sertifikat topilmadi.',
   'certifications.filter.all': 'Barchasi',
   'certifications.filter.active': 'Faol',
   'certifications.filter.expiring_soon': 'Tugayapti',
   'certifications.filter.expired': 'Muddati o\'tgan',
+  'certifications.filter.revoked': 'Bekor qilingan',
   'certifications.pdf.certTitle': 'SERTIFIKAT',
   'certifications.pdf.completed': 'MUVAFFAQIYATLI YAKUNLANGAN',
   'certifications.pdf.holderLabel': 'Ushbu sertifikat egasi',
@@ -95,6 +108,9 @@ const certFallbacks: Record<string, string> = {
   'certifications.pdf.verify': 'TEKSHIRISH',
   'certifications.pdf.unlimited': 'Muddatsiz',
   'certifications.verification.error': 'Sertifikatni tekshirishda xato yuz berdi',
+  'certifications.verification.emptyInput': 'Sertifikat ID kiriting.',
+  'certifications.verification.invalidInput': 'Sertifikat ID formati noto\'g\'ri.',
+  'certifications.verification.notFound': 'Sertifikat tizimda topilmadi.',
   'certifications.verification.title': 'Tekshirish markazi',
   'certifications.verification.sub': 'Darhol tekshirish uchun sertifikat ID yoki UUID kiriting',
   'certifications.verification.placeholder': 'AGMK-2026-000001 yoki UUID...',
@@ -118,9 +134,18 @@ const certFallbacks: Record<string, string> = {
   'certifications.analytics.trend': 'Oylik trend',
   'certifications.analytics.category': 'Kategoriya bo\'yicha',
   'certifications.analytics.department': 'Bo\'limlar bo\'yicha',
+  'certifications.analytics.loadError': 'Analitikani yuklab bo\'lmadi.',
+  'certifications.analytics.empty': 'Sertifikat analitikasi hali shakllanmagan.',
+  'certifications.analytics.noChartData': 'Diagramma uchun ma\'lumot yo\'q.',
+  'certifications.analytics.soonExpiring': 'Tez orada tugaydigan sertifikatlar',
   'certifications.templates.default': 'Default',
   'certifications.templates.loading': 'Shablonlar yuklanmoqda...',
   'certifications.expiration.days': '{{days}} kun',
+  'certifications.expiration.overdueDays': '{{days}} kun o\'tgan',
+  'certifications.expiration.today': 'Bugun',
+  'certifications.expiration.noDate': 'Sana yo\'q',
+  'certifications.expiration.empty': 'Muddat nazoratiga tushadigan sertifikatlar yo\'q.',
+  'certifications.expiration.loadError': 'Muddatlarni yuklab bo\'lmadi.',
   'certifications.expiration.expiredLabel': 'Tugagan',
   'certifications.expiration.soon': 'Tez orada tugaydi ({{count}})',
   'certifications.expiration.noSoon': 'Tugayotgan sertifikatlar yo\'q',
@@ -140,47 +165,130 @@ const ct = (
   values?: Record<string, string | number>,
 ) => t(key, { defaultValue: certFallbacks[key] || key.split('.').pop() || key, ...(values || {}) });
 
-const isExpiredByDate = (cert: Certificate, now = Date.now()) => (
-  Boolean(cert.expiresAt && new Date(cert.expiresAt).getTime() <= now)
-);
+const safeText = (value: unknown, fallback = '') => String(value ?? fallback);
+
+const escapeHtml = (value: unknown) => safeText(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const safeDate = (value: string | null | undefined, fallback = '') => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString();
+};
+
+const dateTime = (value: string | null | undefined) => {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+};
+
+const daysUntil = (value: string | null | undefined, now = Date.now()) => {
+  const time = dateTime(value);
+  return time === null ? null : Math.ceil((time - now) / 86400000);
+};
+
+const safeIsoDate = (value: string | null | undefined, fallback = '') => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toISOString().split('T')[0];
+};
+
+const getCertificateTitle = (cert: Certificate, isRu: boolean) => {
+  const preferred = isRu ? cert.examTitleRu || cert.examTitle : cert.examTitle || cert.examTitleRu;
+  return safeText(preferred, 'Sertifikat');
+};
+
+const safeColor = (value: unknown, fallback = '#3b82f6') => {
+  const color = safeText(value).trim();
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color : fallback;
+};
+
+const isExpiredByDate = (cert: Certificate, now = Date.now()) => {
+  const expiresAt = dateTime(cert.expiresAt);
+  return expiresAt !== null && expiresAt <= now;
+};
 
 const isExpiringByDate = (cert: Certificate, now = Date.now()) => {
   if (!cert.expiresAt || cert.status === 'revoked') return false;
-  const diff = new Date(cert.expiresAt).getTime() - now;
+  const expiresAt = dateTime(cert.expiresAt);
+  if (expiresAt === null) return false;
+  const diff = expiresAt - now;
   return diff > 0 && diff <= EXPIRING_WINDOW_MS;
 };
-
-const isActiveByDate = (cert: Certificate, now = Date.now()) => (
-  cert.status !== 'revoked' && !isExpiredByDate(cert, now) && !isExpiringByDate(cert, now)
-);
 
 const isValidForScore = (cert: Certificate, now = Date.now()) => (
   cert.status !== 'revoked' && !isExpiredByDate(cert, now)
 );
+
+const getComputedStatus = (cert: Certificate, now = Date.now()): ComputedCertificateStatus => {
+  if (cert.status === 'revoked') return 'revoked';
+  if (cert.status === 'expired' || isExpiredByDate(cert, now)) return 'expired';
+  if (isExpiringByDate(cert, now)) return 'expiring_soon';
+  return 'active';
+};
 
 const calculateCertificateKpis = (certs: Certificate[]): CertificateKpis => {
   const now = Date.now();
   const validForScore = certs.filter((cert) => isValidForScore(cert, now));
   return {
     total: certs.length,
-    active: certs.filter((cert) => isActiveByDate(cert, now)).length,
-    expiring: certs.filter((cert) => isExpiringByDate(cert, now)).length,
+    active: certs.filter((cert) => getComputedStatus(cert, now) === 'active').length,
+    expiring: certs.filter((cert) => getComputedStatus(cert, now) === 'expiring_soon').length,
     avgScore: validForScore.length
       ? Math.round(validForScore.reduce((sum, cert) => sum + Number(cert.score || 0), 0) / validForScore.length)
       : 0,
   };
 };
 
+const getVerifyUrl = (certId: string) => (
+  `${window.location.protocol}//${window.location.host}/verify-certificate?id=${encodeURIComponent(certId)}`
+);
+
+const makeQrDataUrl = (value: string, width = 64) => QRCode.toDataURL(value, {
+  width,
+  margin: 1,
+  errorCorrectionLevel: 'M',
+  color: { dark: '#0d1117', light: '#ffffff' },
+});
+
+const normalizeCertificateLookup = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const url = new URL(trimmed);
+    return (url.searchParams.get('id') || trimmed).trim();
+  } catch {
+    return trimmed;
+  }
+};
+
+const isCertificateLookupValid = (value: string) => (
+  value.length >= 6
+  && value.length <= 128
+  && /^[a-zA-Z0-9_-]+(?:-[a-zA-Z0-9_-]+)*$/.test(value)
+);
+
 
 // ─── PDF Print Helper ──────────────────────────────────────────────
 async function printCertificate(cert: Certificate, t: any, isRu: boolean, holderOverride?: string) {
-  const holder = holderOverride || cert.holderName;
-  const title = isRu ? cert.examTitleRu : cert.examTitle;
-  const certId = cert.certificateId || cert.id;
-  const issued = new Date(cert.issuedAt).toISOString().split('T')[0];
-  const expires = cert.expiresAt ? new Date(cert.expiresAt).toISOString().split('T')[0] : ct(t, 'certifications.pdf.unlimited');
-  const trainer = cert.trainerName || 'AGMK LMS';
-  const primaryColor = cert.color || '#d4af37';
+  const holder = safeText(holderOverride || cert.holderName, 'Xodim');
+  const title = getCertificateTitle(cert, isRu);
+  const certId = safeText(cert.certificateId || cert.id, 'certificate');
+  const issued = safeIsoDate(cert.issuedAt, '-');
+  const expires = cert.expiresAt ? safeIsoDate(cert.expiresAt, '-') : ct(t, 'certifications.pdf.unlimited');
+  const trainer = safeText(cert.trainerName, 'AGMK LMS');
+  const primaryColor = safeColor(cert.color, '#d4af37');
+  const qrDataUrl = await makeQrDataUrl(getVerifyUrl(certId), 84);
+  const description = ct(t, 'certifications.pdf.desc', {
+    title: `"${title}"`,
+    score: `${Number(cert.score || 0)}%`,
+  });
 
   const html = `
     <div class="cb" style="width:840px;height:550px;padding:24px;border:14px solid #0d1b2a;background:#fff;position:relative;box-sizing:border-box;font-family:'Montserrat',sans-serif;">
@@ -208,41 +316,38 @@ async function printCertificate(cert: Certificate, t: any, isRu: boolean, holder
         <div style="position:absolute;top:12px;left:16px;font-size:9px;font-weight:900;letter-spacing:1.5px;color:#aa7c11;text-transform:uppercase;">AGMK LMS</div>
 
         <!-- Content -->
-        <h2 style="font-family:'Georgia',serif;font-size:24px;color:#0d1117;letter-spacing:5px;font-weight:900;margin-top:10px;margin-bottom:2px;text-align:center;">${ct(t, 'certifications.pdf.certTitle')}</h2>
-        <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:5px;color:#aa7c11;margin-bottom:16px;text-align:center;">${ct(t, 'certifications.pdf.completed') || 'MUVAFFAQIYATLI YAKUNLANGAN'}</div>
+        <h2 style="font-family:'Georgia',serif;font-size:24px;color:#0d1117;letter-spacing:5px;font-weight:900;margin-top:10px;margin-bottom:2px;text-align:center;">${escapeHtml(ct(t, 'certifications.pdf.certTitle'))}</h2>
+        <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:5px;color:#aa7c11;margin-bottom:16px;text-align:center;">${escapeHtml(ct(t, 'certifications.pdf.completed') || 'MUVAFFAQIYATLI YAKUNLANGAN')}</div>
 
-        <div style="font-size:12px;color:#64748b;margin-bottom:4px;text-align:center;">${ct(t, 'certifications.pdf.holderLabel')}</div>
-        <div style="font-size:26px;font-weight:800;color:#0d1117;border-bottom:2px double ${primaryColor};display:inline-block;padding-bottom:3px;margin-bottom:14px;min-width:280px;letter-spacing:-0.5px;text-align:center;">${holder}</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:4px;text-align:center;">${escapeHtml(ct(t, 'certifications.pdf.holderLabel'))}</div>
+        <div style="font-size:26px;font-weight:800;color:#0d1117;border-bottom:2px double ${primaryColor};display:inline-block;padding-bottom:3px;margin-bottom:14px;min-width:280px;letter-spacing:-0.5px;text-align:center;">${escapeHtml(holder)}</div>
 
         <div style="font-size:11.5px;line-height:1.7;color:#475569;max-width:500px;margin:0 auto 12px;text-align:center;">
-          ${ct(t, 'certifications.pdf.desc', {
-            title: `<strong style="color:#0d1117">"${title}"</strong>`,
-            score: `<strong style="color:#0d1117">${cert.score}%</strong>`
-          })}
+          ${escapeHtml(description)}
         </div>
 
         <!-- Meta row -->
         <div style="display:flex;justify-content:space-between;padding:0 24px;margin-top:20px;font-size:10px;color:#64748b;">
           <div style="text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#0d1117;margin-bottom:3px;">${issued}</div>
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${ct(t, 'certifications.pdf.issued')}</div>
+            <div style="font-size:11px;font-weight:700;color:#0d1117;margin-bottom:3px;">${escapeHtml(issued)}</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${escapeHtml(ct(t, 'certifications.pdf.issued'))}</div>
           </div>
           <div style="text-align:center;">
-            <div style="font-family:'Georgia',serif;font-size:16px;color:#1e3a8a;font-style:italic;margin-bottom:3px;">${trainer}</div>
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${ct(t, 'certifications.pdf.authorizer')}</div>
+            <div style="font-family:'Georgia',serif;font-size:16px;color:#1e3a8a;font-style:italic;margin-bottom:3px;">${escapeHtml(trainer)}</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${escapeHtml(ct(t, 'certifications.pdf.authorizer'))}</div>
           </div>
           <div style="text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#0d1117;margin-bottom:3px;">${expires}</div>
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${ct(t, 'certifications.pdf.expires')}</div>
+            <div style="font-size:11px;font-weight:700;color:#0d1117;margin-bottom:3px;">${escapeHtml(expires)}</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;font-weight:700;border-top:1px solid #cbd5e1;padding-top:4px;width:100px;margin:0 auto;">${escapeHtml(ct(t, 'certifications.pdf.expires'))}</div>
           </div>
         </div>
 
         <!-- QR Code bottom-left -->
         <div style="position:absolute;bottom:16px;left:22px;display:flex;gap:8px;align-items:center;text-align:left;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=52&data=${encodeURIComponent(window.location.protocol + '//' + window.location.host + '/verify-certificate?id=' + certId)}" width="52" height="52" style="border:1px solid ${primaryColor};padding:2px;background:#fff;" />
+          <img src="${qrDataUrl}" width="52" height="52" style="border:1px solid ${primaryColor};padding:2px;background:#fff;" />
           <div>
-            <div style="font-weight:bold;color:#aa7c11;font-size:8px;letter-spacing:0.5px;">${ct(t, 'certifications.pdf.verify')}</div>
-            <div style="font-size:7px;color:#64748b;font-family:monospace;">${certId}</div>
+            <div style="font-weight:bold;color:#aa7c11;font-size:8px;letter-spacing:0.5px;">${escapeHtml(ct(t, 'certifications.pdf.verify'))}</div>
+            <div style="font-size:7px;color:#64748b;font-family:monospace;">${escapeHtml(certId)}</div>
           </div>
         </div>
 
@@ -271,14 +376,17 @@ async function printCertificate(cert: Certificate, t: any, isRu: boolean, holder
   container.innerHTML = html;
   document.body.appendChild(container);
 
-  const { default: html2canvas } = await import('html2canvas');
-  const { jsPDF } = await import('jspdf');
-  const el = container.querySelector('.cb') as HTMLElement;
-  const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#f0f2f5' });
-  document.body.removeChild(container);
-  const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [840, 550] });
-  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 840, 550);
-  pdf.save(`${certId}.pdf`);
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const { jsPDF } = await import('jspdf');
+    const el = container.querySelector('.cb') as HTMLElement;
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#f0f2f5' });
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [840, 550] });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 840, 550);
+    pdf.save(`${certId}.pdf`);
+  } finally {
+    document.body.removeChild(container);
+  }
 }
 
 // ─── Sub-components ────────────────────────────────────────────────
@@ -289,25 +397,31 @@ function CertificateCardView({ cert, onView, onDownload, isDownloading }: {
   onDownload: (cert: Certificate) => void;
   isDownloading?: boolean;
 }) {
-  const { t } = useTranslation();
-  const st = STATUS_MAP[cert.status] || STATUS_MAP.active;
+  const { t, i18n } = useTranslation();
+  const isRu = i18n.language === 'ru';
+  const computedStatus = getComputedStatus(cert);
+  const st = STATUS_MAP[computedStatus] || STATUS_MAP.active;
+  const primaryColor = safeColor(cert.color);
+  const title = getCertificateTitle(cert, isRu);
+  const score = Math.min(100, Math.max(0, Number(cert.score || 0)));
+  const isDownloadDisabled = isDownloading || computedStatus === 'revoked';
   const daysLeft = cert.expiresAt
     ? Math.ceil((new Date(cert.expiresAt).getTime() - Date.now()) / 86400000)
     : null;
 
   return (
-    <div className="cert-card-premium" style={{ animationDelay: '0.05s' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${cert.color || '#3b82f6'}, ${cert.color || '#3b82f6'}55)`, borderRadius: '20px 20px 0 0' }} />
-      <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: cert.color || '#3b82f6', filter: 'blur(50px)', opacity: 0.07, borderRadius: '50%', pointerEvents: 'none' }} />
+    <div className={`cert-card-premium ${computedStatus}`} style={{ animationDelay: '0.05s' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${primaryColor}, ${primaryColor}55)`, borderRadius: '20px 20px 0 0' }} />
+      <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: primaryColor, filter: 'blur(50px)', opacity: 0.07, borderRadius: '50%', pointerEvents: 'none' }} />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: `${cert.color || '#3b82f6'}15`, border: `1px solid ${cert.color || '#3b82f6'}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Award size={20} color={cert.color || '#3b82f6'} />
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: `${primaryColor}15`, border: `1px solid ${primaryColor}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Award size={20} color={primaryColor} />
             </div>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>{cert.category || 'Professional'}</div>
-              <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.3 }}>{t('common.language') === 'ru' ? cert.examTitleRu : cert.examTitle}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>{safeText(cert.category, 'Professional')}</div>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.3 }}>{title}</div>
             </div>
           </div>
           <span style={{ fontSize: 10, padding: '4px 8px', borderRadius: 99, background: `${st.color}15`, border: `1px solid ${st.color}30`, color: st.color, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -315,38 +429,49 @@ function CertificateCardView({ cert, onView, onDownload, isDownloading }: {
           </span>
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>{cert.holderName}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>{safeText(cert.holderName, 'Xodim')}</div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ct(t, 'certifications.score')}</div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: cert.color || '#3b82f6' }}>{cert.score}%</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: primaryColor }}>{score}%</div>
         </div>
         <div style={{ height: 5, width: '100%', background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 12 }}>
-          <div style={{ height: '100%', width: `${cert.score}%`, background: `linear-gradient(90deg, ${cert.color || '#3b82f6'}, ${cert.color || '#3b82f6'}88)`, borderRadius: 99 }} />
+          <div style={{ height: '100%', width: `${score}%`, background: `linear-gradient(90deg, ${primaryColor}, ${primaryColor}88)`, borderRadius: 99 }} />
         </div>
 
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 14, padding: '10px 12px', background: 'var(--surface-1)', borderRadius: 9, border: '1px solid var(--border-1)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span>{ct(t, 'certifications.card.issued')}</span>
-            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{new Date(cert.issuedAt).toLocaleDateString()}</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{safeDate(cert.issuedAt, '-')}</span>
           </div>
           {cert.expiresAt && (
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{ct(t, 'certifications.card.expires')}</span>
-              <span style={{ fontWeight: 700, color: cert.status === 'expired' ? '#ef4444' : cert.status === 'expiring_soon' ? '#f59e0b' : 'var(--text-secondary)' }}>
-                {new Date(cert.expiresAt).toLocaleDateString()}
-                {cert.status === 'expiring_soon' && daysLeft && daysLeft > 0 && <span style={{ fontSize: 9, marginLeft: 5 }}>({ct(t, 'certifications.expiration.days', { days: daysLeft })})</span>}
+              <span style={{ fontWeight: 700, color: computedStatus === 'expired' ? '#ef4444' : computedStatus === 'expiring_soon' ? '#f59e0b' : 'var(--text-secondary)' }}>
+                {safeDate(cert.expiresAt, '-')}
+                {computedStatus === 'expiring_soon' && daysLeft && daysLeft > 0 && <span style={{ fontSize: 9, marginLeft: 5 }}>({ct(t, 'certifications.expiration.days', { days: daysLeft })})</span>}
               </span>
+            </div>
+          )}
+          {computedStatus === 'revoked' && cert.revokeReason && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, color: '#ef4444' }}>
+              <span>{ct(t, 'certifications.revoked.reason', { reason: '' })}</span>
+              <span style={{ fontWeight: 700, textAlign: 'right', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cert.revokeReason}</span>
             </div>
           )}
         </div>
 
         <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 12, fontFamily: 'monospace', background: 'var(--surface-1)', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border-1)' }}>
-          ID: {cert.certificateId}
+          ID: {safeText(cert.certificateId, cert.id)}
         </div>
 
         <div style={{ display: 'flex', gap: 7 }}>
-          <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center', fontSize: 11, borderRadius: 9, opacity: isDownloading ? 0.7 : 1 }} onClick={() => onDownload(cert)} disabled={isDownloading}>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ flex: 1, justifyContent: 'center', fontSize: 11, borderRadius: 9, opacity: isDownloadDisabled ? 0.65 : 1 }}
+            onClick={() => computedStatus === 'revoked' ? toast.error(ct(t, 'certifications.card.revokedDownload')) : onDownload(cert)}
+            disabled={isDownloadDisabled}
+          >
             {isDownloading ? (
               <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} />
             ) : (
@@ -364,13 +489,23 @@ function CertificateCardView({ cert, onView, onDownload, isDownloading }: {
   );
 }
 
-function CertificateModal({ cert, onClose, onDownload }: {
-  cert: Certificate; onClose: () => void; onDownload: (cert: Certificate) => void;
+function CertificateModal({ cert, onClose, onDownload, onShare }: {
+  cert: Certificate; onClose: () => void; onDownload: (cert: Certificate) => void; onShare: (cert: Certificate, url: string) => void;
 }) {
-  const { t } = useTranslation();
-  const verifyUrl = `${window.location.protocol}//${window.location.host}/verify-certificate?id=${cert.certificateId}`;
-  const primaryColor = cert.color || '#d4af37';
-  const examTitle = t('common.language') === 'ru' ? (cert.examTitleRu || cert.examTitle) : cert.examTitle;
+  const { t, i18n } = useTranslation();
+  const isRu = i18n.language === 'ru';
+  const verifyUrl = getVerifyUrl(safeText(cert.certificateId || cert.id));
+  const primaryColor = safeColor(cert.color, '#d4af37');
+  const examTitle = getCertificateTitle(cert, isRu);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    makeQrDataUrl(verifyUrl, 84)
+      .then((url) => { if (active) setQrDataUrl(url); })
+      .catch(() => { if (active) setQrDataUrl(''); });
+    return () => { active = false; };
+  }, [verifyUrl]);
 
   return (
     <div className="cert-preview-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -381,37 +516,41 @@ function CertificateModal({ cert, onClose, onDownload }: {
             <div className="cert-card-inner">
               <div className="corner-ornament corner-tl" /><div className="corner-ornament corner-tr" />
               <div className="corner-ornament corner-bl" /><div className="corner-ornament corner-br" />
-              <div style={{ position: 'absolute', top: 11, right: 17, fontFamily: 'monospace', fontSize: '8px', color: '#aa7c11', fontWeight: 'bold' }}>№ {cert.certificateId}</div>
+              <div style={{ position: 'absolute', top: 11, right: 17, fontFamily: 'monospace', fontSize: '8px', color: '#aa7c11', fontWeight: 'bold' }}>№ {safeText(cert.certificateId)}</div>
               <div className="cert-modal-logo">AGMK LMS</div>
               <h2 className="cert-modal-header">{ct(t, 'certifications.pdf.certTitle')}</h2>
               <div className="cert-modal-sub">{ct(t, 'certifications.pdf.completed') || 'MUVAFFAQIYATLI YAKUNLANGAN'}</div>
               <div className="cert-modal-holder-label">{ct(t, 'certifications.pdf.holderLabel')}</div>
-              <div className="cert-modal-holder-name">{cert.holderName}</div>
-              <div className="cert-modal-description" dangerouslySetInnerHTML={{
-                __html: ct(t, 'certifications.pdf.desc', {
-                  title: `<strong>"${examTitle}"</strong>`,
-                  score: `<strong>${cert.score}%</strong>`
-                })
-              }} />
+              <div className="cert-modal-holder-name">{safeText(cert.holderName, 'Xodim')}</div>
+              <div className="cert-modal-description">
+                {ct(t, 'certifications.pdf.desc', {
+                  title: `"${examTitle}"`,
+                  score: `${Number(cert.score || 0)}%`,
+                })}
+              </div>
               <div className="cert-modal-meta-row">
                 <div className="cert-meta-col">
-                  <div className="cert-meta-val">{new Date(cert.issuedAt).toLocaleDateString()}</div>
+                  <div className="cert-meta-val">{safeDate(cert.issuedAt, '-')}</div>
                   <div className="cert-meta-lbl">{ct(t, 'certifications.pdf.issued')}</div>
                 </div>
                 <div className="cert-meta-col">
-                  <div style={{ fontFamily: 'Georgia', fontSize: 16, color: '#1e3a8a', fontStyle: 'italic' }}>{cert.trainerName || 'AGMK LMS'}</div>
+                  <div style={{ fontFamily: 'Georgia', fontSize: 16, color: '#1e3a8a', fontStyle: 'italic' }}>{safeText(cert.trainerName, 'AGMK LMS')}</div>
                   <div className="cert-meta-lbl">{ct(t, 'certifications.pdf.authorizer')}</div>
                 </div>
                 <div className="cert-meta-col">
-                  <div className="cert-meta-val">{cert.expiresAt ? new Date(cert.expiresAt).toLocaleDateString() : ct(t, 'certifications.pdf.unlimited')}</div>
+                  <div className="cert-meta-val">{cert.expiresAt ? safeDate(cert.expiresAt, '-') : ct(t, 'certifications.pdf.unlimited')}</div>
                   <div className="cert-meta-lbl">{ct(t, 'certifications.pdf.expires')}</div>
                 </div>
               </div>
               <div style={{ position: 'absolute', bottom: 16, left: 22, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=52&data=${encodeURIComponent(verifyUrl)}`} width="52" height="52" style={{ border: `1px solid ${primaryColor}`, padding: 2, background: '#fff' }} />
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} width="52" height="52" style={{ border: `1px solid ${primaryColor}`, padding: 2, background: '#fff' }} />
+                ) : (
+                  <div style={{ width: 58, height: 58, border: `1px solid ${primaryColor}`, padding: 2, background: '#fff' }} />
+                )}
                 <div>
                   <div style={{ fontWeight: 'bold', color: '#aa7c11', fontSize: '8px', letterSpacing: '0.5px' }}>{ct(t, 'certifications.pdf.verify')}</div>
-                  <div style={{ fontSize: '7px', color: '#64748b', fontFamily: 'monospace' }}>{cert.certificateId}</div>
+                  <div style={{ fontSize: '7px', color: '#64748b', fontFamily: 'monospace' }}>{safeText(cert.certificateId)}</div>
                 </div>
               </div>
               <div className="cert-modal-badge-seal">
@@ -425,10 +564,10 @@ function CertificateModal({ cert, onClose, onDownload }: {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => onDownload(cert)} style={{ background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', gap: 7 }}>
+            <button className="btn btn-primary" onClick={() => onDownload(cert)} disabled={getComputedStatus(cert) === 'revoked'} style={{ background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', gap: 7 }}>
               <Download size={14} /> {t('common.download')} PDF
             </button>
-            <button className="btn btn-secondary" onClick={() => { navigator.clipboard?.writeText(verifyUrl); }}>
+            <button className="btn btn-secondary" onClick={() => onShare(cert, verifyUrl)}>
               <Share2 size={14} /> {t('common.share')}
             </button>
             <button className="btn btn-ghost" onClick={onClose}>{t('common.close')}</button>
@@ -440,31 +579,76 @@ function CertificateModal({ cert, onClose, onDownload }: {
 }
 
 // ─── TAB: My Certificates ──────────────────────────────────────────
-function TabMyCerts({ certs, isRu, loading }: { certs: Certificate[]; isRu: boolean; loading: boolean }) {
+function TabMyCerts({
+  certs,
+  isRu,
+  loading,
+  error,
+  onRetry,
+}: {
+  certs: Certificate[];
+  isRu: boolean;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<'all' | 'active' | 'expiring_soon' | 'expired'>('all');
+  const [filter, setFilter] = useState<CertificateFilter>('all');
   const [search, setSearch] = useState('');
   const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const { trackAction } = useCertificateStore();
 
+  const normalizedSearch = search.trim().toLowerCase();
   const filtered = certs
-    .filter(c => filter === 'all' || c.status === filter)
-    .filter(c => !search || (isRu ? c.examTitleRu : c.examTitle).toLowerCase().includes(search.toLowerCase()) || c.certificateId.toLowerCase().includes(search.toLowerCase()));
+    .filter(c => filter === 'all' || getComputedStatus(c) === filter)
+    .filter(c => {
+      if (!normalizedSearch) return true;
+      return [
+        getCertificateTitle(c, isRu),
+        c.examTitle,
+        c.examTitleRu,
+        c.certificateId,
+        c.holderName,
+        c.category,
+      ].some((value) => safeText(value).toLowerCase().includes(normalizedSearch));
+    });
 
   const counts = {
-    active: certs.filter(c => c.status === 'active').length,
-    expiring_soon: certs.filter(c => c.status === 'expiring_soon').length,
-    expired: certs.filter(c => c.status === 'expired').length,
+    active: certs.filter(c => getComputedStatus(c) === 'active').length,
+    expiring_soon: certs.filter(c => getComputedStatus(c) === 'expiring_soon').length,
+    expired: certs.filter(c => getComputedStatus(c) === 'expired').length,
+    revoked: certs.filter(c => getComputedStatus(c) === 'revoked').length,
   };
 
   const handleDownload = async (cert: Certificate) => {
+    if (getComputedStatus(cert) === 'revoked') {
+      toast.error(ct(t, 'certifications.card.revokedDownload'));
+      return;
+    }
     setDownloading(cert.id);
     try {
       await printCertificate(cert, t, isRu);
       await trackAction(cert.id, 'download');
+    } catch {
+      toast.error(ct(t, 'certifications.card.downloadFailed'));
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handleView = async (cert: Certificate) => {
+    setPreviewCert(cert);
+    await trackAction(cert.id, 'view');
+  };
+
+  const handleShare = async (cert: Certificate, url: string) => {
+    try {
+      await navigator.clipboard?.writeText(url);
+      await trackAction(cert.id, 'share');
+      toast.success(ct(t, 'certifications.card.shareCopied'));
+    } catch {
+      toast.error(ct(t, 'certifications.card.shareFailed'));
     }
   };
 
@@ -475,9 +659,20 @@ function TabMyCerts({ certs, isRu, loading }: { certs: Certificate[]; isRu: bool
     </div>
   );
 
+  if (error) return (
+    <div style={{ textAlign: 'center', padding: '64px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+      <AlertCircle size={38} style={{ marginBottom: 14, color: '#ef4444' }} />
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#ef4444', marginBottom: 6 }}>{ct(t, 'certifications.kpiLoadError')}</div>
+      <div style={{ fontSize: 12, marginBottom: 16 }}>{error}</div>
+      <button type="button" className="btn btn-secondary" onClick={onRetry}>
+        <RefreshCw size={14} /> {ct(t, 'certifications.retry')}
+      </button>
+    </div>
+  );
+
   return (
     <>
-      {previewCert && <CertificateModal cert={previewCert} onClose={() => setPreviewCert(null)} onDownload={handleDownload} />}
+      {previewCert && <CertificateModal cert={previewCert} onClose={() => setPreviewCert(null)} onDownload={handleDownload} onShare={handleShare} />}
 
       {/* Search + Filter */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -498,6 +693,7 @@ function TabMyCerts({ certs, isRu, loading }: { certs: Certificate[]; isRu: bool
           { key: 'active', labelKey: 'certifications.filter.active', count: counts.active, color: '#22c55e' },
           { key: 'expiring_soon', labelKey: 'certifications.filter.expiring_soon', count: counts.expiring_soon, color: '#f59e0b' },
           { key: 'expired', labelKey: 'certifications.filter.expired', count: counts.expired, color: '#ef4444' },
+          { key: 'revoked', labelKey: 'certifications.filter.revoked', count: counts.revoked, color: '#6b7280' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setFilter(tab.key as any)} style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px',
@@ -518,11 +714,11 @@ function TabMyCerts({ certs, isRu, loading }: { certs: Certificate[]; isRu: bool
           <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
             <Trophy size={44} style={{ opacity: 0.2, marginBottom: 14, color: 'var(--text-muted)' }} />
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{ct(t, 'certifications.noCertsTitle')}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ct(t, 'certifications.noCertsDesc')}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{certs.length === 0 ? ct(t, 'certifications.kpiEmpty') : ct(t, 'certifications.card.searchEmpty')}</div>
           </div>
         ) : filtered.map(cert => (
           <CertificateCardView key={cert.id} cert={cert}
-            onView={() => setPreviewCert(cert)}
+            onView={handleView}
             onDownload={handleDownload}
             isDownloading={downloading === cert.id}
           />
@@ -537,18 +733,34 @@ function TabVerification() {
   const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
   const [inputId, setInputId] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<VerifyResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const normalizedInput = normalizeCertificateLookup(inputId);
+  const canSubmit = Boolean(normalizedInput) && !loading;
 
   const handleVerify = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputId.trim()) return;
+    const lookupId = normalizeCertificateLookup(inputId);
+    if (!lookupId) {
+      setResult(null);
+      setError(ct(t, 'certifications.verification.emptyInput'));
+      return;
+    }
+    if (!isCertificateLookupValid(lookupId)) {
+      setResult(null);
+      setError(ct(t, 'certifications.verification.invalidInput'));
+      return;
+    }
     setLoading(true); setError(''); setResult(null);
     try {
       const { verifyCertificate } = await import('@/api/certificates');
-      const data = await verifyCertificate(inputId.trim());
+      const data = await verifyCertificate(lookupId);
+      setInputId(lookupId);
       setResult(data);
+      if (!data.valid && !data.certificate) {
+        setError(data.message || ct(t, 'certifications.verification.notFound'));
+      }
     } catch {
       setError(ct(t, 'certifications.verification.error'));
     } finally {
@@ -556,7 +768,9 @@ function TabVerification() {
     }
   };
 
-  const isValid = result?.valid;
+  const isValid = Boolean(result?.valid);
+  const resultCert = result?.certificate;
+  const statusLabel = result?.status ? ct(t, `certifications.statusMap.${result.status}`) : '';
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -577,10 +791,12 @@ function TabVerification() {
             <input
               value={inputId} onChange={e => setInputId(e.target.value)}
               placeholder={ct(t, 'certifications.verification.placeholder')}
+              autoCapitalize="characters"
+              spellCheck={false}
               style={{ width: '100%', height: 44, paddingLeft: 38, paddingRight: 12, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'monospace' }}
             />
           </div>
-          <button type="submit" className="btn btn-primary" disabled={loading} style={{ minWidth: 120, background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }}>
+          <button type="submit" className="btn btn-primary" disabled={!canSubmit} style={{ minWidth: 120, background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', opacity: canSubmit ? 1 : 0.65 }}>
             {loading ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <><Shield size={14} /> {ct(t, 'certifications.verification.btn')}</>}
           </button>
         </div>
@@ -606,27 +822,27 @@ function TabVerification() {
             </div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 900, color: isValid ? '#22c55e' : '#ef4444' }}>{isValid ? ct(t, 'certifications.verification.valid') : ct(t, 'certifications.verification.invalid')}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ct(t, 'certifications.verification.status', { status: ct(t, `certifications.statusMap.${result.status}`) })}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ct(t, 'certifications.verification.status', { status: statusLabel })}</div>
             </div>
           </div>
-          {result.certificate && (
+          {resultCert && (
             <div style={{ padding: '20px 24px' }}>
               {[
-                { label: ct(t, 'certifications.verification.holder'), value: result.certificate.holderName },
-                { label: ct(t, 'certifications.verification.course'), value: isRu ? result.certificate.examTitleRu : result.certificate.examTitle },
-                { label: ct(t, 'certifications.verification.score'), value: `${result.certificate.score}%` },
-                { label: ct(t, 'certifications.verification.issued'), value: new Date(result.certificate.issuedAt).toLocaleDateString() },
-                { label: ct(t, 'certifications.verification.expires'), value: result.certificate.expiresAt ? new Date(result.certificate.expiresAt).toLocaleDateString() : ct(t, 'certifications.pdf.unlimited') },
-                { label: 'ID', value: result.certificate.certificateId },
+                { label: ct(t, 'certifications.verification.holder'), value: safeText(resultCert.holderName, '-') },
+                { label: ct(t, 'certifications.verification.course'), value: safeText(isRu ? resultCert.examTitleRu || resultCert.examTitle : resultCert.examTitle || resultCert.examTitleRu, '-') },
+                { label: ct(t, 'certifications.verification.score'), value: `${Number(resultCert.score || 0)}%` },
+                { label: ct(t, 'certifications.verification.issued'), value: safeDate(resultCert.issuedAt, '-') },
+                { label: ct(t, 'certifications.verification.expires'), value: resultCert.expiresAt ? safeDate(resultCert.expiresAt, '-') : ct(t, 'certifications.pdf.unlimited') },
+                { label: 'ID', value: safeText(resultCert.certificateId, '-') },
               ].map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 5 ? '1px solid var(--border-1)' : 'none', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{row.value}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right', marginLeft: 16 }}>{row.value}</span>
                 </div>
               ))}
-              {result.certificate.revokeReason && (
+              {resultCert.revokeReason && (
                 <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(239,68,68,0.06)', borderRadius: 10, fontSize: 12, color: '#ef4444' }}>
-                  <strong>{ct(t, 'certifications.verification.revokeReasonLabel') || (isRu ? 'Причина отзыва: ' : 'Bekor qilish sababi: ')}</strong>{result.certificate.revokeReason}
+                  <strong>{ct(t, 'certifications.verification.revokeReasonLabel')}</strong>{resultCert.revokeReason}
                 </div>
               )}
             </div>
@@ -640,27 +856,66 @@ function TabVerification() {
 // ─── TAB: Analytics ───────────────────────────────────────────────
 function TabAnalytics() {
   const { t } = useTranslation();
-  const { analytics, analyticsLoading, loadAnalytics } = useCertificateStore();
+  const { analytics, analyticsLoading, analyticsLoaded, analyticsError, loadAnalytics } = useCertificateStore();
 
-  useEffect(() => { loadAnalytics(); }, []);
+  useEffect(() => { loadAnalytics(); }, [loadAnalytics]);
 
   if (analyticsLoading) return (
     <div style={{ textAlign: 'center', padding: '80px 20px' }}>
       <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6', marginBottom: 16 }} />
+      <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{ct(t, 'certifications.kpiLoading')}</div>
     </div>
   );
 
-  if (!analytics) return null;
+  if (analyticsError) return (
+    <div style={{ textAlign: 'center', padding: '64px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+      <AlertCircle size={38} style={{ marginBottom: 14, color: '#ef4444' }} />
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#ef4444', marginBottom: 6 }}>{ct(t, 'certifications.analytics.loadError')}</div>
+      <div style={{ fontSize: 12, marginBottom: 16 }}>{analyticsError}</div>
+      <button type="button" className="btn btn-secondary" onClick={() => void loadAnalytics()}>
+        <RefreshCw size={14} /> {ct(t, 'certifications.retry')}
+      </button>
+    </div>
+  );
+
+  if (!analytics) {
+    return analyticsLoaded ? (
+      <div style={{ textAlign: 'center', padding: '64px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+        <BarChart3 size={42} style={{ opacity: 0.3, marginBottom: 14 }} />
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{ct(t, 'certifications.analytics.empty')}</div>
+      </div>
+    ) : null;
+  }
 
   const { totals, byDepartment, byCategory, monthlyTrend, avgScore } = analytics;
+  const safeTotals = {
+    total: Number(totals?.total || 0),
+    active: Number(totals?.active || 0),
+    expiring: Number(totals?.expiring || 0),
+    expired: Number(totals?.expired || 0),
+    revoked: Number(totals?.revoked || 0),
+  };
+  const safeAvgScore = Math.min(100, Math.max(0, Number(avgScore || 0)));
+  const safeMonthlyTrend = Array.isArray(monthlyTrend) ? monthlyTrend.map((row) => ({
+    month: safeText(row.month, '-'),
+    count: Number(row.count || 0),
+  })) : [];
+  const safeByCategory = Array.isArray(byCategory)
+    ? byCategory.filter((row) => Number(row.count || 0) > 0).map((row) => ({ name: safeText(row.name, '-'), count: Number(row.count || 0) }))
+    : [];
+  const safeByDepartment = Array.isArray(byDepartment)
+    ? byDepartment.filter((row) => Number(row.count || 0) > 0).map((row) => ({ name: safeText(row.name, '-'), count: Number(row.count || 0) }))
+    : [];
+  const safeSoonExpiring = Array.isArray(analytics.soonExpiring) ? analytics.soonExpiring : [];
+  const hasAnyData = safeTotals.total > 0;
 
   const kpiCards = [
-    { label: ct(t, 'certifications.analytics.total'), value: totals.total, color: '#3b82f6', icon: Award },
-    { label: ct(t, 'certifications.analytics.active'), value: totals.active, color: '#22c55e', icon: CheckCircle },
-    { label: ct(t, 'certifications.analytics.expiring'), value: totals.expiring, color: '#f59e0b', icon: Clock },
-    { label: ct(t, 'certifications.analytics.expired'), value: totals.expired, color: '#ef4444', icon: AlertCircle },
-    { label: ct(t, 'certifications.analytics.revoked'), value: totals.revoked, color: '#6b7280', icon: Ban },
-    { label: ct(t, 'certifications.analytics.avgScore'), value: `${avgScore}%`, color: '#8b5cf6', icon: Star },
+    { label: ct(t, 'certifications.analytics.total'), value: safeTotals.total, color: '#3b82f6', icon: Award },
+    { label: ct(t, 'certifications.analytics.active'), value: safeTotals.active, color: '#22c55e', icon: CheckCircle },
+    { label: ct(t, 'certifications.analytics.expiring'), value: safeTotals.expiring, color: '#f59e0b', icon: Clock },
+    { label: ct(t, 'certifications.analytics.expired'), value: safeTotals.expired, color: '#ef4444', icon: AlertCircle },
+    { label: ct(t, 'certifications.analytics.revoked'), value: safeTotals.revoked, color: '#6b7280', icon: Ban },
+    { label: ct(t, 'certifications.analytics.avgScore'), value: `${safeAvgScore}%`, color: '#8b5cf6', icon: Star },
   ];
 
   return (
@@ -680,6 +935,13 @@ function TabAnalytics() {
         ))}
       </div>
 
+      {!hasAnyData && (
+        <div style={{ textAlign: 'center', padding: '44px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 18, border: '1px solid var(--border-1)' }}>
+          <BarChart3 size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+          <div style={{ fontSize: 14, fontWeight: 800 }}>{ct(t, 'certifications.analytics.empty')}</div>
+        </div>
+      )}
+
       {/* Charts Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         {/* Monthly Trend */}
@@ -687,15 +949,21 @@ function TabAnalytics() {
           <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <TrendingUp size={15} color="#3b82f6" />{ct(t, 'certifications.analytics.trend')}
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }} />
-              <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: '#3b82f6' }} />
-            </LineChart>
-          </ResponsiveContainer>
+          {safeMonthlyTrend.some((row) => row.count > 0) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={safeMonthlyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }} />
+                <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: '#3b82f6' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+              {ct(t, 'certifications.analytics.noChartData')}
+            </div>
+          )}
         </div>
 
         {/* By Category Pie */}
@@ -703,28 +971,50 @@ function TabAnalytics() {
           <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <BarChart3 size={15} color="#8b5cf6" />{ct(t, 'certifications.analytics.category')}
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={byCategory} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, percent }) => `${name} ${typeof percent === 'number' ? (percent * 100).toFixed(0) : 0}%`} labelLine={false}>
-                {byCategory.map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
+          {safeByCategory.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={safeByCategory} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, percent }) => `${name} ${typeof percent === 'number' ? (percent * 100).toFixed(0) : 0}%`} labelLine={false}>
+                  {safeByCategory.map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+              {ct(t, 'certifications.analytics.noChartData')}
+            </div>
+          )}
         </div>
       </div>
 
+      {safeSoonExpiring.length > 0 && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock size={15} color="#f59e0b" />{ct(t, 'certifications.analytics.soonExpiring')}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {safeSoonExpiring.slice(0, 5).map((cert) => (
+              <div key={cert.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeText(cert.examTitle, safeText(cert.certificateId, '-'))}</span>
+                <span style={{ color: '#f59e0b', flexShrink: 0 }}>{cert.expiresAt ? safeDate(cert.expiresAt, '-') : '-'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* By Department Bar */}
-      {byDepartment.length > 0 && (
+      {safeByDepartment.length > 0 && (
         <div className="card" style={{ padding: 20 }}>
           <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <BarChart3 size={15} color="#22c55e" />{ct(t, 'certifications.analytics.department')}
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={byDepartment.slice(0, 8)}>
+            <BarChart data={safeByDepartment.slice(0, 8)}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} allowDecimals={false} />
               <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border-1)', borderRadius: 10, fontSize: 12 }} />
               <Bar dataKey="count" fill="#22c55e" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -802,18 +1092,45 @@ function TabTemplates() {
 }
 
 // ─── TAB: Expiration ──────────────────────────────────────────────
-function TabExpiration({ certs }: { certs: Certificate[] }) {
+function TabExpiration({
+  certs,
+  loading,
+  error,
+  onRetry,
+}: {
+  certs: Certificate[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const isRu = i18n.language === 'ru';
-  const expiring = certs.filter(c => isExpiringByDate(c))
-    .sort((a, b) => new Date(a.expiresAt!).getTime() - new Date(b.expiresAt!).getTime());
-  const expired = certs.filter(c => c.status !== 'revoked' && (c.status === 'expired' || isExpiredByDate(c)))
-    .sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+  const now = Date.now();
+  const datedCerts = certs.filter(c => c.status !== 'revoked' && dateTime(c.expiresAt) !== null);
+  const expiring = datedCerts
+    .filter(c => getComputedStatus(c, now) === 'expiring_soon')
+    .sort((a, b) => (dateTime(a.expiresAt) ?? Number.MAX_SAFE_INTEGER) - (dateTime(b.expiresAt) ?? Number.MAX_SAFE_INTEGER));
+  const expired = datedCerts
+    .filter(c => getComputedStatus(c, now) === 'expired')
+    .sort((a, b) => (dateTime(b.expiresAt) ?? 0) - (dateTime(a.expiresAt) ?? 0));
+  const hasTrackedDates = expiring.length + expired.length > 0;
 
   const ExpirationRow = ({ cert }: { cert: Certificate }) => {
-    const daysLeft = cert.expiresAt ? Math.ceil((new Date(cert.expiresAt).getTime() - Date.now()) / 86400000) : null;
-    const isExpired = cert.status === 'expired' || isExpiredByDate(cert);
+    const daysLeft = daysUntil(cert.expiresAt, now);
+    const absDays = daysLeft === null ? null : Math.abs(daysLeft);
+    const isExpired = getComputedStatus(cert, now) === 'expired';
     const color = isExpired ? '#ef4444' : daysLeft !== null && daysLeft <= 7 ? '#ef4444' : '#f59e0b';
+    const dateLabel = safeDate(cert.expiresAt, ct(t, 'certifications.expiration.noDate'));
+    const title = getCertificateTitle(cert, isRu);
+    const holder = safeText(cert.holderName, 'Xodim');
+    const certId = safeText(cert.certificateId, cert.id);
+    const daysLabel = isExpired
+      ? absDays && absDays > 0
+        ? ct(t, 'certifications.expiration.overdueDays', { days: absDays })
+        : ct(t, 'certifications.expiration.expiredLabel')
+      : daysLeft === 0
+        ? ct(t, 'certifications.expiration.today')
+        : ct(t, 'certifications.expiration.days', { days: daysLeft ?? 0 });
 
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface-1)', border: `1px solid ${color}20`, borderRadius: 14, marginBottom: 10 }}>
@@ -822,22 +1139,53 @@ function TabExpiration({ certs }: { certs: Certificate[] }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {isRu ? cert.examTitleRu : cert.examTitle}
+            {title}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{cert.holderName} • {cert.certificateId}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{holder} • {certId}</div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 900, color, letterSpacing: '-0.5px' }}>
-            {isExpired ? ct(t, 'certifications.expiration.expiredLabel') : ct(t, 'certifications.expiration.days', { days: daysLeft ?? 0 })}
+            {daysLabel}
           </div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{cert.expiresAt ? new Date(cert.expiresAt).toLocaleDateString() : ''}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{dateLabel}</div>
         </div>
       </div>
     );
   };
 
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '70px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+        <RefreshCw size={34} style={{ animation: 'spin 1s linear infinite', marginBottom: 14, color: '#3b82f6' }} />
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{ct(t, 'certifications.loading')}</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: '56px 20px', color: 'var(--text-muted)', background: 'rgba(239,68,68,0.04)', borderRadius: 20, border: '1px solid rgba(239,68,68,0.15)' }}>
+        <AlertCircle size={38} style={{ marginBottom: 14, color: '#ef4444' }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>{ct(t, 'certifications.expiration.loadError')}</div>
+        <div style={{ fontSize: 12, marginBottom: 18 }}>{safeText(error)}</div>
+        <button className="btn btn-primary btn-sm" onClick={onRetry} style={{ gap: 8 }}>
+          <RefreshCw size={14} />{ct(t, 'certifications.retry')}
+        </button>
+      </div>
+    );
+  }
+
+  if (!hasTrackedDates) {
+    return (
+      <div style={{ textAlign: 'center', padding: '70px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+        <CheckCircle size={42} style={{ opacity: 0.35, marginBottom: 14, color: '#22c55e' }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{ct(t, 'certifications.expiration.empty')}</div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+    <div className="cert-expiration-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
       <div>
         <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: '#f59e0b' }}>
           <AlertTriangle size={16} />{ct(t, 'certifications.expiration.soon', { count: expiring.length })}
@@ -912,10 +1260,18 @@ function TabRevoked() {
 }
 
 function TabHistory() {
-  const { t } = useTranslation();
-  const { downloadHistory, loadDownloadHistory } = useCertificateStore();
+  const { t, i18n } = useTranslation();
+  const isRu = i18n.language === 'ru';
+  const {
+    downloadHistory,
+    downloadHistoryLoading,
+    downloadHistoryTotal,
+    downloadHistoryPage,
+    downloadHistoryLimit,
+    loadDownloadHistory
+  } = useCertificateStore();
 
-  useEffect(() => { loadDownloadHistory(); }, []);
+  useEffect(() => { loadDownloadHistory(1, 10); }, []);
 
   const actionColors: Record<string, string> = {
     download: '#3b82f6',
@@ -923,6 +1279,31 @@ function TabHistory() {
     share: '#22c55e',
     view: '#f59e0b',
   };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return new Intl.DateTimeFormat(isRu ? 'ru-RU' : 'uz-UZ', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    }).format(date);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > Math.ceil(downloadHistoryTotal / downloadHistoryLimit)) return;
+    loadDownloadHistory(newPage, downloadHistoryLimit);
+  };
+
+  const totalPages = Math.ceil(downloadHistoryTotal / downloadHistoryLimit);
+
+  if (downloadHistoryLoading && downloadHistory.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '70px 20px', color: 'var(--text-muted)', background: 'var(--surface-1)', borderRadius: 20, border: '1px solid var(--border-1)' }}>
+        <RefreshCw size={34} style={{ animation: 'spin 1s linear infinite', marginBottom: 14, color: '#3b82f6' }} />
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{ct(t, 'certifications.loading')}</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -934,25 +1315,53 @@ function TabHistory() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {downloadHistory.map((h: any, i: number) => {
+          {downloadHistory.map((h: any) => {
             const color = actionColors[h.action] || '#6b7280';
+            const title = isRu ? h.certificateTitleRu : h.certificateTitle;
             return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 12 }}>
+              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', borderRadius: 12 }}>
                 <div style={{ width: 34, height: 34, borderRadius: 9, background: `${color}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {h.action === 'download' ? <Download size={14} color={color} /> : h.action === 'share' ? <Share2 size={14} color={color} /> : <Printer size={14} color={color} />}
+                  {h.action === 'download' ? <Download size={14} color={color} /> : h.action === 'share' ? <Share2 size={14} color={color} /> : h.action === 'view' ? <Eye size={14} color={color} /> : <Printer size={14} color={color} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color }}>{t(`certifications.history.actions.${h.action}`, { defaultValue: h.action })}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color }}>{t(`certifications.history.actions.${h.action}`, { defaultValue: h.action.toUpperCase() })}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {h.certificateId || h.id} {h.ipAddress ? `• ${h.ipAddress}` : ''}
+                    {h.certificateDisplayId} • {h.holderName} {h.ipAddress ? `• IP: ${h.ipAddress}` : ''}
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {h.downloadedAt ? new Date(h.downloadedAt).toLocaleString() : ''}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>
+                  {formatDate(h.downloadedAt)}
                 </div>
               </div>
             );
           })}
+
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => handlePageChange(downloadHistoryPage - 1)}
+                disabled={downloadHistoryPage === 1 || downloadHistoryLoading}
+                style={{ borderRadius: 10 }}
+              >
+                {t('common.prev', 'Oldingi')}
+              </button>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {downloadHistoryPage} / {totalPages}
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => handlePageChange(downloadHistoryPage + 1)}
+                disabled={downloadHistoryPage === totalPages || downloadHistoryLoading}
+                style={{ borderRadius: 10 }}
+              >
+                {t('common.next', 'Keyingi')}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1101,11 +1510,11 @@ export default function Certifications() {
 
       {/* ─── Tab Content ──────────────────────────────────────── */}
       <div>
-        {activeTab === 'my' && <TabMyCerts certs={displayCerts} isRu={isRu} loading={loading} />}
+        {activeTab === 'my' && <TabMyCerts certs={displayCerts} isRu={isRu} loading={loading} error={error} onRetry={() => void loadMyCerts()} />}
         {activeTab === 'verification' && <TabVerification />}
         {activeTab === 'analytics' && <TabAnalytics />}
         {activeTab === 'templates' && isAdmin && <TabTemplates />}
-        {activeTab === 'expiration' && <TabExpiration certs={displayCerts} />}
+        {activeTab === 'expiration' && <TabExpiration certs={displayCerts} loading={loading} error={error} onRetry={() => void loadMyCerts()} />}
         {activeTab === 'revoked' && isAdmin && <TabRevoked />}
         {activeTab === 'history' && <TabHistory />}
       </div>

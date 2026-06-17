@@ -1,25 +1,29 @@
 import toast from 'react-hot-toast';
 
-export const customConfirm = (message: string, onConfirm: () => void) => {
+export const customConfirm = (
+  message: string,
+  onConfirm: () => void,
+  options?: { cancelLabel?: string; confirmLabel?: string },
+) => {
   toast((t) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{message}</span>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button 
-          className="btn btn-secondary btn-sm" 
+        <button
+          className="btn btn-secondary btn-sm"
           onClick={() => toast.dismiss(t.id)}
         >
-          Bekor qilish
+          {options?.cancelLabel || 'Bekor qilish'}
         </button>
-        <button 
-          className="btn btn-primary btn-sm" 
+        <button
+          className="btn btn-primary btn-sm"
           style={{ background: 'var(--red-500)', borderColor: 'var(--red-500)' }}
           onClick={() => {
             toast.dismiss(t.id);
             onConfirm();
           }}
         >
-          Tasdiqlash
+          {options?.confirmLabel || 'Tasdiqlash'}
         </button>
       </div>
     </div>

@@ -32,6 +32,7 @@ const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 const SecurityDashboardPage = lazy(() => import('@/pages/SecurityDashboardPage'));
 const AdminSecurityPage = lazy(() => import('@/pages/AdminSecurityPage'));
+const EnterprisePage = lazy(() => import('@/pages/EnterprisePage'));
 const ComingSoon = lazy(() => import('@/pages/ComingSoon'));
 
 // Suspense Loader component
@@ -70,53 +71,53 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
     errorElement: <ErrorBoundary />,
     children: [
-      { 
-        path: 'dashboard', 
-        element: <Suspense fallback={<PageLoader />}><Dashboard /></Suspense> 
+      {
+        path: 'dashboard',
+        element: <Suspense fallback={<PageLoader />}><Dashboard /></Suspense>
       },
-      { 
-        path: 'courses', 
-        element: <Suspense fallback={<PageLoader />}><Courses /></Suspense> 
+      {
+        path: 'courses',
+        element: <Suspense fallback={<PageLoader />}><Courses /></Suspense>
       },
-      { 
-        path: 'courses/:courseId', 
-        element: <Suspense fallback={<PageLoader />}><CoursePage /></Suspense> 
+      {
+        path: 'courses/:courseId',
+        element: <Suspense fallback={<PageLoader />}><CoursePage /></Suspense>
       },
-      { 
-        path: 'mylearning', 
-        element: <Suspense fallback={<PageLoader />}><MyLearning /></Suspense> 
+      {
+        path: 'mylearning',
+        element: <Suspense fallback={<PageLoader />}><MyLearning /></Suspense>
       },
-      { 
-        path: 'assessments', 
-        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense> 
+      {
+        path: 'assessments',
+        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense>
       },
-      { 
-        path: 'exams/:examId', 
-        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense> 
+      {
+        path: 'exams/:examId',
+        element: <Suspense fallback={<PageLoader />}><ExamPage /></Suspense>
       },
-      { 
-        path: 'certifications', 
-        element: <Suspense fallback={<PageLoader />}><Certifications /></Suspense> 
+      {
+        path: 'certifications',
+        element: <Suspense fallback={<PageLoader />}><Certifications /></Suspense>
       },
-      { 
-        path: 'achievements', 
-        element: <Suspense fallback={<PageLoader />}><Achievements /></Suspense> 
+      {
+        path: 'achievements',
+        element: <Suspense fallback={<PageLoader />}><Achievements /></Suspense>
       },
-      { 
-        path: 'analytics', 
-        element: <Suspense fallback={<PageLoader />}><Analytics /></Suspense> 
+      {
+        path: 'analytics',
+        element: <Suspense fallback={<PageLoader />}><Analytics /></Suspense>
       },
-      { 
-        path: 'admin', 
+      {
+        path: 'admin',
         element: (
           <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr_manager']}>
             <Suspense fallback={<PageLoader />}><AdminPage /></Suspense>
           </ProtectedRoute>
-        ) 
+        )
       },
-      { 
-        path: 'employees', 
-        element: <Suspense fallback={<PageLoader />}><Employees /></Suspense> 
+      {
+        path: 'employees',
+        element: <Suspense fallback={<PageLoader />}><Employees /></Suspense>
       },
       { path: 'ai', element: <Suspense fallback={<PageLoader />}><AiAssistant /></Suspense> },
       { path: 'webinars', element: <Suspense fallback={<PageLoader />}><Webinars /></Suspense> },
@@ -131,6 +132,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
             <Suspense fallback={<PageLoader />}><AdminSecurityPage /></Suspense>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'enterprise',
+        element: (
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr_manager']}>
+            <Suspense fallback={<PageLoader />}><EnterprisePage /></Suspense>
           </ProtectedRoute>
         ),
       },
@@ -163,8 +172,8 @@ export const router = createBrowserRouter([
     ]
   },
   // Auth routes isolated from the main layout
-  { 
-    path: '/auth', 
+  {
+    path: '/auth',
     element: <AuthLayout />,
     children: [
       { path: 'login', element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },

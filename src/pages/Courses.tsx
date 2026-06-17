@@ -1,35 +1,11 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Filter, Clock, Users, Star, BookOpen, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/axios';
 import { useAuthStore } from '@/store/auth.store';
-
-const CATEGORIES = [
-  { id: 'IT', uz: 'IT', ru: 'IT' },
-  { id: 'Security', uz: 'Xavfsizlik', ru: 'Безопасность' },
-  { id: 'Management', uz: 'Boshqaruv', ru: 'Управление' },
-  { id: 'Finance', uz: 'Moliya', ru: 'Финансы' },
-  { id: 'Engineering', uz: 'Muhandislik', ru: 'Инженерия' },
-  { id: 'HR', uz: 'HR', ru: 'HR' },
-];
-
-const LEVELS = [
-  { id: 'Beginner', uz: "Boshlang'ich", ru: 'Начальный' },
-  { id: 'Intermediate', uz: "O'rta", ru: 'Средний' },
-  { id: 'Advanced', uz: 'Yuqori', ru: 'Продвинутый' },
-];
-
-const COLOR_PRESETS = [
-  { name: 'Red', value: '#ef4444' },
-  { name: 'Blue', value: '#3b82f6' },
-  { name: 'Purple', value: '#8b5cf6' },
-  { name: 'Orange', value: '#f59e0b' },
-  { name: 'Cyan', value: '#06b6d4' },
-  { name: 'Green', value: '#22c55e' },
-];
+import AddCourseModal from '../components/AddCourseModal';
 
 const hasPositiveNumber = (value: unknown) => {
   const parsed = Number(value);
@@ -43,7 +19,7 @@ export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const user = useAuthStore((state) => state.user);
   const canCreate =
     user?.role === 'super_admin' ||
@@ -54,31 +30,8 @@ export default function Courses() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [languageFilter, setLanguageFilter] = useState<'uz' | 'ru'>('uz');
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    cat: 'IT',
-    catRu: 'IT',
-    level: "Boshlang'ich",
-    levelRu: 'Начальный',
-    lessons: 1,
-    duration: '',
-    color: '#3b82f6',
-    instructor: '',
-    status: 'draft',
-    language: 'uz',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
 
   const isRu = i18n.language === 'ru';
-
-  useEffect(() => {
-    if (user) {
-      const name = user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'O\'qituvchi';
-      setFormData(prev => ({ ...prev, instructor: name }));
-    }
-  }, [user]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,77 +48,7 @@ export default function Courses() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [languageFilter]);
-
-  const handleCategoryChange = (catId: string) => {
-    const found = CATEGORIES.find(c => c.id === catId);
-    if (found) {
-      setFormData(prev => ({
-        ...prev,
-        cat: found.uz,
-        catRu: found.ru
-      }));
-    }
-  };
-
-  const handleLevelChange = (levelId: string) => {
-    const found = LEVELS.find(l => l.id === levelId);
-    if (found) {
-      setFormData(prev => ({
-        ...prev,
-        level: found.uz,
-        levelRu: found.ru
-      }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validation
-    const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = t('courses_page.errTitle');
-    if (!formData.description.trim()) newErrors.description = t('courses_page.errDescription');
-    if (!formData.instructor.trim()) newErrors.instructor = t('courses_page.errInstructor');
-    if (formData.lessons <= 0) newErrors.lessons = t('courses_page.errLessons');
-    if (!formData.duration.trim()) newErrors.duration = t('courses_page.errDuration');
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    
-    setErrors({});
-    setSubmitting(true);
-    
-    try {
-      const res = await apiClient.post('/courses', formData);
-      const newCreatedCourse = res.data?.data || res.data;
-      
-      const normalizedCourse = {
-        ...newCreatedCourse,
-        id: newCreatedCourse._id || newCreatedCourse.id,
-        status: newCreatedCourse.status === 'published' ? 'active' : newCreatedCourse.status
-      };
-      
-      setCourses(prev => [normalizedCourse, ...prev]);
-      setIsModalOpen(false);
-      
-      setFormData(prev => ({
-        ...prev,
-        title: '',
-        description: '',
-        lessons: 1,
-        duration: '',
-        status: 'draft',
-      }));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : (t('common.error') || 'Xatolik yuz berdi');
-      setErrors({ submit: message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  }, [languageFilter, t]);
 
   const tabs = [
     { id: 'all', label: t('courses.all') },
@@ -356,233 +239,19 @@ export default function Courses() {
       </div>
       )}
 
-      {/* Course Creation Modal */}
-      {isModalOpen && createPortal(
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: 20,
-          overflowY: 'auto'
-        }}>
-          <div className="card card-glass modal-animate" style={{
-            width: '100%',
-            maxWidth: 680,
-            background: 'var(--bg-2)',
-            border: '1px solid var(--border-3)',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
-            padding: 28,
-            position: 'relative'
-          }}>
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              style={{
-                position: 'absolute',
-                top: 20,
-                right: 20,
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                fontSize: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'color 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-            >
-              ✕
-            </button>
-
-            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Plus size={20} color="var(--blue-400)" />
-              {t('courses_page.createTitle')}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              {t('courses_page.createSubtitle')}
-            </p>
-
-            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 10, padding: 3, border: '1px solid var(--border-1)', width: 'fit-content', marginBottom: 20 }}>
-              <button 
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, language: 'uz' }))}
-                className={clsx('btn btn-sm', formData.language === 'uz' ? 'btn-primary' : 'btn-ghost')}
-                style={{ borderRadius: 6, padding: '4px 12px' }}
-              >
-                O'zbek tili
-              </button>
-              <button 
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, language: 'ru' }))}
-                className={clsx('btn btn-sm', formData.language === 'ru' ? 'btn-primary' : 'btn-ghost')}
-                style={{ borderRadius: 6, padding: '4px 12px' }}
-              >
-                Русский язык
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div className="input-group">
-                <label className="input-label">{t('courses_page.createTitleLabel', formData.language === 'ru' ? 'Название курса *' : 'Kurs nomi *')}</label>
-                <input 
-                  className="input" 
-                  placeholder={t('courses_page.createTitlePlaceholder', formData.language === 'ru' ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari')}
-                  value={formData.title}
-                  onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                />
-                {errors.title && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.title}</span>}
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">{t('courses_page.createDescLabel', formData.language === 'ru' ? 'Описание курса *' : 'Kurs tavsifi *')}</label>
-                <textarea 
-                  className="input" 
-                  rows={3}
-                  placeholder={t('courses_page.createDescPlaceholder', formData.language === 'ru' ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...')}
-                  value={formData.description}
-                  style={{ resize: 'none' }}
-                  onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                />
-                {errors.description && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.description}</span>}
-              </div>
-
-              <div className="form-grid-2" style={{ gap: 16 }}>
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.categoryLabel')}</label>
-                  <select 
-                    className="input"
-                    value={CATEGORIES.find(c => c.uz === formData.cat)?.id || 'IT'}
-                    onChange={e => handleCategoryChange(e.target.value)}
-                  >
-                    {CATEGORIES.map(c => (
-                      <option key={c.id} value={c.id}>{isRu ? c.ru : c.uz}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.levelLabel')}</label>
-                  <select 
-                    className="input"
-                    value={LEVELS.find(l => l.uz === formData.level)?.id || 'Beginner'}
-                    onChange={e => handleLevelChange(e.target.value)}
-                  >
-                    {LEVELS.map(l => (
-                      <option key={l.id} value={l.id}>{isRu ? l.ru : l.uz}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.lessonsLabel')}</label>
-                  <input 
-                    type="number"
-                    className="input"
-                    min={1}
-                    value={formData.lessons}
-                    onChange={e => setFormData(prev => ({ ...prev, lessons: parseInt(e.target.value) || 1 }))}
-                  />
-                  {errors.lessons && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.lessons}</span>}
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.durationLabel')}</label>
-                  <input 
-                    className="input"
-                    placeholder={t('courses_page.durationPlaceholder')}
-                    value={formData.duration}
-                    onChange={e => setFormData(prev => ({ ...prev, duration: e.target.value }))}
-                  />
-                  {errors.duration && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.duration}</span>}
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.instructorLabel')}</label>
-                  <input 
-                    className="input"
-                    placeholder={t('courses_page.instructorPlaceholder', 'Masalan: B. Rahimov')}
-                    value={formData.instructor}
-                    onChange={e => setFormData(prev => ({ ...prev, instructor: e.target.value }))}
-                  />
-                  {errors.instructor && <span style={{ color: 'var(--red-400)', fontSize: 12 }}>{errors.instructor}</span>}
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{t('courses_page.statusLabel')}</label>
-                  <select 
-                    className="input"
-                    value={formData.status}
-                    onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                  >
-                    <option value="draft">{t('courses_page.statusDraft')}</option>
-                    <option value="published">{t('courses_page.statusPublished')}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">{t('courses_page.colorLabel')}</label>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                  {COLOR_PRESETS.map(preset => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, color: preset.value }))}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: preset.value,
-                        border: formData.color === preset.value ? '2.5px solid #fff' : 'none',
-                        boxShadow: formData.color === preset.value ? '0 0 10px rgba(255,255,255,0.4)' : 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {formData.color === preset.value && (
-                        <span style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 10 }}>
-                {errors.submit && (
-                  <span style={{ alignSelf: 'center', marginRight: 'auto', color: 'var(--red-400)', fontSize: 12 }}>
-                    {errors.submit}
-                  </span>
-                )}
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setIsModalOpen(false)}
-                  disabled={submitting}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary"
-                  disabled={submitting}
-                >
-                  {submitting ? t('courses_page.creating') : t('courses_page.createBtn')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
+      {isModalOpen && (
+        <AddCourseModal
+          onClose={() => setIsModalOpen(false)}
+          onSuccess={(newCourse) => {
+            const normalizedCourse = {
+              ...newCourse,
+              id: newCourse._id || newCourse.id,
+              status: newCourse.status === 'published' ? 'active' : newCourse.status
+            };
+            setCourses(prev => [normalizedCourse, ...prev]);
+            setIsModalOpen(false);
+          }}
+        />
       )}
     </div>
   );

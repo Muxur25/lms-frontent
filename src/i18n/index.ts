@@ -12,7 +12,7 @@ export const initI18n = () =>
     fallbackLng: 'uz',
     supportedLngs: ['uz', 'ru'],
     backend: {
-      loadPath: '/locales/{{lng}}/translation.json?v=' + (import.meta.env?.PROD ? '1.0.3' : Date.now()),
+      loadPath: '/locales/{{lng}}/translation.json?v=' + (import.meta.env?.PROD ? '1.0.4' : Date.now()),
     },
     interpolation: { escapeValue: false },
     react: { useSuspense: false },

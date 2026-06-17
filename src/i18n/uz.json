@@ -16,12 +16,124 @@
     "notifications": "Bildirishnomalar",
     "admin": "Boshqaruv",
     "security": "Xavfsizlik",
+    "enterprise": "Korxona",
     "adminSecurity": "Admin xavfsizlik",
     "main": "ASOSIY",
     "tools": "VOSITALAR",
     "system": "TIZIM",
     "executive": "Executive BI",
     "achievements": "Yutuqlar"
+  },
+  "admin": {
+    "title": "Boshqaruv Paneli",
+    "subtitle": "AGMK LMS Enterprise • Tizim administratsiyasi",
+    "actions": {
+      "report": "Hisobot",
+      "newUser": "Yangi foydalanuvchi"
+    },
+    "tabs": {
+      "overview": "Umumiy",
+      "users": "Foydalanuvchilar",
+      "courses": "Kurslar & Testlar",
+      "analytics": "Tahlil",
+      "monitoring": "Monitoring",
+      "settings": "Sozlamalar"
+    },
+    "kpis": {
+      "totalUsers": "Jami xodimlar",
+      "activeCourses": "Faol kurslar",
+      "certificates": "Sertifikatlar",
+      "averageScore": "O'rtacha ball"
+    },
+    "kpiChange": {
+      "active": "{{count}} faol",
+      "published": "{{count}} nashrda",
+      "issued": "Jami berilgan",
+      "attempts": "{{count}} urinish",
+      "updated": "Yangilangan"
+    },
+    "overview": {
+      "systemActivity": "Tizim faolligi",
+      "lastSixMonths": "Oxirgi 6 oy"
+    },
+    "analytics": {
+      "monthlyActivity": "Foydalanuvchilar faolligi (Oylik)",
+      "departmentRatings": "Bo'limlar kesimida reytinglar"
+    },
+    "chart": {
+      "users": "A'zolar",
+      "completions": "Bitiruvlar",
+      "averageScore": "O'rtacha ball",
+      "enrolled": "Ro'yxatdan o'tganlar",
+      "usersValue": "{{value}} foydalanuvchi"
+    },
+    "insights": {
+      "title": "Tizim kuzatuvlari",
+      "lowScoreTitle": "{{dept}} bo'limida o'rtacha ball {{score}}",
+      "lowScoreSub": "Qo'shimcha trening rejasini ko'rib chiqing",
+      "activeUsersTitle": "{{count}} faol foydalanuvchi",
+      "activeUsersSub": "{{month}} oyidagi test faolligi",
+      "kpiFreshTitle": "KPI ma'lumotlari real va yangilangan",
+      "kpiFreshSub": "{{count}} ta ko'rsatkich yuklandi"
+    },
+    "loading": {
+      "kpis": "KPI ko'rsatkichlari yuklanmoqda...",
+      "monthly": "Oylik faollik yuklanmoqda...",
+      "departments": "Bo'limlar reytingi yuklanmoqda...",
+      "insights": "Kuzatuvlar tayyorlanmoqda..."
+    },
+    "empty": {
+      "kpis": "KPI ma'lumotlari hali shakllanmagan",
+      "monthly": "Oylik faollik ma'lumotlari hali yo'q",
+      "departments": "Bo'limlar kesimida reyting ma'lumotlari hali yo'q",
+      "insights": "Tahlil uchun ma'lumot yetarli emas",
+      "users": "Foydalanuvchilar topilmadi"
+    },
+    "errors": {
+      "usersLoad": "Foydalanuvchilarni yuklashda xatolik",
+      "analyticsLoad": "Analitikani yuklashda xatolik"
+    },
+    "monitoring": {
+      "title": "Imtihon monitoringi",
+      "subtitle": "Real-time anti-cheat nazorati - {{count}} ta faol sessiya",
+      "activeSessions": "Faol sessiyalar",
+      "loading": "Faol sessiyalar yuklanmoqda...",
+      "loadError": "Monitoring ma'lumotlarini yuklashda xatolik yuz berdi",
+      "detailsLoadError": "Sessiya tafsilotlarini yuklashda xatolik",
+      "searchPlaceholder": "Xodim, tabel, imtihon yoki bo'lim bo'yicha qidirish",
+      "allStatuses": "Barcha holatlar",
+      "noSessions": "Hozirda faol imtihon sessiyalari yo'q",
+      "noFilteredSessions": "Tanlangan filter bo'yicha sessiya topilmadi",
+      "liveEvents": "Jonli hodisalar",
+      "eventsCount": "{{count}} ta",
+      "waitingEvents": "Hodisalar kutilmoqda...",
+      "eventViolation": "{{type}} - urinish: {{attempt}}",
+      "eventAutoSubmit": "Avtomatik yakunlandi - {{attempt}} ({{reason}})",
+      "detailsTitle": "Sessiya tafsilotlari",
+      "employeeId": "Tabel raqami",
+      "department": "Bo'lim",
+      "position": "Lavozim",
+      "violationsHistory": "Buzilishlar tarixi",
+      "detailsLoading": "Tafsilotlar yuklanmoqda...",
+      "noViolations": "Bu sessiyada buzilishlar qayd etilmagan",
+      "table": {
+        "user": "Foydalanuvchi",
+        "exam": "Imtihon",
+        "started": "Boshlangan",
+        "duration": "Davomiylik",
+        "risk": "Risk",
+        "violations": "Buzilishlar",
+        "status": "Holat",
+        "latest": "So'nggi",
+        "actions": "Amallar"
+      },
+      "risk": {
+        "NORMAL": "XAVFSIZ",
+        "WARNING": "OGOHLANTIRISH",
+        "CRITICAL": "KRITIK",
+        "TERMINATED": "YAKUNLANDI"
+      }
+    }
   },
   "schedule": {
     "title": "Shaxsiy Jadval",
@@ -703,10 +815,52 @@
     "activeUsers": "Faol foydalanuvchilar",
     "adminUsers": "Admin rollar",
     "userSessions": "Foydalanuvchi sessiyalari",
-    "userSessionsSub": "Qidiruv, rollar va majburiy logout amallari",
+    "userSessionsSub": "Qidiruv, sessiyalar va majburiy logout amallari",
     "confirmForceLogout": "Ushbu foydalanuvchini barcha qurilmalardan chiqarib yubormoqchimisiz?",
     "forceLogoutSuccess": "Foydalanuvchi barcha qurilmalardan chiqarildi.",
-    "forceLogoutError": "Majburiy logout bajarilmadi."
+    "forceLogoutError": "Majburiy logout bajarilmadi.",
+    "sessionsLoadError": "Sessiyalarni yuklab bo'lmadi.",
+    "forceLogoutOthers": "Boshqa sessiyalarni yopish",
+    "forceLogoutSelfSuccess": "Boshqa sessiyalaringiz yopildi.",
+    "confirmForceLogoutSelf": "O'zingizdan boshqa sessiyalarni yopmoqchimisiz?",
+    "activeSessions": "Faol sessiyalar",
+    "allRoles": "Barcha rollar",
+    "sessionStatus": "Sessiyalar",
+    "lastActivity": "Oxirgi faollik",
+    "sessionCount": "{{count}} sessiya",
+    "showSessions": "Sessiyalarni ko'rish",
+    "noActiveSessions": "Faol sessiya yo'q",
+    "currentSessionProtected": "Joriy sessiya himoyalangan",
+    "roleProtected": "Bu rol himoyalangan",
+    "noSessionsDetail": "Faol sessiyalar topilmadi.",
+    "unknownBrowser": "Noma'lum brauzer",
+    "unknownOs": "Noma'lum OS",
+    "unknownIp": "Noma'lum IP",
+    "currentSession": "Joriy sessiya",
+    "processing": "Bajarilmoqda...",
+    "removeSession": "Qurilmani logout qilish",
+    "confirmRemoveSession": "Ushbu qurilma sessiyasini tugatmoqchimisiz?",
+    "removeSessionSuccess": "Qurilma sessiyasi tugatildi.",
+    "removeSessionError": "Qurilma sessiyasini tugatib bo'lmadi.",
+    "blockIp": "IP bloklash",
+    "confirmBlockIp": "{{ip}} IP manzilini bloklamoqchimisiz?",
+    "blockIpSuccess": "IP bloklandi va shu IPdagi sessiyalar yopildi.",
+    "blockIpError": "IP manzilni bloklab bo'lmadi.",
+    "ipBlockKicker": "IP nazorati",
+    "ipBlockTitle": "IP bloklash",
+    "ipBlockSubtitle": "Bloklangan IP manzildan hech bir foydalanuvchi tizimga kira olmaydi.",
+    "ipPlaceholder": "Masalan: 192.168.1.25",
+    "ipRequired": "IP manzil kiriting.",
+    "blockedIps": "Bloklangan IPlar",
+    "blockedIpCount": "{{count}} ta",
+    "blockedIpsLoadError": "Bloklangan IPlarni yuklab bo'lmadi.",
+    "noBlockedIps": "Bloklangan IP yo'q.",
+    "manualBlock": "Manual blok",
+    "unblockIp": "Blokdan chiqarish",
+    "confirmUnblockIp": "{{ip}} IP manzilini blokdan chiqarasizmi?",
+    "unblockIpSuccess": "IP blokdan chiqarildi.",
+    "unblockIpError": "IP manzilni blokdan chiqarib bo'lmadi.",
+    "panelBlock": "Admin panel orqali bloklangan"
   },
   "settings": {
     "cancel": "Bekor qilish",
@@ -1080,19 +1234,27 @@
       "active": "Faol",
       "expiring_soon": "Tugayapti",
       "expired": "Muddati o'tgan",
-      "revoked": "Bekor qilingan"
+      "revoked": "Bekor qilingan",
+      "valid": "Haqiqiy",
+      "invalid": "Topilmadi"
     },
     "card": {
       "issued": "Berilgan",
       "expires": "Amal qiladi",
       "download": "Yuklab olish",
-      "view": "Ko'rish"
+      "view": "Ko'rish",
+      "revokedDownload": "Bekor qilingan sertifikat yuklab olinmaydi",
+      "shareCopied": "Tekshirish havolasi nusxalandi",
+      "shareFailed": "Havolani nusxalab bo'lmadi",
+      "downloadFailed": "Sertifikatni yuklab bo'lmadi",
+      "searchEmpty": "Qidiruv yoki filtr bo'yicha sertifikat topilmadi."
     },
     "filter": {
       "all": "Barchasi",
       "active": "Faol",
       "expiring_soon": "Tugayapti",
-      "expired": "Muddati o'tgan"
+      "expired": "Muddati o'tgan",
+      "revoked": "Bekor qilingan"
     },
     "pdf": {
       "certTitle": "SERTIFIKAT",
@@ -1107,6 +1269,9 @@
     },
     "verification": {
       "error": "Sertifikatni tekshirishda xato yuz berdi",
+      "emptyInput": "Sertifikat ID kiriting.",
+      "invalidInput": "Sertifikat ID formati noto'g'ri.",
+      "notFound": "Sertifikat tizimda topilmadi.",
       "title": "Tekshirish markazi",
       "sub": "Darhol tekshirish uchun sertifikat ID yoki UUID kiriting",
       "placeholder": "AGMK-2026-000001 yoki UUID...",
@@ -1131,7 +1296,11 @@
       "avgScore": "O'rtacha ball",
       "trend": "Oylik trend",
       "category": "Kategoriya bo'yicha",
-      "department": "Bo'limlar bo'yicha"
+      "department": "Bo'limlar bo'yicha",
+      "loadError": "Analitikani yuklab bo'lmadi.",
+      "empty": "Sertifikat analitikasi hali shakllanmagan.",
+      "noChartData": "Diagramma uchun ma'lumot yo'q.",
+      "soonExpiring": "Tez orada tugaydigan sertifikatlar"
     },
     "templates": {
       "default": "Default",
@@ -1139,6 +1308,11 @@
     },
     "expiration": {
       "days": "{{days}} kun",
+      "overdueDays": "{{days}} kun o'tgan",
+      "today": "Bugun",
+      "noDate": "Sana yo'q",
+      "empty": "Muddat nazoratiga tushadigan sertifikatlar yo'q.",
+      "loadError": "Muddatlarni yuklab bo'lmadi.",
       "expiredLabel": "Tugagan",
       "soon": "Tez orada tugaydi ({{count}})",
       "noSoon": "Tugayotgan sertifikatlar yo'q",
@@ -1467,5 +1641,54 @@
     "trainer": "Trener",
     "executive": "Rahbar",
     "department_manager": "Bo'lim boshlig'i"
+  },
+  "examResults": {
+    "title": "Test natijalari ({{title}})",
+    "search": "Tabel yoki ism bo'yicha qidirish...",
+    "exportCsv": "Eksport (CSV)",
+    "table": {
+      "tabel": "Tabel",
+      "fullName": "FIO",
+      "score": "Natija",
+      "time": "Vaqt",
+      "date": "Sana",
+      "status": "Holat",
+      "actions": "Amallar"
+    },
+    "status": {
+      "passed": "O'tdi",
+      "failed": "Yiqildi",
+      "cancelled": "Bekor qilingan",
+      "archived": "Arxivlangan",
+      "unknown": "Noma'lum"
+    },
+    "actions": {
+      "details": "Batafsil ko'rish",
+      "addScore": "Ball qo'shish",
+      "addAttempt": "Urinish qo'shish",
+      "cancel": "Bekor qilish"
+    },
+    "modals": {
+      "addScoreTitle": "Qo'shimcha foiz (ball) qo'shish",
+      "addScoreDesc": "Agar testda xatolik ketgan bo'lsa, xodim natijasiga foiz qo'shishingiz mumkin.",
+      "scoreAmount": "Qo'shiladigan foiz (%)",
+      "addAttemptTitle": "Qo'shimcha urinish berish",
+      "addAttemptDesc": "Xodimning oldingi muvaffaqiyatsiz urinishlari arxivlanadi va yana test ishlash imkoni beriladi.",
+      "attemptAmount": "Arxivlanadigan urinishlar soni",
+      "cancelTitle": "Natijani bekor qilish",
+      "cancelDesc": "Rostdan ham ushbu natijani bekor qilmoqchimisiz? Agar o'tish balidan o'tib sertifikat olgan bo'lsa, u ham bekor qilinadi!",
+      "detailsTitle": "Natija tafsilotlari",
+      "employeeAnswer": "Xodim javobi:",
+      "correctAnswer": "To'g'ri javob:"
+    },
+    "messages": {
+      "errorLoading": "Natijalarni yuklashda xatolik yuz berdi",
+      "exporting": "Eksport qilinmoqda...",
+      "exportSuccess": "Muvaffaqiyatli yuklab olindi",
+      "exportError": "Eksport qilishda xatolik",
+      "cancelSuccess": "Natija bekor qilindi",
+      "addScoreSuccess": "Ball qo'shildi!",
+      "addAttemptSuccess": "Qo'shimcha urinish muvaffaqiyatli berildi!"
+    }
   }
 }

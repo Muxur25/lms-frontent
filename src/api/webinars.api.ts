@@ -21,4 +21,5 @@ export const webinarsApi = {
   update: (id: string, data: Partial<Webinar>) => apiClient.patch(`/webinars/${id}`, data).then(unwrap),
   delete: (id: string) => apiClient.delete(`/webinars/${id}`),
   join: (id: string) => apiClient.post(`/webinars/${id}/join`).then(unwrap),
+  leave: (id: string) => apiClient.post(`/webinars/${id}/leave`).then(unwrap),
 };

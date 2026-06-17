@@ -74,6 +74,7 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [languageFilter, setLanguageFilter] = useState<'uz' | 'ru'>('uz');
 
   const [exam, setExam] = useState<Partial<Exam> & {
     startAt?: string; endAt?: string; password?: string;
@@ -81,7 +82,9 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
     customCategory?: string;
   }>({
     title: '',
+    titleRu: '',
     description: '',
+    descriptionRu: '',
     category: '',
     customCategory: '',
     timeLimitMinutes: 60,
@@ -122,7 +125,9 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
       const isCustomCategory = examToEdit.category && !CATEGORIES.includes(examToEdit.category);
       setExam({
         title: examToEdit.title || '',
+        titleRu: examToEdit.titleRu || '',
         description: examToEdit.description || '',
+        descriptionRu: examToEdit.descriptionRu || '',
         category: isCustomCategory ? '__custom__' : (examToEdit.category || ''),
         customCategory: isCustomCategory ? examToEdit.category : '',
         timeLimitMinutes: examToEdit.timeLimitMinutes || 60,
@@ -144,7 +149,9 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
         setQuestions((examToEdit as any).questions.map((q: any) => ({
           type: q.type || 'single',
           question: q.text || q.question || '',
+          questionRu: q.questionRu || '',
           options: q.options || ['', '', '', ''],
+          optionsRu: q.optionsRu || ['', '', '', ''],
           correctAnswers: q.correctAnswers || [0],
           difficulty: q.difficulty || 'medium',
           points: q.points || 1,
@@ -158,7 +165,9 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
     {
       type: 'single',
       question: '',
+      questionRu: '',
       options: ['', '', '', ''],
+      optionsRu: ['', '', '', ''],
       correctAnswers: [0],
       difficulty: 'medium',
       points: 1,
@@ -172,7 +181,9 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
       {
         type: 'single',
         question: '',
+        questionRu: '',
         options: ['', '', '', ''],
+        optionsRu: ['', '', '', ''],
         correctAnswers: [0],
         difficulty: 'medium',
         points: 1,
@@ -187,11 +198,42 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
     setQuestions(updated);
   };
 
-  const updateOption = (qIndex: number, optIndex: number, val: string) => {
+  const updateOption = (qIndex: number, optIndex: number, val: string, isRu = false) => {
     const updated = [...questions];
-    const newOptions = [...(updated[qIndex].options || [])];
-    newOptions[optIndex] = val;
-    updated[qIndex].options = newOptions;
+    if (isRu) {
+      const newOptionsRu = [...(updated[qIndex].optionsRu || [])];
+      newOptionsRu[optIndex] = val;
+      updated[qIndex].optionsRu = newOptionsRu;
+    } else {
+      const newOptions = [...(updated[qIndex].options || [])];
+      newOptions[optIndex] = val;
+      updated[qIndex].options = newOptions;
+    }
+    setQuestions(updated);
+  };
+
+  const addOptionToQuestion = (qIndex: number) => {
+    const updated = [...questions];
+    updated[qIndex].options = [...(updated[qIndex].options || []), ''];
+    updated[qIndex].optionsRu = [...(updated[qIndex].optionsRu || []), ''];
+    setQuestions(updated);
+  };
+
+  const removeOptionFromQuestion = (qIndex: number, optIndex: number) => {
+    const updated = [...questions];
+    if ((updated[qIndex].options?.length || 0) <= 2) return; // Min 2 options
+
+    updated[qIndex].options = updated[qIndex].options?.filter((_, i) => i !== optIndex);
+    updated[qIndex].optionsRu = updated[qIndex].optionsRu?.filter((_, i) => i !== optIndex);
+
+    // Adjust correct answers
+    let newCorrect = (updated[qIndex].correctAnswers || [])
+      .filter(i => i !== optIndex)
+      .map(i => i > optIndex ? i - 1 : i);
+
+    if (newCorrect.length === 0) newCorrect = [0];
+    updated[qIndex].correctAnswers = newCorrect;
+
     setQuestions(updated);
   };
 
@@ -206,7 +248,29 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
     if (step > 1) { setDirection(-1); setStep(prev => prev - 1); }
   };
 
+  const validateForm = () => {
+    if (!exam.title?.trim()) return "Imtihon nomini kiriting!";
+    if (exam.startAt && exam.endAt && new Date(exam.startAt) >= new Date(exam.endAt)) {
+      return "Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak!";
+    }
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question?.trim()) return `${i + 1}-savol matnini kiriting!`;
+      if (q.type !== 'truefalse') {
+        if (q.options?.some(o => !o.trim())) return `${i + 1}-savolda bo'sh variantlar bor!`;
+      }
+      if (!q.correctAnswers || q.correctAnswers.length === 0) return `${i + 1}-savolda to'g'ri javob belgilanmagan!`;
+    }
+    return null;
+  };
+
   const handleSubmit = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      toast.error(validationError, { position: 'bottom-right' });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
@@ -217,7 +281,7 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
         questions,
       };
       delete (payload as any).customCategory;
-      
+
       let result;
       if (examToEdit) {
         result = await examsApi.update(examToEdit.id, payload as any);
@@ -248,7 +312,8 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
   return createPortal(
     <AnimatePresence>
       <div className="cew-overlay">
-        <style dangerouslySetInnerHTML={{ __html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           .cew-overlay {
             position: fixed; inset: 0; z-index: 1000;
             display: flex; align-items: center; justify-content: center;
@@ -623,6 +688,25 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
               </div>
             </div>
 
+            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-1)', borderRadius: 10, padding: 3, border: '1px solid var(--border-1)' }}>
+              <button
+                type="button"
+                onClick={() => setLanguageFilter('uz')}
+                className={clsx('cew-btn cew-btn-sm', languageFilter === 'uz' ? 'cew-btn-primary' : 'cew-btn-ghost')}
+                style={{ padding: '4px 12px', fontSize: 11, borderRadius: 8, height: 28 }}
+              >
+                O'zbek
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguageFilter('ru')}
+                className={clsx('cew-btn cew-btn-sm', languageFilter === 'ru' ? 'cew-btn-primary' : 'cew-btn-ghost')}
+                style={{ padding: '4px 12px', fontSize: 11, borderRadius: 8, height: 28 }}
+              >
+                Русский
+              </button>
+            </div>
+
             {/* O'rta: Steps */}
             <div className="cew-steps-inline">
               {STEPS.map((s, idx) => {
@@ -651,7 +735,11 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
             {/* O'ng: Yopish */}
             <motion.button
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={onClose} className="cew-close"
+              onClick={() => {
+                if (window.confirm("Haqiqatan ham oynani yopmoqchimisiz? Barcha kiritilgan ma'lumotlar saqlanmaydi.")) {
+                  onClose();
+                }
+              }} className="cew-close"
             >
               <X style={{ width: 16, height: 16 }} />
             </motion.button>
@@ -691,22 +779,22 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                         <div className="cew-field">
-                          <label className="cew-label">Imtihon nomi *</label>
+                          <label className="cew-label">Imtihon nomi ({languageFilter === 'uz' ? 'O\'zbekcha' : 'Ruscha'}) *</label>
                           <input
                             type="text"
-                            value={exam.title}
-                            onChange={(e) => setExam({ ...exam, title: e.target.value })}
+                            value={languageFilter === 'uz' ? exam.title : (exam.titleRu || '')}
+                            onChange={(e) => languageFilter === 'uz' ? setExam({ ...exam, title: e.target.value }) : setExam({ ...exam, titleRu: e.target.value })}
                             className="cew-input"
-                            placeholder="Masalan: ISO 9001 Sifat Menejmenti Tizimi"
+                            placeholder={languageFilter === 'uz' ? "Masalan: ISO 9001 Sifat Menejmenti Tizimi" : "Например: Система менеджмента качества ISO 9001"}
                           />
                         </div>
                         <div className="cew-field">
-                          <label className="cew-label">Tavsif va Yo'riqnoma</label>
+                          <label className="cew-label">Tavsif va Yo'riqnoma ({languageFilter === 'uz' ? 'O\'zbekcha' : 'Ruscha'})</label>
                           <textarea
-                            value={exam.description}
-                            onChange={(e) => setExam({ ...exam, description: e.target.value })}
+                            value={languageFilter === 'uz' ? exam.description : (exam.descriptionRu || '')}
+                            onChange={(e) => languageFilter === 'uz' ? setExam({ ...exam, description: e.target.value }) : setExam({ ...exam, descriptionRu: e.target.value })}
                             className="cew-input cew-textarea"
-                            placeholder="Ushbu imtihonning maqsadi va qoidalari haqida qisqacha ma'lumot bering..."
+                            placeholder={languageFilter === 'uz' ? "Ushbu imtihonning maqsadi va qoidalari haqida qisqacha ma'lumot bering..." : "Кратко опишите цель и правила данного экзамена..."}
                           />
                         </div>
                         <div className="cew-grid-2">
@@ -1113,17 +1201,22 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
                           {/* Card body */}
                           <div className="cew-q-body">
                             <textarea
-                              value={q.question}
-                              onChange={(e) => updateQuestion(qIndex, { question: e.target.value })}
+                              value={languageFilter === 'uz' ? q.question : (q.questionRu || '')}
+                              onChange={(e) => languageFilter === 'uz' ? updateQuestion(qIndex, { question: e.target.value }) : updateQuestion(qIndex, { questionRu: e.target.value })}
                               className="cew-input cew-textarea"
-                              placeholder="Savol matnini bu yerga yozing..."
+                              placeholder={languageFilter === 'uz' ? "Savol matnini bu yerga yozing..." : "Введите текст вопроса здесь..."}
                             />
                             <div>
-                              <div className="cew-label" style={{ marginBottom: 10 }}>
-                                Variantlar — {q.type === 'multiple' ? "To'g'ri javoblarni belgilang" : "To'g'ri javobni belgilang"}
+                              <div className="cew-label" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Variantlar — {q.type === 'multiple' ? "To'g'ri javoblarni belgilang" : "To'g'ri javobni belgilang"}</span>
+                                {q.type !== 'truefalse' && (
+                                  <button type="button" onClick={() => addOptionToQuestion(qIndex)} className="cew-btn-ghost" style={{ padding: '2px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none' }}>
+                                    <Plus size={12} /> Variant qo'shish
+                                  </button>
+                                )}
                               </div>
                               <div className="cew-options-grid">
-                                {q.options?.map((opt, oIndex) => {
+                                {(languageFilter === 'uz' ? (q.options || []) : (q.optionsRu || [])).map((opt, oIndex) => {
                                   const isCorrect = q.correctAnswers?.includes(oIndex);
                                   const isMultiple = q.type === 'multiple';
                                   const isTF = q.type === 'truefalse';
@@ -1141,23 +1234,34 @@ export function CreateExamWizard({ examToEdit, onClose, onSuccess }: CreateExamW
                                     <div
                                       key={oIndex}
                                       className={clsx('cew-opt', isCorrect && 'correct')}
-                                      onClick={handleToggle}
+                                      style={{ position: 'relative' }}
                                     >
-                                      <div className={clsx('cew-opt-sel', isMultiple ? 'checkbox' : 'radio', isCorrect && 'correct')}>
-                                        {isCorrect && <Check style={{ width: 10, height: 10 }} />}
+                                      <div onClick={handleToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, cursor: 'pointer' }}>
+                                        <div className={clsx('cew-opt-sel', isMultiple ? 'checkbox' : 'radio', isCorrect && 'correct')}>
+                                          {isCorrect && <Check style={{ width: 10, height: 10 }} />}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={opt}
+                                          readOnly={isTF}
+                                          onClick={(e) => {
+                                            if (isTF) handleToggle();
+                                            else e.stopPropagation();
+                                          }}
+                                          onChange={(e) => updateOption(qIndex, oIndex, e.target.value, languageFilter === 'ru')}
+                                          className="cew-opt-input"
+                                          placeholder={isTF ? (languageFilter === 'uz' ? (oIndex === 0 ? 'Rost' : 'Yolg\'on') : (oIndex === 0 ? 'Правда' : 'Ложь')) : `Variant ${String.fromCharCode(65 + oIndex)}`}
+                                        />
                                       </div>
-                                      <input
-                                        type="text"
-                                        value={opt}
-                                        readOnly={isTF}
-                                        onClick={(e) => {
-                                          if (isTF) handleToggle();
-                                          else e.stopPropagation();
-                                        }}
-                                        onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}
-                                        className="cew-opt-input"
-                                        placeholder={isTF ? opt : `Variant ${['A', 'B', 'C', 'D'][oIndex] || oIndex + 1}`}
-                                      />
+                                      {!isTF && (q.options?.length || 0) > 2 && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); removeOptionFromQuestion(qIndex, oIndex); }}
+                                          style={{ position: 'absolute', right: 10, background: 'none', border: 'none', color: 'var(--red-400)', cursor: 'pointer', opacity: 0.7 }}
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
                                     </div>
                                   );
                                 })}

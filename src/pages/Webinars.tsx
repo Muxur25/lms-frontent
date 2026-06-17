@@ -45,6 +45,7 @@ export default function Webinars() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'ended'>('active');
   const [, setJoined] = useState<Set<string>>(new Set());
   const { user } = useAuthStore();
   const { t, i18n } = useTranslation();
@@ -99,9 +100,10 @@ export default function Webinars() {
   };
 
   // sort: server registration first, then live and upcoming sessions
-  const sortedWebinars = [...webinars]
-    .filter(w => getStatus(w) !== 'ended')
-    .sort((a, b) => {
+  const activeWebinars = webinars.filter(w => getStatus(w) !== 'ended');
+  const endedWebinars = webinars.filter(w => getStatus(w) === 'ended');
+
+  const sortedWebinars = (activeTab === 'active' ? activeWebinars : endedWebinars).sort((a, b) => {
       const aReg = a.isRegistered ? 0 : 1;
       const bReg = b.isRegistered ? 0 : 1;
       if (aReg !== bReg) return aReg - bReg;
@@ -132,6 +134,16 @@ export default function Webinars() {
       setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, ...updated, isRegistered: true } : x));
     } catch (error: any) {
       toast.error(error?.response?.data?.message || tr(t, 'webinars.registerError', 'Vebinarga yozilishda xatolik yuz berdi'), { position: 'bottom-right' });
+    }
+  };
+
+  const handleLeave = async (w: Webinar) => {
+    try {
+      const updated = await webinarsApi.leave(w.id);
+      setWebinars(prev => prev.map(x => x.id === w.id ? { ...x, ...updated, isRegistered: false } : x));
+      toast.success(tr(t, 'webinars.unregistered', 'Ro\'yxatdan o\'chirildingiz'), { position: 'bottom-right' });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || tr(t, 'webinars.unregisterError', 'Bekor qilishda xatolik yuz berdi'), { position: 'bottom-right' });
     }
   };
 
@@ -290,7 +302,7 @@ export default function Webinars() {
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>{tr(t, 'webinars.meetingLink', 'Meeting link')} *</label>
                   <div style={{ position: 'relative' }}>
                     <Link2 size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                    <input className="input" required value={form.meetingLink} onChange={e => setForm(p => ({ ...p, meetingLink: e.target.value }))} placeholder={tr(t, 'webinars.meetingLinkPlaceholder', 'https://meet.google.com/ yoki zoom.us/j/...')} style={{ width: '100%', paddingLeft: 36 }} />
+                    <input className="input" type="url" required value={form.meetingLink} onChange={e => setForm(p => ({ ...p, meetingLink: e.target.value }))} placeholder={tr(t, 'webinars.meetingLinkPlaceholder', 'https://meet.google.com/ yoki zoom.us/j/...')} pattern="https?://.+" title="Iltimos yaroqli URL manzil kiriting (http yoki https)" style={{ width: '100%', paddingLeft: 36 }} />
                   </div>
                 </div>
 
@@ -371,6 +383,21 @@ export default function Webinars() {
         )}
       </div>
 
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, borderBottom: '1px solid var(--border-2)', paddingBottom: 16 }}>
+        <button
+          onClick={() => setActiveTab('active')}
+          style={{ padding: '8px 16px', borderRadius: 99, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', transition: 'all 0.2s', background: activeTab === 'active' ? 'var(--blue-500)' : 'transparent', color: activeTab === 'active' ? '#fff' : 'var(--text-secondary)' }}
+        >
+          {tr(t, 'webinars.tabActive', 'Faol')}
+        </button>
+        <button
+          onClick={() => setActiveTab('ended')}
+          style={{ padding: '8px 16px', borderRadius: 99, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', transition: 'all 0.2s', background: activeTab === 'ended' ? 'var(--surface-3)' : 'transparent', color: activeTab === 'ended' ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+        >
+          {tr(t, 'webinars.tabEnded', 'Tugallangan')}
+        </button>
+      </div>
+
       {loading && (
         <div className="card" style={{ padding: 24, color: 'var(--text-secondary)' }}>
           {tr(t, 'webinars.loading', 'Vebinarlar yuklanmoqda...')}
@@ -418,7 +445,8 @@ export default function Webinars() {
                     <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', borderRadius: 8 }} onClick={() => {
                       setEditingWebinar(w);
                       const dt = new Date(w.scheduledAt);
-                      const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      const pad = (n: number) => String(n).padStart(2, '0');
+                      const local = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
                       setForm({ title: w.title || '', titleRu: w.titleRu || '', speaker: w.speaker || '', scheduledAt: local, durationMinutes: w.durationMinutes ?? 60, meetingLink: w.meetingLink, imageUrl: w.imageUrl || '' });
                       setImgPreview(w.imageUrl || '');
                       setShowModal(true);
@@ -451,10 +479,19 @@ export default function Webinars() {
                 <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', background: isLive ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,#f59e0b,#d97706)' }} onClick={() => handleJoin(w)}>
                   <PlayCircle size={16} /> {isLive ? tr(t, 'webinars.join', "Qo'shilish") : tr(t, 'webinars.joinSoon', "Qo'shilish (tez boshlanadi)")}
                 </button>
-              ) : isReg ? (
-                <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', color: 'var(--green-400)', borderColor: 'var(--green-500)' }} disabled>
-                  {tr(t, 'webinars.registered', '✓ Yozilgansiz')}
+              ) : status === 'ended' ? (
+                <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', opacity: 0.6 }} disabled>
+                  {tr(t, 'webinars.ended', 'Vebinar tugagan')}
                 </button>
+              ) : isReg ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center', color: 'var(--green-400)', borderColor: 'var(--green-500)' }} disabled>
+                    {tr(t, 'webinars.registered', '✓ Yozilgansiz')}
+                  </button>
+                  <button className="btn btn-secondary" style={{ width: 42, padding: 0, justifyContent: 'center', color: 'var(--red-400)' }} onClick={() => handleLeave(w)} title={tr(t, 'webinars.leave', 'Bekor qilish')}>
+                    <X size={16} />
+                  </button>
+                </div>
               ) : (
                 <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', color: 'var(--blue-400)', borderColor: 'var(--blue-500)' }} onClick={() => handleRegister(w)}>
                   <Users size={16} /> {tr(t, 'webinars.register', 'Yozilish')}

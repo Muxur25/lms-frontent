@@ -21,6 +21,7 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/auth.store';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 /* ─────────────────── TYPES ─────────────────── */
 
@@ -45,13 +46,21 @@ type DepartmentOption = {
   id?: string;
   name: string;
   displayName?: string;
+  displayNameRu?: string;
   organizationCode?: string;
   subdivision?: string;
   positions: PositionOption[];
 };
 
+type OrganizationOption = {
+  value: string;
+  label: string;
+  labelRu?: string;
+};
+
 type Mof3Options = {
   subdivisions: string[];
+  organizations?: OrganizationOption[];
   departments: DepartmentOption[];
 };
 
@@ -71,6 +80,7 @@ const initialForm: FormState = {
 
 const fallbackOptions: Mof3Options = {
   subdivisions: ['MOF-3'],
+  organizations: [{ value: 'MOF-3', label: 'MOF-3', labelRu: 'MOF-3' }],
   departments: [],
 };
 
@@ -207,6 +217,8 @@ function Dropdown({
 
 export default function Register() {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isRu = i18n.language?.startsWith('ru');
   const loginAction = useAuthStore((state) => state.login);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
@@ -232,8 +244,12 @@ export default function Register() {
         if (!mounted) return;
         const payload = getDataPayload(response) as Mof3Options;
         const subdivisions = payload.subdivisions?.length ? payload.subdivisions : ['MOF-3'];
+        const organizations = payload.organizations?.length
+          ? payload.organizations
+          : subdivisions.map((value) => ({ value, label: value, labelRu: value }));
         setOptions({
           subdivisions,
+          organizations,
           departments: payload.departments || [],
         });
         setForm((cur) => (
@@ -269,6 +285,18 @@ export default function Register() {
   );
   const employeeOptions = selectedPosition?.employees || [];
   const percent = step === 0 ? 50 : 100;
+  const organizationOptions = useMemo(
+    () => options.subdivisions.map((value) => {
+      const organization = options.organizations?.find((item) => item.value === value);
+      return {
+        value,
+        label: (isRu ? organization?.labelRu || organization?.label : organization?.label || organization?.labelRu) || value,
+      };
+    }),
+    [isRu, options.organizations, options.subdivisions],
+  );
+  const getDepartmentLabel = (department: DepartmentOption) =>
+    (isRu ? department.displayNameRu || department.displayName : department.displayName || department.displayNameRu) || department.name;
 
   const employeePayload = useMemo(
     () => ({
@@ -1358,7 +1386,7 @@ export default function Register() {
                       <Dropdown
                         value={form.subdivision}
                         onChange={selectSubdivision}
-                        options={options.subdivisions.map((s) => ({ value: s, label: s }))}
+                        options={organizationOptions}
                         placeholder="Podrazdeleniyani tanlang"
                       />
                     </Field>
@@ -1367,7 +1395,7 @@ export default function Register() {
                       <Dropdown
                         value={form.departmentId || form.departmentName}
                         onChange={selectDepartment}
-                        options={visibleDepartments.map((d) => ({ value: d.id || d.name, label: d.displayName || d.name }))}
+                        options={visibleDepartments.map((d) => ({ value: d.id || d.name, label: getDepartmentLabel(d) }))}
                         placeholder={loadingOptions ? 'Yuklanmoqda...' : "Bo'limni tanlang"}
                         disabled={loadingOptions}
                       />

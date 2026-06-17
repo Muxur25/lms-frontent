@@ -82,6 +82,8 @@ export interface CertAnalytics {
   avgScore: number;
 }
 
+export type CertificateTrackAction = 'download' | 'print' | 'share' | 'view';
+
 // ─── API calls ────────────────────────────────────────────────────
 
 /** Get current user's certificates */
@@ -119,13 +121,13 @@ export const getCertificateTemplates = async (): Promise<CertificateTemplate[]> 
 };
 
 /** Get download history */
-export const getDownloadHistory = async (): Promise<any[]> => {
-  const { data } = await api.get('/downloads');
+export const getDownloadHistory = async (page = 1, limit = 10): Promise<any> => {
+  const { data } = await api.get('/downloads', { params: { page, limit } });
   return data?.data || data || [];
 };
 
 /** Track download/print/share */
-export const trackCertificateAction = async (id: string, action: string): Promise<void> => {
+export const trackCertificateAction = async (id: string, action: CertificateTrackAction): Promise<void> => {
   await api.post(`/${id}/track`, { action });
 };
 

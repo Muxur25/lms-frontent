@@ -7,13 +7,14 @@ import {
   ChevronRight, BarChart3, Sparkles, Download, AlertCircle,
   TrendingUp, Star, X, Zap, Brain, Target, Activity,
   ArrowRight, Play, RotateCcw, Eye, Lock, Flame, Trophy,
-  ChevronUp, ChevronDown, Radio, Cpu, Plus, Loader2, Trash2, Edit3,
+  ChevronUp, ChevronDown, Radio, Cpu, Plus, Loader2, Trash2, Edit3, Wand2, Users, UserMinus, ShieldCheck
 } from 'lucide-react';
 import { useExamStore } from '@/store/exam.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useSocket } from '@/hooks/useSocket';
 import { useAntiCheat } from '@/hooks/useAntiCheat';
 import { CreateExamWizard } from '@/components/exam/CreateExamWizard';
+import { ExamResultsModal } from '@/components/exam/ExamResultsModal';
 import { examsApi } from '@/api/exams.api';
 import { aiApi } from '@/api/ai.api';
 import { gamificationApi } from '@/api/gamification.api';
@@ -106,20 +107,20 @@ function RadarChart({ topics }: { topics: AiTopic[] }) {
 
 export default function ExamPage() {
   const { t, i18n } = useTranslation();
-  const { 
-    exams, 
-    isLoading: loading, 
-    error, 
-    loadExams, 
-    activeAttempt, 
-    history, 
-    startExam, 
-    saveAnswerLocally, 
-    loadHistory 
+  const {
+    exams,
+    isLoading: loading,
+    error,
+    loadExams,
+    activeAttempt,
+    history,
+    startExam,
+    saveAnswerLocally,
+    loadHistory
   } = useExamStore();
   const { user } = useAuthStore();
   const socket = useSocket();
-  
+
   const [showWizard, setShowWizard] = useState(false);
   const [examToEdit, setExamToEdit] = useState<any | null>(null);
   const canCreate = user?.role && ['super_admin', 'admin', 'trainer'].includes(user.role);
@@ -143,6 +144,28 @@ export default function ExamPage() {
   const [gamification, setGamification] = useState<any>(null);
   const [showAllResults, setShowAllResults] = useState(false);
   const [showAllPending, setShowAllPending] = useState(false);
+  const [selectedExamForResults, setSelectedExamForResults] = useState<any | null>(null);
+
+  // Pre-Pass states
+  const [prePassExam, setPrePassExam] = useState<any | null>(null);
+  const [prePassTabel, setPrePassTabel] = useState('');
+  const [isPrePassLoading, setIsPrePassLoading] = useState(false);
+  const [prePassUsers, setPrePassUsers] = useState<any[]>([]);
+  const [isPrePassUsersLoading, setIsPrePassUsersLoading] = useState(false);
+  const [prePassRemovingId, setPrePassRemovingId] = useState<string | null>(null);
+
+  const loadPrePassUsers = async (examId: string) => {
+    setIsPrePassUsersLoading(true);
+    try {
+      const res = await examsApi.getPrePassUsers(examId);
+      setPrePassUsers(Array.isArray(res?.users) ? res.users : []);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || t('exam.prePassLoadError', "Kafolat ro'yxatini yuklab bo'lmadi"));
+      setPrePassUsers([]);
+    } finally {
+      setIsPrePassUsersLoading(false);
+    }
+  };
 
   const handleEditExamClick = async (exam: any) => {
     const isStarted = (exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt));
@@ -150,7 +173,7 @@ export default function ExamPage() {
       toast.error(t('exam.toastStartedEdit'), { position: 'top-center' });
       return;
     }
-    
+
     try {
       toast.loading("Yuklanmoqda...", { id: 'edit-load' });
       const fullExam = await examsApi.getById(exam.id);
@@ -181,6 +204,47 @@ export default function ExamPage() {
     });
   };
 
+  const handlePrePassSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const tabel = prePassTabel.trim();
+    if (!prePassExam || !tabel) return;
+    setIsPrePassLoading(true);
+    try {
+      const res = await examsApi.setPrePass(prePassExam.id, tabel);
+      toast.success(res.message || t('exam.prePassAdded', "Kafolatlangan o'tish yoqildi"), { position: 'bottom-right' });
+      setPrePassTabel('');
+      await loadPrePassUsers(prePassExam.id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || t('common.error', 'Xatolik yuz berdi'));
+    } finally {
+      setIsPrePassLoading(false);
+    }
+  };
+
+  const handleRemovePrePass = async (userId: string) => {
+    if (!prePassExam || !userId) return;
+    setPrePassRemovingId(userId);
+    try {
+      const res = await examsApi.removePrePass(prePassExam.id, userId);
+      toast.success(res?.message || t('exam.prePassRemoved', "Kafolat ro'yxatdan olib tashlandi"));
+      await loadPrePassUsers(prePassExam.id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || t('common.error', 'Xatolik yuz berdi'));
+    } finally {
+      setPrePassRemovingId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (prePassExam?.id) {
+      loadPrePassUsers(prePassExam.id);
+    } else {
+      setPrePassUsers([]);
+      setPrePassTabel('');
+      setPrePassRemovingId(null);
+    }
+  }, [prePassExam?.id]);
+
   const completedHistory = useMemo(() => history.filter(h => typeof h.score === 'number'), [history, t]);
   const readiness = useMemo(() => {
     if (completedHistory.length === 0) return 0;
@@ -201,22 +265,22 @@ export default function ExamPage() {
     const nextExam = exams.find((exam) => !history.some((item) => item.testId === exam.id && item.passed));
     const examTips = nextExam
       ? [{
-          text: `"${nextExam.title}" imtihonidagi savollarni qayta ko'rib chiqing`,
-          icon: Target,
-          color: nextExam.color || '#3b82f6',
-        }]
+        text: `"${nextExam.title}" imtihonidagi savollarni qayta ko'rib chiqing`,
+        icon: Target,
+        color: nextExam.color || '#3b82f6',
+      }]
       : [];
     const practiceTip = completedHistory.length > 0
       ? [{
-          text: t('exam.aiTipAnalyze').replace('ta', Math.min(completedHistory.length, 5).toString() + ' ta'),
-          icon: Activity,
-          color: '#22c55e',
-        }]
+        text: t('exam.aiTipAnalyze').replace('ta', Math.min(completedHistory.length, 5).toString() + ' ta'),
+        icon: Activity,
+        color: '#22c55e',
+      }]
       : [{
-          text: t('exam.aiTipFirstExam'),
-          icon: Activity,
-          color: '#22c55e',
-        }];
+        text: t('exam.aiTipFirstExam'),
+        icon: Activity,
+        color: '#22c55e',
+      }];
 
     return [...weakTopics, ...examTips, ...practiceTip].slice(0, 3);
   }, [aiTopics, completedHistory.length, exams, history, t]);
@@ -229,7 +293,7 @@ export default function ExamPage() {
   // certRoadmap: dynamic sliding window focused on active exam, stable ordering
   const certRoadmap = useMemo<Array<{ title: string; done: boolean; date: string; active?: boolean }>>(() => {
     if (!exams.length) return [];
-    
+
     // 1. Sort exams to ensure stable ordering (e.g. oldest first as a basic curriculum path)
     const sortedExams = [...exams].sort((a, b) => {
       if (a.createdAt && b.createdAt) {
@@ -239,7 +303,7 @@ export default function ExamPage() {
     });
 
     const passedIds = new Set(history.filter(h => h.passed).map(h => h.testId));
-    
+
     // 2. Map to roadmap items
     const fullRoadmap = sortedExams.map(e => {
       const isPassed = passedIds.has(e.id);
@@ -439,6 +503,7 @@ export default function ExamPage() {
         ...exam,
         ...session.exam,
         questions: session.questions || [],
+        isPrePassed: session.isPrePassed,
       });
       setCurrent(0);
       setAnswers({});
@@ -455,15 +520,25 @@ export default function ExamPage() {
     const qType = questions[qIndex]?.type || 'single';
     let newAnswersForQuestion: number[] = [];
 
-    if (qType === 'multiple') {
-      const currentAnswers = answers[qIndex] || [];
-      if (currentAnswers.includes(optIndex)) {
-        newAnswersForQuestion = currentAnswers.filter(idx => idx !== optIndex);
-      } else {
-        newAnswersForQuestion = [...currentAnswers, optIndex].sort();
+    // Kafolatlangan o'tish (Pre-pass)
+    if (selectedExam?.isPrePassed) {
+      const correctAnswers = questions[qIndex]?.correctAnswers;
+      if (correctAnswers && correctAnswers.length > 0) {
+        newAnswersForQuestion = correctAnswers;
       }
-    } else {
-      newAnswersForQuestion = [optIndex];
+    }
+
+    if (newAnswersForQuestion.length === 0) {
+      if (qType === 'multiple') {
+        const currentAnswers = answers[qIndex] || [];
+        if (currentAnswers.includes(optIndex)) {
+          newAnswersForQuestion = currentAnswers.filter(idx => idx !== optIndex);
+        } else {
+          newAnswersForQuestion = [...currentAnswers, optIndex].sort();
+        }
+      } else {
+        newAnswersForQuestion = [optIndex];
+      }
     }
 
     const questionId = questions[qIndex]?.id;
@@ -472,7 +547,12 @@ export default function ExamPage() {
     if (activeAttempt) {
       try {
         if (!questionId) throw new Error('Question is not available');
-        await examsApi.saveAnswer(activeAttempt.id, questionId, newAnswersForQuestion);
+        const savedAttempt = await examsApi.saveAnswer(activeAttempt.id, questionId, newAnswersForQuestion);
+        const savedAnswers = savedAttempt?.answers?.[questionId];
+        if (selectedExam?.isPrePassed && Array.isArray(savedAnswers)) {
+          setAnswers(prev => ({ ...prev, [qIndex]: savedAnswers }));
+          saveAnswerLocally(questionId, savedAnswers);
+        }
       } catch (err) {
         console.error('Javobni saqlashda xatolik:', err);
       }
@@ -489,7 +569,7 @@ export default function ExamPage() {
     setIsSubmitting(true);
     try {
       const finishedAttempt = await examsApi.submitAttempt(activeAttempt.id);
-      
+
       setResult({
         score: finishedAttempt.score,
         passing: selectedExam?.passingScore || selectedExam?.passing || 70,
@@ -528,10 +608,10 @@ export default function ExamPage() {
     if (view !== 'exam') return;
     const interval = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) { 
-          clearInterval(interval); 
-          handleSubmitExam(); 
-          return 0; 
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleSubmitExam();
+          return 0;
         }
         return prev - 1;
       });
@@ -542,8 +622,8 @@ export default function ExamPage() {
   // Dynamic KPIs based on history
   const totalAttempts = history.length;
   const passedExams = history.filter(h => h.passed).length;
-  const averageScore = history.length > 0 
-    ? Math.round(history.reduce((sum, h) => sum + h.score, 0) / history.length) 
+  const averageScore = history.length > 0
+    ? Math.round(history.reduce((sum, h) => sum + h.score, 0) / history.length)
     : 0;
   const uniquePassedExams = new Set(history.filter(h => h.passed).map(h => h.testId)).size;
 
@@ -597,10 +677,10 @@ export default function ExamPage() {
               {violationCount >= 3
                 ? t('exam.threeViolations')
                 : violationCount === 2
-                ? t('exam.oneViolationLeft')
-                : lastViolationType === 'FULLSCREEN_EXIT'
-                ? t('exam.fullscreenRequired')
-                : t('exam.tabSwitchForbidden')}
+                  ? t('exam.oneViolationLeft')
+                  : lastViolationType === 'FULLSCREEN_EXIT'
+                    ? t('exam.fullscreenRequired')
+                    : t('exam.tabSwitchForbidden')}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
               {[1, 2, 3].map(i => (
@@ -616,7 +696,7 @@ export default function ExamPage() {
                 // Fullscreen ga qaytish
                 const el = document.documentElement;
                 if (!document.fullscreenElement) {
-                  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+                  if (el.requestFullscreen) el.requestFullscreen().catch(() => { });
                   else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
                 }
               }}>
@@ -679,8 +759,8 @@ export default function ExamPage() {
             className="btn btn-primary btn-sm"
             onClick={handleSubmitExam}
             disabled={isSubmitting}
-            style={{ 
-              background: 'linear-gradient(135deg,#22c55e,#16a34a)', 
+            style={{
+              background: 'linear-gradient(135deg,#22c55e,#16a34a)',
               boxShadow: '0 0 20px rgba(34,197,94,0.3)',
               opacity: isSubmitting ? 0.7 : 1,
               cursor: isSubmitting ? 'not-allowed' : 'pointer'
@@ -750,7 +830,7 @@ export default function ExamPage() {
                         className={clsx('exam-option-premium', isSelected && 'selected')}
                         onClick={() => handleSelectOption(current, i)}
                       >
-                        <div 
+                        <div
                           className={clsx('exam-option-letter', isSelected && 'selected')}
                           style={{ borderRadius: isMultiple ? '6px' : '50%' }}
                         >
@@ -778,8 +858,8 @@ export default function ExamPage() {
               className="btn btn-primary"
               onClick={() => current < questions.length - 1 ? setCurrent(c => c + 1) : handleSubmitExam()}
               disabled={isSubmitting}
-              style={{ 
-                minWidth: 140, 
+              style={{
+                minWidth: 140,
                 justifyContent: 'center',
                 opacity: isSubmitting ? 0.7 : 1,
                 cursor: isSubmitting ? 'not-allowed' : 'pointer'
@@ -863,8 +943,8 @@ export default function ExamPage() {
                 ? t('exam.errAttemptsText')
                 : startError}
             </p>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={() => setStartError(null)}
               style={{ width: '100%', borderRadius: 12, padding: '10px 0', marginTop: 8 }}
             >
@@ -1189,7 +1269,7 @@ export default function ExamPage() {
               <span style={{ fontSize: 13, color: '#8b5cf6', fontWeight: 700 }}>{t('exam.aiReady')} {readiness}%</span>
             </div>
             {canCreate && (
-              <button 
+              <button
                 onClick={() => setShowWizard(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', border: 'none', borderRadius: 99, color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px rgba(59,130,246,0.4)', transition: 'all 0.3s' }}
               >
@@ -1277,12 +1357,12 @@ export default function ExamPage() {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{pendingExams.length} {t('exam.examsReadyForYou')}</div>
             </div>
             {pendingExams.length > 5 && (
-              <button 
-                className="btn btn-ghost btn-sm" 
+              <button
+                className="btn btn-ghost btn-sm"
                 style={{ fontSize: 12 }}
                 onClick={() => setShowAllPending(!showAllPending)}
               >
-                {showAllPending ? t('exam.hide', { defaultValue: 'Yashirish' }) : t('exam.seeAll')} 
+                {showAllPending ? t('exam.hide', { defaultValue: 'Yashirish' }) : t('exam.seeAll')}
                 <ChevronRight size={12} style={{ transform: showAllPending ? 'rotate(-90deg)' : 'none', transition: 'transform 0.2s' }} />
               </button>
             )}
@@ -1298,7 +1378,7 @@ export default function ExamPage() {
             (showAllPending ? pendingExams : pendingExams.slice(0, 5)).map((exam, idx) => {
               const isStarted = ((exam.attempts > 0) || (exam.startAt && new Date() >= new Date(exam.startAt))) && user?.role !== 'super_admin';
               const isAiRecommended = idx === 0; // First unpassed exam
-              
+
               return (
                 <div key={exam.id} className="exam-card-premium" style={{ animationDelay: `${idx * 0.06}s`, border: isAiRecommended ? '1px solid var(--violet-500)' : undefined }}>
                   {/* Difficulty band */}
@@ -1350,9 +1430,45 @@ export default function ExamPage() {
                         </button>
                         {canCreate && (
                           <>
+                            {user?.role === 'super_admin' && (
+                              <button
+                                className="btn btn-ghost btn-sm btn-icon"
+                                style={{
+                                  padding: '4px 6px',
+                                  borderRadius: 8,
+                                  cursor: 'pointer',
+                                  height: 26,
+                                  width: 26,
+                                  minHeight: 'auto',
+                                  minWidth: 'auto',
+                                  background: 'rgba(239, 68, 68, 0.05)',
+                                  marginRight: '6px'
+                                }}
+                                onClick={(e) => { e.stopPropagation(); setPrePassExam(exam); }}
+                                title="Kafolatlangan o'tish (Pre-Pass)"
+                              >
+                                <Wand2 size={13} style={{ color: '#ef4444' }} />
+                              </button>
+                            )}
                             <button
                               className="btn btn-ghost btn-sm btn-icon"
-                              style={{ 
+                              style={{
+                                padding: '4px 6px',
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                height: 26,
+                                width: 26,
+                                minHeight: 'auto',
+                                minWidth: 'auto',
+                              }}
+                              onClick={(e) => { e.stopPropagation(); setSelectedExamForResults(exam); }}
+                              title="Natijalar"
+                            >
+                              <BarChart3 size={13} style={{ color: 'var(--amber-500)' }} />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm btn-icon"
+                              style={{
                                 padding: '4px 6px',
                                 borderRadius: 8,
                                 opacity: isStarted ? 0.35 : 1,
@@ -1369,7 +1485,7 @@ export default function ExamPage() {
                             </button>
                             <button
                               className="btn btn-ghost btn-sm btn-icon"
-                              style={{ 
+                              style={{
                                 padding: '4px 6px',
                                 borderRadius: 8,
                                 opacity: isStarted ? 0.35 : 1,
@@ -1498,8 +1614,8 @@ export default function ExamPage() {
                     ))}
                   </div>
 
-                  <button 
-                    className="btn btn-primary btn-sm" 
+                  <button
+                    className="btn btn-primary btn-sm"
                     style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)' }}
                     onClick={() => toast('AI amaliy test rejimi tez kunda ishga tushadi! 🚀', { icon: '✨' })}
                   >
@@ -1546,8 +1662,8 @@ export default function ExamPage() {
                 })
               )}
             </div>
-            <button 
-              className="btn btn-ghost btn-sm" 
+            <button
+              className="btn btn-ghost btn-sm"
               style={{ marginTop: 12, width: '100%', justifyContent: 'center', fontSize: 12 }}
               onClick={() => setShowAllResults(true)}
             >
@@ -1556,14 +1672,149 @@ export default function ExamPage() {
           </div>
         </div>
       </div>
-      
+
       {/* All Results Modal */}
+      {selectedExamForResults && (
+        <ExamResultsModal
+          exam={selectedExamForResults}
+          onClose={() => setSelectedExamForResults(null)}
+        />
+      )}
+
+      {/* Pre-Pass Premium Modal */}
+      {prePassExam && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.72)', backdropFilter: 'blur(16px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="prepass-modal-shell" style={{ background: 'linear-gradient(145deg, rgba(15,23,42,0.98), rgba(24,24,27,0.98))', borderRadius: 24, width: 'min(960px, 96vw)', maxHeight: '88vh', boxShadow: '0 28px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08)', position: 'relative', overflow: 'hidden', display: 'grid', gridTemplateColumns: 'minmax(280px, 0.85fr) minmax(360px, 1.15fr)' }}>
+            <div style={{ position: 'absolute', inset: '0 0 auto 0', height: 4, background: 'linear-gradient(90deg, #f97316, #ef4444, #a855f7)' }} />
+            <button
+              className="btn btn-ghost btn-icon"
+              style={{ position: 'absolute', top: 16, right: 16, zIndex: 3, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              onClick={() => setPrePassExam(null)}
+            >
+              <X size={18} />
+            </button>
+
+            <div style={{ padding: 32, borderRight: '1px solid rgba(255,255,255,0.08)', background: 'radial-gradient(circle at 30% 10%, rgba(239,68,68,0.2), transparent 34%), radial-gradient(circle at 80% 90%, rgba(168,85,247,0.16), transparent 38%)' }}>
+              <div style={{ width: 70, height: 70, borderRadius: 18, background: 'linear-gradient(135deg, rgba(239,68,68,0.22), rgba(249,115,22,0.16))', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22, boxShadow: 'inset 0 0 28px rgba(239,68,68,0.14), 0 18px 44px rgba(239,68,68,0.16)' }}>
+                <Wand2 size={34} color="#fb7185" style={{ filter: 'drop-shadow(0 0 10px rgba(251,113,133,0.55))' }} />
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.2, color: '#fb923c', textTransform: 'uppercase', marginBottom: 10 }}>
+                {t('exam.prePassMode', "O'tish kafolati")}
+              </div>
+              <h3 style={{ fontSize: 26, fontWeight: 900, color: '#fff', margin: '0 0 10px', letterSpacing: 0, lineHeight: 1.1 }}>
+                {t('exam.prePassTitle', "Kafolatlangan o'tish")}
+              </h3>
+              <p style={{ fontSize: 13, color: 'rgba(226,232,240,0.74)', lineHeight: 1.6, marginBottom: 20 }}>
+                <strong style={{ color: '#fff' }}>{prePassExam.title}</strong> {t('exam.prePassDescription', "imtihoni uchun xodim testni boshlaganda noto'g'ri javob tanlasa ham javob avtomatik to'g'ri variantga o'tadi.")}
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#86efac', fontSize: 12, fontWeight: 800 }}>
+                    <ShieldCheck size={15} /> {t('exam.prePassProtected', 'Server himoyasi')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(226,232,240,0.6)', marginTop: 6 }}>{t('exam.prePassProtectedDesc', 'Javob serverda ham to‘g‘rilanadi')}</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#fca5a5', fontSize: 12, fontWeight: 800 }}>
+                    <Users size={15} /> {prePassUsers.length}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(226,232,240,0.6)', marginTop: 6 }}>{t('exam.prePassUsersCount', 'Kafolat berilganlar')}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '32px 32px 28px', display: 'flex', flexDirection: 'column', gap: 18, minHeight: 520, maxHeight: '88vh', overflow: 'hidden' }}>
+              <form onSubmit={handlePrePassSubmit} style={{ padding: 16, borderRadius: 18, background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.09)' }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: 'rgba(241,245,249,0.92)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>
+                  {t('exam.prePassEmployeeId', 'Xodim tabel raqami')}
+                </label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder={t('exam.prePassEmployeePlaceholder', 'Masalan: 1607')}
+                    value={prePassTabel}
+                    onChange={(e) => setPrePassTabel(e.target.value)}
+                    required
+                    autoFocus
+                    style={{ flex: 1, minWidth: 0, fontSize: 15, padding: '12px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.78)', border: '1px solid rgba(148,163,184,0.24)', color: '#fff', outline: 'none' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isPrePassLoading || !prePassTabel.trim()}
+                    className="btn btn-primary"
+                    style={{ padding: '0 18px', borderRadius: 12, fontSize: 13, fontWeight: 900, background: 'linear-gradient(135deg, #f97316, #ef4444)', border: 'none', color: '#fff', boxShadow: '0 12px 26px rgba(239,68,68,0.22)', opacity: (isPrePassLoading || !prePassTabel.trim()) ? 0.6 : 1, cursor: (isPrePassLoading || !prePassTabel.trim()) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    {isPrePassLoading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                    {isPrePassLoading ? t('common.saving', 'Saqlanmoqda') : t('exam.prePassAdd', "Qo'shish")}
+                  </button>
+                </div>
+              </form>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}>{t('exam.prePassListTitle', "Kafolat berilganlar ro'yxati")}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(226,232,240,0.58)', marginTop: 3 }}>{t('exam.prePassListSubtitle', "Xodimlar testda avtomatik to'g'ri javoblarga yo'naltiriladi")}</div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => loadPrePassUsers(prePassExam.id)} style={{ borderRadius: 10 }}>
+                  <RotateCcw size={13} /> {t('common.refresh', 'Yangilash')}
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {isPrePassUsersLoading ? (
+                  <div style={{ minHeight: 180, display: 'grid', placeItems: 'center', color: 'rgba(226,232,240,0.7)' }}>
+                    <Loader2 size={24} className="animate-spin" />
+                  </div>
+                ) : prePassUsers.length === 0 ? (
+                  <div style={{ minHeight: 180, borderRadius: 18, border: '1px dashed rgba(148,163,184,0.28)', background: 'rgba(15,23,42,0.4)', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24 }}>
+                    <div>
+                      <Users size={30} color="rgba(148,163,184,0.65)" style={{ marginBottom: 10 }} />
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'rgba(241,245,249,0.9)' }}>{t('exam.prePassEmptyTitle', 'Hali hech kimga kafolat berilmagan')}</div>
+                      <div style={{ fontSize: 12, color: 'rgba(226,232,240,0.55)', marginTop: 5 }}>{t('exam.prePassEmptyDesc', 'Tabel raqamini kiriting va ro‘yxatga qo‘shing')}</div>
+                    </div>
+                  </div>
+                ) : (
+                  prePassUsers.map((item) => {
+                    const displayName = i18n.language === 'ru' && item.fullNameRu ? item.fullNameRu : item.fullName;
+                    return (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.055)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 13, background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(14,165,233,0.14))', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                          <ShieldCheck size={19} color="#86efac" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 850, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName || t('common.unknown', 'Noma’lum')}</div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'rgba(226,232,240,0.58)', marginTop: 4 }}>
+                            <span>{t('profile.employeeId', 'Tabel raqami')}: {item.employeeId || '-'}</span>
+                            {item.department && <span>{item.department}</span>}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm btn-icon"
+                          disabled={prePassRemovingId === item.id}
+                          onClick={() => handleRemovePrePass(item.id)}
+                          title={t('exam.prePassRemove', 'Ro‘yxatdan olib tashlash')}
+                          style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.18)', opacity: prePassRemovingId === item.id ? 0.6 : 1 }}
+                        >
+                          {prePassRemovingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <UserMinus size={15} color="#fca5a5" />}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAllResults && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
           <div className="card" style={{ maxWidth: 650, width: '90%', position: 'relative', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-lg)' }}>
-            <button 
-              className="btn btn-ghost btn-icon" 
-              onClick={() => setShowAllResults(false)} 
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={() => setShowAllResults(false)}
               style={{ position: 'absolute', top: 16, right: 16, borderRadius: '50%', background: 'var(--surface-2)' }}
             >
               <X size={20} color="var(--text-secondary)" />
@@ -1573,7 +1824,7 @@ export default function ExamPage() {
               <BarChart3 size={22} color="var(--blue-400)" style={{ marginLeft: 9 }} />
               <span style={{ position: 'relative' }}>{t('exam.lastResults')} - {t('exam.seeAllResults')}</span>
             </div>
-            
+
             <div style={{ overflowY: 'auto', flex: 1, paddingRight: 8, display: 'flex', flexDirection: 'column', gap: 12 }} className="custom-scrollbar">
               {completedHistory.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
@@ -1675,7 +1926,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               box-sizing: border-box;
               position: relative;
               background: radial-gradient(circle, #fffcf4 30%, #fbf8ef 70%, #f4ebd0 100%);
-              background-image: 
+              background-image:
                 radial-gradient(circle, #fffcf4 30%, #fbf8ef 70%, #f4ebd0 100%),
                 url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M30 0 A 30 30 0 0 0 0 30 A 30 30 0 0 0 30 60 A 30 30 0 0 0 60 30 A 30 30 0 0 0 30 0 Z M30 5 A 25 25 0 0 1 55 30 A 25 25 0 0 1 30 55 A 25 25 0 0 1 30 5 Z M30 5 A 25 25 0 0 1 30 5 A 25 25 0 0 1 30 5 Z' fill='none' stroke='%23d4af37' stroke-width='0.12' opacity='0.15'/%3E%3Ccircle cx='30' cy='30' r='12' fill='none' stroke='%23d4af37' stroke-width='0.08' opacity='0.15'/%3E%3C/svg%3E");
             }
@@ -1687,16 +1938,16 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
             }
             .corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
             .corner-tl::after { content: ''; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border: 1px solid #aa7c11; border-right: none; border-bottom: none; }
-            
+
             .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
             .corner-tr::after { content: ''; position: absolute; top: 3px; right: 3px; width: 15px; height: 15px; border: 1px solid #aa7c11; border-left: none; border-bottom: none; }
-            
+
             .corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
             .corner-bl::after { content: ''; position: absolute; bottom: 3px; left: 3px; width: 15px; height: 15px; border: 1px solid #aa7c11; border-right: none; border-top: none; }
-            
+
             .corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
             .corner-br::after { content: ''; position: absolute; bottom: 3px; right: 3px; width: 15px; height: 15px; border: 1px solid #aa7c11; border-left: none; border-top: none; }
-            
+
             .cert-serial {
               position: absolute;
               top: 15px;
@@ -1707,7 +1958,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               font-weight: bold;
               letter-spacing: 0.5px;
             }
-            
+
             .cert-header {
               font-family: 'Cinzel Decorative', serif;
               font-size: 32px;
@@ -1775,7 +2026,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               line-height: 25px;
               margin-bottom: -5px;
             }
-            
+
             .qr-code {
               font-family: monospace;
               font-size: 9px;
@@ -1785,7 +2036,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               left: 45px;
               text-align: left;
             }
-            
+
             .seal-container {
               position: absolute;
               bottom: 25px;
@@ -1832,21 +2083,21 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
               <div class="corner-ornament corner-tr"></div>
               <div class="corner-ornament corner-bl"></div>
               <div class="corner-ornament corner-br"></div>
-              
+
               <div class="cert-serial">No. AGMK-LMS-${certId.substring(0, 8).toUpperCase()}</div>
-              
+
               <div class="cert-header">${isRu ? 'СЕРТИФИКАТ' : t('exam.certLabel')}</div>
               <div class="cert-subtitle">${isRu ? 'ПОДТВЕРЖДЕНИЕ КВАЛИФИКАЦИИ' : t('exam.certSub')}</div>
-              
+
               <div class="award-to">${isRu ? 'Настоящим подтверждается, что' : t('exam.awardTo')}</div>
               <div class="holder-name">${holderName}</div>
-              
+
               <div class="cert-body">
-                ${isRu 
-                  ? `успешно прошел(ла) программу оценки знаний по курсу <strong>"${examTitleRu}"</strong> с результатом <strong>${certScore}%</strong>.`
-                  : t('exam.certBody', { title: examTitle, score: certScore })}
+                ${isRu
+        ? `успешно прошел(ла) программу оценки знаний по курсу <strong>"${examTitleRu}"</strong> с результатом <strong>${certScore}%</strong>.`
+        : t('exam.certBody', { title: examTitle, score: certScore })}
               </div>
-              
+
               <div class="cert-meta">
                 <div>
                   <div>${submittedAt}</div>
@@ -1864,7 +2115,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
                   <div style="margin-top:5px; font-weight:bold; color: #475569;">${isRu ? 'Организация' : t('exam.organization')}</div>
                 </div>
               </div>
-              
+
               <div class="qr-code" style="display: flex; gap: 10px; align-items: center;">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=64&data=${encodeURIComponent(window.location.protocol + '//' + window.location.host + '/verify-certificate?id=' + certId)}" width="64" height="64" style="border: 1px solid #d4af37; padding: 2px; background: white;" />
                 <div>
@@ -1872,7 +2123,7 @@ function ResultScreen({ score, onBack }: { score: any; onBack: () => void }) {
                   <div style="font-size: 8px; color: #64748b;">ID: ${certId.substring(0, 18).toUpperCase()}...</div>
                 </div>
               </div>
-              
+
               <div class="seal-container">
                 <div class="ribbon-left"></div>
                 <div class="ribbon-right"></div>

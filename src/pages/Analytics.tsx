@@ -136,9 +136,9 @@ const pageSize = 15;
 
 const unwrap = (payload: any): AnalyticsData => payload || emptyData;
 
-  const formatChange = (t: any, changeStr: string) => {
-    if (!changeStr) return changeStr;
-    return changeStr
+  const formatChange = (t: any, changeStr: string | number) => {
+    if (!changeStr) return String(changeStr);
+    return String(changeStr)
       .replace('active', tr(t, 'analytics.executive.kpiChange.active', 'active'))
       .replace('issued', tr(t, 'analytics.executive.kpiChange.issued', 'issued'))
       .replace('joins', tr(t, 'analytics.executive.kpiChange.joins', 'joins'))

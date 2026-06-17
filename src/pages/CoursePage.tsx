@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
-  Play, 
+  Play,
   ChevronRight, CheckCircle,
   Clock, BookOpen, Star, Users, Award, Sparkles,
   FileText, Download, MessageSquare, Bookmark,
@@ -57,7 +57,13 @@ const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
 
 /* ── Helpers ─────────────────────────────────── */
 function nextId() {
-  return Date.now().toString();
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 function normalizeMediaUrl(url?: string) {
@@ -541,7 +547,7 @@ export default function CoursePage() {
             enrollment: fetched.enrollment,
           };
           setCourse(courseData);
-          
+
           let mods: Module[] = (fetched.modules && fetched.modules.length > 0)
             ? fetched.modules.map((m: any) => ({
                 ...m,
@@ -550,7 +556,7 @@ export default function CoursePage() {
                 items: m.items || [],
               }))
             : [];
-            
+
           // Map completed lessons if enrolled
           if (fetched.enrollment?.completedLessons) {
             mods = mods.map((m: any) => ({
@@ -647,9 +653,29 @@ export default function CoursePage() {
     }));
   };
 
+  const extractFileId = (url: string) => {
+    if (!url) return null;
+    const match = url.match(/\/uploads\/download\/([a-zA-Z0-9-]+)/);
+    return match ? match[1] : null;
+  };
+
+  const deleteFileOnServer = async (url: string) => {
+    const fileId = extractFileId(url);
+    if (!fileId) return;
+    try {
+      await apiClient.delete(`/uploads/file/${fileId}`);
+    } catch (e) {
+      console.error('Failed to delete file', e);
+    }
+  };
+
   const deleteLesson = (modId: string | number, lessonId: string | number) => {
     setCourseModules(prev => prev.map(m => {
       if (m.id !== modId) return m;
+      const lessonToDelete = m.items.find(i => i.id === lessonId);
+      if (lessonToDelete?.videoUrl) {
+        void deleteFileOnServer(lessonToDelete.videoUrl);
+      }
       const newItems = m.items.filter(i => i.id !== lessonId);
       return { ...m, lessons: newItems.length, items: newItems };
     }));
@@ -670,14 +696,14 @@ export default function CoursePage() {
   const handleLessonUpload = async (modId: string | number, lessonId: string | number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     const key = `${modId}-${lessonId}`;
     setUploadingLessons(prev => ({ ...prev, [key]: true }));
-    
+
     const formData = new FormData();
     formData.append('visibility', 'public');
     formData.append('file', file);
-    
+
     try {
       const res = await apiClient.post('/uploads/file', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -687,6 +713,10 @@ export default function CoursePage() {
       // Build absolute URL so video player can use it
       const relativeUrl = res.data?.url || res.data?.data?.url;
       if (relativeUrl) {
+        const oldLesson = (courseModules.find(m => m.id === modId)?.items || []).find(i => i.id === lessonId);
+        if (oldLesson?.videoUrl) {
+          void deleteFileOnServer(oldLesson.videoUrl);
+        }
         updateLesson(modId, lessonId, 'videoUrl', normalizeMediaUrl(relativeUrl));
       }
     } catch (err) {
@@ -922,12 +952,12 @@ export default function CoursePage() {
   const handleMaterialUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !course) return;
-    
+
     setMaterialUploading(true);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('visibility', 'public');
-    
+
     try {
       const res = await apiClient.post('/uploads/file', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -937,7 +967,7 @@ export default function CoursePage() {
       if (url) {
         const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
         const sizeMb = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-        
+
         const newMaterial = {
           name: file.name,
           url,
@@ -946,14 +976,14 @@ export default function CoursePage() {
           lessonTitle: getActiveLessonTitle(),
           uploadedAt: new Date().toISOString(),
         };
-        
+
         const updatedCourse = {
           ...course,
           materials: [...(course.materials || []), newMaterial]
         };
-        
+
         setCourse(updatedCourse);
-        
+
         // Auto save to backend
         await apiClient.patch(`/courses/${course.id}`, { materials: updatedCourse.materials });
       }
@@ -1005,8 +1035,8 @@ export default function CoursePage() {
 
   const title = course?.title || '';
   const allLessons = courseModules.flatMap(m => m.items);
-  const currentLesson = currentLessonId 
-    ? allLessons.find(i => i.id === currentLessonId) 
+  const currentLesson = currentLessonId
+    ? allLessons.find(i => i.id === currentLessonId)
     : allLessons.find(i => (i as any).current) || allLessons[0];
   const isLessonUnlocked = (lessonId: string | number) => {
     const targetIndex = allLessons.findIndex(item => item.id === lessonId);
@@ -1121,13 +1151,13 @@ export default function CoursePage() {
   return (
     <div className="course-player-layout learning-window">
       <div className="ambient-bg" />
-      
+
       {/* ── VIDEO / CONTENT AREA ── */}
       <div className={clsx('player-main learning-main', !sidebarOpen && 'player-main-full learning-main-full')}>
-        
+
         {/* Main Workspace Card */}
         <div className="learning-shell glass-panel-2">
-          
+
           {/* Header over video */}
           <div className="learning-header">
              <div className="learning-title-row">
@@ -1142,7 +1172,7 @@ export default function CoursePage() {
              </div>
              <div className="learning-actions">
                 <button className="btn btn-secondary btn-sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
-                  {sidebarOpen ? <ChevronRight size={14} /> : <BookOpen size={14} />} 
+                  {sidebarOpen ? <ChevronRight size={14} /> : <BookOpen size={14} />}
                   {sidebarOpen ? playerText.hideLessons : playerText.showLessons}
                 </button>
              </div>
@@ -1150,7 +1180,7 @@ export default function CoursePage() {
 
           {/* Content Area */}
           <div className={clsx('learning-content', currentLesson?.type === 'quiz' && 'learning-content-quiz')}>
-            
+
             {currentLesson?.type === 'video' ? (
               <div className="video-container" style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {currentMediaUrl && !videoError ? (
@@ -1175,7 +1205,7 @@ export default function CoursePage() {
                     )}
                     {/* Blurred background for cinematic effect */}
                     <div style={{ position: 'absolute', inset: -50, background: 'radial-gradient(circle at center, rgba(59,130,246,0.18), rgba(139,92,246,0.10), transparent 65%)', filter: 'blur(80px)', opacity: 0.8, zIndex: 1, pointerEvents: 'none' }} />
-                    
+
                     {/* Cinematic Overlays */}
                     <div className="video-overlay-cinematic" />
                     {youtubeEmbedUrl && (
@@ -1210,7 +1240,7 @@ export default function CoursePage() {
             ) : currentLesson?.type === 'quiz' ? (
               <div className="learning-quiz-shell">
                 {currentLesson.quizData ? (
-                  <QuizPlayer 
+                  <QuizPlayer
                     key={currentLesson.id}
                     quizData={{
                       ...currentLesson.quizData,
@@ -1219,7 +1249,7 @@ export default function CoursePage() {
                     isRu={isRu}
                     onComplete={(score, passed) => {
                       if (passed && score >= 75) handleLessonComplete(currentLesson.id, score);
-                    }} 
+                    }}
                   />
                 ) : (
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1239,7 +1269,7 @@ export default function CoursePage() {
                 onComplete={() => currentLesson && handleLessonComplete(currentLesson.id)}
               />
             )}
-            
+
             {/* Smart Workspace Tabs (AI, Notes, Materials) */}
             {currentLesson?.type !== 'quiz' && (
             <div className="learning-panel">
@@ -1260,7 +1290,7 @@ export default function CoursePage() {
                   </button>
                 ))}
               </div>
-              
+
               <div className="learning-panel-body">
                 {activeTab === 'ai' && (
                   <div className="course-ai-panel">
@@ -1299,7 +1329,7 @@ export default function CoursePage() {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="course-ai-composer">
                       <div className="course-ai-prompts hide-scrollbar">
                         {playerText.aiPrompts.map(prompt => (
@@ -1324,7 +1354,7 @@ export default function CoursePage() {
                     <div ref={aiEndRef} className="course-ai-scroll-anchor" />
                   </div>
                 )}
-                
+
                 {activeTab === 'materials' && (
                   <div className="course-material-panel">
                     {canEdit && (
@@ -1339,7 +1369,7 @@ export default function CoursePage() {
                         <input type="file" style={{ display: 'none' }} onChange={handleMaterialUpload} disabled={materialUploading} />
                       </label>
                     )}
-                    
+
                     {(!course?.materials || course.materials.length === 0) ? (
                       <div className="course-empty-panel">
                         <FileText size={34} />
@@ -1369,7 +1399,7 @@ export default function CoursePage() {
                     )}
                   </div>
                 )}
-                
+
                 {activeTab === 'notes' && (
                   <div className="course-notes-panel">
                     <div className="course-panel-heading">
@@ -1434,8 +1464,8 @@ export default function CoursePage() {
                       {discussionImageUrl && (
                         <div className="course-discussion-preview">
                           <img src={normalizeMediaUrl(discussionImageUrl)} alt="Upload" />
-                          <button 
-                            className="btn btn-ghost btn-sm btn-icon" 
+                          <button
+                            className="btn btn-ghost btn-sm btn-icon"
                             onClick={() => setDiscussionImageUrl('')}
                           >
                             <X size={13} />
@@ -1488,7 +1518,7 @@ export default function CoursePage() {
               </div>
             </div>
             )}
-            
+
           </div>
         </div>
       </div>
@@ -1508,7 +1538,7 @@ export default function CoursePage() {
               <div className="progress-fill" style={{ width: `${course?.progress || 0}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', boxShadow: '0 0 10px rgba(139,92,246,0.5)' }} />
             </div>
           </div>
-          
+
           <div className="lesson-sidebar-body learning-sidebar-body">
             {courseModules.map((mod, modIdx) => (
               <div key={mod.id} style={{ marginBottom: 24 }}>
@@ -1516,15 +1546,15 @@ export default function CoursePage() {
                   <div style={{ width: 24, height: 1, background: 'var(--border-2)' }} />
                   {isRu ? mod.titleRu || mod.title : mod.title}
                 </div>
-                
+
                 <div style={{ position: 'relative' }}>
                   {mod.items.map((item, i) => {
                     const isCurrent = currentLesson?.id === item.id;
                     const isLast = i === mod.items.length - 1 && modIdx === courseModules.length - 1;
                     const unlocked = isLessonUnlocked(item.id);
                     return (
-                      <div 
-                        key={item.id} 
+                      <div
+                        key={item.id}
                         title={!unlocked ? 'Oldingi darsni tugating' : undefined}
                         style={{
                           display: 'flex',
@@ -1537,9 +1567,9 @@ export default function CoursePage() {
                         onClick={() => selectLesson(item)}
                       >
                         {!isLast && <div className={clsx('timeline-connector', item.done && 'active')} />}
-                        
-                        <div style={{ 
-                          width: 34, height: 34, borderRadius: '50%', flexShrink: 0, 
+
+                        <div style={{
+                          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
                           background: isCurrent ? 'linear-gradient(135deg, #3b82f6, #8b5cf6)' : item.done ? 'var(--surface-2)' : 'var(--bg-0)',
                           border: `2px solid ${isCurrent ? 'transparent' : item.done ? 'var(--blue-500)' : 'var(--border-2)'}`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1549,7 +1579,7 @@ export default function CoursePage() {
                         }}>
                           {!unlocked ? <Lock size={14} /> : item.done && !isCurrent ? <CheckCircle size={16} /> : item.type === 'quiz' ? <FileText size={14} /> : item.type === 'assignment' ? <Award size={14} /> : <Play size={14} />}
                         </div>
-                        
+
                         <div style={{ flex: 1, paddingTop: 6 }}>
                           <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
                             {item.title}
@@ -1579,7 +1609,7 @@ function CourseOverview({
   onToggleEdit, onSave, onAddModule, onDeleteModule, onUpdateModuleTitle,
   onAddLesson, onDeleteLesson, onUpdateLesson, handleLessonUpload,
   setAddingModule, setNewModuleTitle,
-  uploadingLessons = {},
+  uploadingLessons = {}, setCourseModules,
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
   const [editingModId, setEditingModId] = useState<string | number | null>(null);
@@ -1633,7 +1663,7 @@ function CourseOverview({
       <div className="course-hero" style={{ marginBottom: 32, borderRadius: 'var(--radius-2xl)', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 30px 60px rgba(0,0,0,0.4)' }}>
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color || '#3b82f6'}30, #000)`, zIndex: 0 }} />
         <div style={{ position: 'absolute', top: -50, right: -50, width: 300, height: 300, background: `${course.color || '#3b82f6'}`, filter: 'blur(100px)', opacity: 0.2, borderRadius: '50%', zIndex: 0 }} />
-        
+
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', opacity: 0.05, right: 40, pointerEvents: 'none', zIndex: 0 }}>
           <BookOpen size={240} />
         </div>
@@ -1642,13 +1672,13 @@ function CourseOverview({
           <span className="badge badge-blue" style={{ marginBottom: 16, display: 'inline-flex', padding: '6px 12px', fontSize: 13, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', backdropFilter: 'blur(10px)' }}>
             <Sparkles size={12} style={{ marginRight: 6 }} /> {cat} • {level}
           </span>
-          
+
           <h1 style={{ fontSize: 36, fontWeight: 900, letterSpacing: '-1px', marginBottom: 16, lineHeight: 1.1, background: 'linear-gradient(180deg, #fff, #cbd5e1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {title}
           </h1>
-          
+
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', marginBottom: 28, lineHeight: 1.6, maxWidth: 600 }}>{desc}</p>
-          
+
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 28, fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
             {ratingVisible && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star size={14} color="#f59e0b" fill="#f59e0b" /> <strong style={{ color: '#fff' }}>{Number(course.rating).toFixed(1)}</strong> {isRu ? 'Рейтинг' : 'Reyting'}</span>
@@ -1757,15 +1787,25 @@ function CourseOverview({
                   {/* Module header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editMode && mod.items.length > 0 ? 12 : 0 }}>
                     {editMode && editingModId === mod.id ? (
-                      <input
-                        className="input"
-                        style={{ fontSize: 14, fontWeight: 700, flex: 1, marginRight: 8, padding: '6px 10px' }}
-                        value={mod.title}
-                        autoFocus
-                        onChange={e => onUpdateModuleTitle(mod.id, e.target.value)}
-                        onBlur={() => setEditingModId(null)}
-                        onKeyDown={e => e.key === 'Enter' && setEditingModId(null)}
-                      />
+                      <div style={{ flex: 1, marginRight: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <input
+                          className="input"
+                          style={{ fontSize: 14, fontWeight: 700, padding: '6px 10px' }}
+                          value={mod.title}
+                          placeholder="Modul nomi (O'zbek)"
+                          autoFocus
+                          onChange={e => onUpdateModuleTitle(mod.id, e.target.value)}
+                        />
+                        <input
+                          className="input"
+                          style={{ fontSize: 13, fontWeight: 500, padding: '6px 10px' }}
+                          value={mod.titleRu || ''}
+                          placeholder="Название модуля (Русский)"
+                          onChange={e => setCourseModules((prev: any[]) => prev.map((m: any) => m.id === mod.id ? { ...m, titleRu: e.target.value } : m))}
+                          onKeyDown={e => e.key === 'Enter' && setEditingModId(null)}
+                        />
+                        <button className="btn btn-sm btn-primary" style={{ alignSelf: 'flex-start' }} onClick={() => setEditingModId(null)}>Saqlash</button>
+                      </div>
                     ) : (
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 14 }}>{isRu ? mod.titleRu : mod.title}</div>
@@ -1806,14 +1846,23 @@ function CourseOverview({
                             <div style={{ width: 26, height: 26, borderRadius: 6, background: item.type === 'quiz' ? 'rgba(59,130,246,0.15)' : item.type === 'assignment' ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               {item.type === 'quiz' ? <FileText size={12} color="#3b82f6" /> : item.type === 'assignment' ? <Award size={12} color="#f59e0b" /> : <Play size={12} color="#22c55e" />}
                             </div>
-                            {/* Title input */}
-                            <input
-                              className="input"
-                              style={{ flex: 1, fontSize: 13, padding: '5px 10px', height: 32 }}
-                              value={item.title}
-                              placeholder="Dars nomi..."
-                              onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
-                            />
+                            {/* Title inputs */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <input
+                                className="input"
+                                style={{ fontSize: 13, padding: '5px 10px', height: 32 }}
+                                value={item.title}
+                                placeholder="Dars nomi (O'zbek)..."
+                                onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
+                              />
+                              <input
+                                className="input"
+                                style={{ fontSize: 12, padding: '4px 10px', height: 28 }}
+                                value={item.titleRu || ''}
+                                placeholder="Название урока (Русский)..."
+                                onChange={e => onUpdateLesson(mod.id, item.id, 'titleRu', e.target.value)}
+                              />
+                            </div>
                             {/* Type selector */}
                             <select
                               className="input"

@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore } from '@/store/notification.store';
 import { getRealtimeUrl } from '@/shared/lib/api-config';
+import toast from 'react-hot-toast';
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -26,7 +27,21 @@ export function useSocket() {
 
         setSocket(socketInstance);
 
-        socketInstance.on('notification', (data: { notification?: any }) => {
+        socketInstance.on('notification', (data: { notification?: any; message?: string }) => {
+          if (data.message) {
+            const isError = data.notification?.priority === 'HIGH' || data.notification?.priority === 'CRITICAL';
+            toast(data.message, {
+              icon: isError ? '⚠️' : '🔔',
+              duration: 8000,
+              style: {
+                background: isError ? '#fef2f2' : '#f0fdf4',
+                color: isError ? '#991b1b' : '#166534',
+                border: `1px solid ${isError ? '#f87171' : '#4ade80'}`,
+                fontWeight: '600'
+              }
+            });
+          }
+
           if (data.notification?.id) {
             addRealtimeNotification(data.notification);
           } else {

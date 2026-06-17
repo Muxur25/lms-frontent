@@ -4082,6 +4082,18 @@ body.exam-immersive-mode .exam-immersive-layout {
 .cert-roadmap-line.done { background: #22c55e; }
 .cert-roadmap-label { padding-top: 6px; }
 
+@media (max-width: 760px) {
+  .prepass-modal-shell {
+    grid-template-columns: 1fr !important;
+    overflow-y: auto !important;
+  }
+
+  .prepass-modal-shell > div:first-of-type {
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  }
+}
+
 /* ── Certifications Dashboard ── */
 .cert-dashboard-root {
   display: flex;
@@ -4173,6 +4185,7 @@ body.exam-immersive-mode .exam-immersive-layout {
   .exam-nav-premium { display: none; }
   .cert-hero { grid-template-columns: 1fr; }
   .cert-hero-stats { flex-wrap: wrap; }
+  .cert-expiration-grid { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 640px) {
   .exam-kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -4674,7 +4687,7 @@ body.exam-immersive-mode .exam-immersive-layout {
   text-align: center;
   position: relative;
   background: radial-gradient(circle, #fffcf4 30%, #fbf8ef 70%, #f4ebd0 100%);
-  background-image: 
+  background-image:
     radial-gradient(circle, #fffcf4 30%, #fbf8ef 70%, #f4ebd0 100%),
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M30 0 A 30 30 0 0 0 0 30 A 30 30 0 0 0 30 60 A 30 30 0 0 0 60 30 A 30 30 0 0 0 30 0 Z M30 5 A 25 25 0 0 1 55 30 A 25 25 0 0 1 30 55 A 25 25 0 0 1 30 5 A 25 25 0 0 1 30 5 Z' fill='none' stroke='%23d4af37' stroke-width='0.12' opacity='0.15'/%3E%3Ccircle cx='30' cy='30' r='12' fill='none' stroke='%23d4af37' stroke-width='0.08' opacity='0.15'/%3E%3C/svg%3E");
   border-radius: 8px;
@@ -4827,6 +4840,19 @@ body.exam-immersive-mode .exam-immersive-layout {
   overflow-y: auto;
   box-shadow: 0 40px 80px rgba(0,0,0,0.7);
   animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@media (max-width: 640px) {
+  .cert-preview-modal-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .cert-preview-modal {
+    padding: 24px 14px 18px;
+    max-height: calc(100vh - 24px);
+    border-radius: 18px;
+  }
 }
 
 .cert-modal-close {

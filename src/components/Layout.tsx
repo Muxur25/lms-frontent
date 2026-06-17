@@ -16,6 +16,9 @@ import { useNotificationStore } from '@/store/notification.store';
 import { useUIStore } from '@/store/useUIStore';
 import { getInitials } from '@/shared/lib/auth-user';
 import ProfileModal from './ProfileModal';
+import AddCourseModal from './AddCourseModal';
+import { CreateExamWizard } from './exam/CreateExamWizard';
+import toast from 'react-hot-toast';
 
 /* ─── Types ────────────────────────────────────────────────── */
 interface SidebarProps {
@@ -67,6 +70,7 @@ const NAV = [
       { id: 'notifications', icon: Bell,        label: 'nav.notifications', badge: '8' },
       { id: 'settings',      icon: Settings,    label: 'nav.settings',      badge: null },
       { id: 'security',      icon: ShieldCheck, label: 'nav.security',      badge: null },
+      { id: 'enterprise',    icon: Building2,   label: 'nav.enterprise',    badge: null },
       { id: 'admin',         icon: ShieldCheck, label: 'nav.admin',         badge: null },
       { id: 'admin/security', icon: ShieldCheck, label: 'nav.adminSecurity', badge: null },
     ],
@@ -152,6 +156,9 @@ export function Sidebar({ collapsed, setCollapsed, activePage, setActivePage, mo
               }
               if (item.id === 'admin/security') {
                 return user?.role === 'super_admin' || user?.role === 'admin';
+              }
+              if (item.id === 'enterprise') {
+                return user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'hr_manager';
               }
               return true;
             });
@@ -333,7 +340,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
     security: t('nav.security'), 'admin/security': t('nav.adminSecurity'),
     notifications: t('nav.notifications'), admin: t('nav.admin'),
     ai: t('nav.ai'), webinars: t('nav.webinars'),
-    library: t('nav.library'),
+    library: t('nav.library'), enterprise: t('nav.enterprise'),
   };
 
   return (
@@ -392,15 +399,15 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
                 <div className="pd-header" style={{ padding: '12px 16px', paddingBottom: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)' }}>Tezkor yaratish</div>
                 </div>
-                <div className="pd-item" onClick={() => navigate('/admin/courses/new')}>
+                <div className="pd-item" onClick={() => { openModal('addCourse'); setQuickAddOpen(false); }}>
                   <BookOpen size={14} color="var(--blue-400)" />
                   <span>Yangi kurs</span>
                 </div>
-                <div className="pd-item" onClick={() => navigate('/admin/exams/new')}>
+                <div className="pd-item" onClick={() => { openModal('addExam'); setQuickAddOpen(false); }}>
                   <FileText size={14} color="var(--purple-400)" />
                   <span>Yangi imtihon</span>
                 </div>
-                <div className="pd-item" onClick={() => navigate('/admin/webinars/new')}>
+                <div className="pd-item" onClick={() => { openModal('addWebinar'); setQuickAddOpen(false); }}>
                   <Video size={14} color="var(--green-400)" />
                   <span>Yangi vebinar</span>
                 </div>
@@ -472,16 +479,39 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
       {/* Profile Modal */}
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => closeModal()} />
 
+      {/* Global Modals */}
+      {activeModal === 'addCourse' && (
+        <AddCourseModal
+          onClose={() => closeModal()}
+          onSuccess={() => {
+            closeModal();
+            toast.success(t('courses_page.createSuccess', 'Kurs muvaffaqiyatli yaratildi!'));
+            navigate('/courses');
+          }}
+        />
+      )}
+
+      {activeModal === 'addExam' && (
+        <CreateExamWizard
+          onClose={() => closeModal()}
+          onSuccess={() => {
+            closeModal();
+            toast.success(t('exam.createSuccess', 'Imtihon muvaffaqiyatli yaratildi!'));
+            navigate('/exams');
+          }}
+        />
+      )}
+
       {/* Command Palette */}
       {cmdOpen && (
         <div className="cmd-overlay" onClick={() => setCmdOpen(false)}>
           <div className="cmd-palette" onClick={e => e.stopPropagation()}>
             <div className="cmd-input-wrap">
               <Search size={16} color="var(--text-muted)" />
-              <input 
-                autoFocus 
-                className="cmd-input" 
-                placeholder={t('layout.cmdPlaceholder') || 'Qidirish yoki buyruq...'} 
+              <input
+                autoFocus
+                className="cmd-input"
+                placeholder={t('layout.cmdPlaceholder') || 'Qidirish yoki buyruq...'}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -493,7 +523,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
                   if (!searchQuery) return false;
                   return t(item.label).toLowerCase().includes(searchQuery.toLowerCase());
                 }).slice(0, 5);
-                
+
                 const showSuggestions = !searchQuery;
 
                 return (
@@ -559,7 +589,7 @@ export function Topbar({ activePage, setActivePage, setMobileOpen, lang, setLang
                     {!showSuggestions && searchQuery.length >= 2 && !isSearching && searchResults.courses?.length === 0 && searchResults.users?.length === 0 && staticPages.length === 0 && (
                       <div className="cmd-no-results" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>Natija topilmadi</div>
                     )}
-                    
+
                     {isSearching && (
                       <div className="cmd-no-results" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
                         <div className="spinner" style={{ width: 16, height: 16, display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />

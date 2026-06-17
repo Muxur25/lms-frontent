@@ -97,6 +97,14 @@ function calculateKpis(certs) {
   };
 }
 
+function calculateExpirationBuckets(certs) {
+  const now = Date.now();
+  return {
+    expiring: certs.filter((cert) => isExpiringByDate(cert, now)).length,
+    expired: certs.filter((cert) => cert.status !== 'revoked' && (cert.status === 'expired' || isExpiredByDate(cert, now))).length,
+  };
+}
+
 function validateCertificate(cert) {
   assert(cert.id, `Certificate has no id: ${JSON.stringify(cert)}`);
   assert(cert.certificateId, `Certificate has no certificateId: ${JSON.stringify(cert)}`);
@@ -109,12 +117,22 @@ function validateAnalytics(analytics) {
   assert(analytics.totals && typeof analytics.totals === 'object', 'Analytics has no totals object');
   for (const key of ['total', 'active', 'expiring', 'expired', 'revoked']) {
     assert(Number.isFinite(Number(analytics.totals[key])), `Analytics totals.${key} is invalid`);
+    assert(Number(analytics.totals[key]) >= 0, `Analytics totals.${key} must not be negative`);
   }
   assert(Number.isFinite(Number(analytics.avgScore)), 'Analytics avgScore is invalid');
+  assert(Number(analytics.avgScore) >= 0 && Number(analytics.avgScore) <= 100, 'Analytics avgScore must be between 0 and 100');
   assert(Array.isArray(analytics.byDepartment), 'Analytics byDepartment must be an array');
   assert(Array.isArray(analytics.byCategory), 'Analytics byCategory must be an array');
   assert(Array.isArray(analytics.monthlyTrend), 'Analytics monthlyTrend must be an array');
   assert(Array.isArray(analytics.soonExpiring), 'Analytics soonExpiring must be an array');
+  for (const row of analytics.monthlyTrend) {
+    assert(typeof row.month === 'string' && row.month.trim(), 'Analytics monthlyTrend row has invalid month');
+    assert(Number.isFinite(Number(row.count)) && Number(row.count) >= 0, 'Analytics monthlyTrend row has invalid count');
+  }
+  for (const row of [...analytics.byDepartment, ...analytics.byCategory]) {
+    assert(typeof row.name === 'string' && row.name.trim(), 'Analytics grouping row has invalid name');
+    assert(Number.isFinite(Number(row.count)) && Number(row.count) >= 0, 'Analytics grouping row has invalid count');
+  }
 }
 
 async function run() {
@@ -131,13 +149,37 @@ async function run() {
   const myCerts = unwrapList(myResult.data);
   myCerts.forEach(validateCertificate);
 
+  const missingVerifyResult = await request('/certificates/verify/AGMK-DOES-NOT-EXIST-000000', { headers });
+  assert(missingVerifyResult.response.ok, `/certificates/verify missing certificate failed with HTTP ${missingVerifyResult.response.status}`);
+  const missingVerify = unwrap(missingVerifyResult.data);
+  assert(missingVerify?.valid === false, 'Missing certificate verification must return valid=false');
+  assert(missingVerify?.status === 'invalid', `Missing certificate verification status must be invalid, got ${missingVerify?.status}`);
+
+  if (myCerts.length > 0) {
+    const cert = myCerts[0];
+    const verifyResult = await request(`/certificates/verify/${encodeURIComponent(cert.certificateId)}`, { headers });
+    assert(verifyResult.response.ok, `/certificates/verify existing certificate failed with HTTP ${verifyResult.response.status}`);
+    const verified = unwrap(verifyResult.data);
+    assert(verified?.certificate?.certificateId === cert.certificateId, 'Verified certificate id does not match');
+    assert(['valid', 'expired', 'revoked'].includes(verified.status), `Unexpected verify status: ${verified.status}`);
+  }
+
   const expectedPersonal = calculateKpis(myCerts);
+  const expirationBuckets = calculateExpirationBuckets(myCerts);
   assert(expectedPersonal.active + expectedPersonal.expiring <= expectedPersonal.total, 'Personal KPI counts exceed total');
+  assert(expirationBuckets.expiring >= 0 && expirationBuckets.expired >= 0, 'Expiration buckets must not be negative');
 
   const analyticsResult = await request('/certificates/analytics', { headers });
   assert(analyticsResult.response.ok, `/certificates/analytics failed with HTTP ${analyticsResult.response.status}`);
   const analytics = unwrap(analyticsResult.data);
   validateAnalytics(analytics);
+
+  const invalidTrackResult = await request('/certificates/not-a-real-id/track', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'invalid_action' }),
+  });
+  assert(invalidTrackResult.response.status === 400, `Invalid track action should return 400, got ${invalidTrackResult.response.status}`);
 
   if (!ORG_KPI_ROLES.has(role)) {
     assert(Number(analytics.totals.total) === expectedPersonal.total, 'Employee analytics total does not match /certificates/my');
@@ -147,6 +189,7 @@ async function run() {
   }
 
   console.log('Personal KPI expected:', expectedPersonal);
+  console.log('Expiration buckets:', expirationBuckets);
   console.log('Analytics totals:', analytics.totals, `avgScore=${analytics.avgScore}`);
   console.log('Certifications KPI e2e OK');
 }

@@ -4,7 +4,9 @@ export interface TestQuestion {
   id: string;
   type: 'single' | 'multiple' | 'truefalse' | 'text';
   question: string;
+  questionRu?: string;
   options: string[];
+  optionsRu?: string[];
   correctAnswers?: number[];
   explanation?: string;
   difficulty: 'easy' | 'medium' | 'hard';
@@ -17,6 +19,7 @@ export interface Exam {
   title: string;
   titleRu?: string;
   description?: string;
+  descriptionRu?: string;
   category?: string;
   tags?: string[];
   courseId?: string;
@@ -59,6 +62,7 @@ export interface StartAttemptResponse {
   attempt: TestAttempt;
   exam: Exam;
   questions: TestQuestion[];
+  isPrePassed?: boolean;
 }
 
 export interface ExamResultsQuery {
@@ -71,6 +75,18 @@ export interface ExamResultsQuery {
   status?: 'all' | 'passed' | 'failed';
   search?: string;
   sort?: 'newest' | 'oldest' | 'highest' | 'lowest';
+  page?: number;
+  limit?: number;
+}
+
+export interface ExamPrePassUser {
+  id: string;
+  fullName: string;
+  fullNameRu?: string;
+  employeeId?: string;
+  department?: string;
+  position?: string;
+  role?: string;
 }
 
 const extractData = (res: any) => {
@@ -102,7 +118,22 @@ export const examsApi = {
   },
 
   delete: async (id: string) => {
-    const res = await apiClient.delete(`/exams/${id}`);
+    const res = await apiClient.delete<any>(`/exams/${id}`);
+    return extractData(res);
+  },
+
+  setPrePass: async (id: string, tabelNumber: string) => {
+    const res = await apiClient.post<any>(`/exams/${id}/pre-pass`, { tabelNumber });
+    return extractData(res);
+  },
+
+  getPrePassUsers: async (id: string) => {
+    const res = await apiClient.get<any>(`/exams/${id}/pre-pass`);
+    return extractData(res) as { users: ExamPrePassUser[]; total: number };
+  },
+
+  removePrePass: async (id: string, userId: string) => {
+    const res = await apiClient.delete<any>(`/exams/${id}/pre-pass/${userId}`);
     return extractData(res);
   },
 
@@ -150,7 +181,11 @@ export const examsApi = {
   },
 
   exportResultsCsv: async (params?: ExamResultsQuery) => {
-    const res = await apiClient.get<any>('/exams/results/export/csv', { params });
-    return extractData(res);
+    const res = await apiClient.get<string>('/exams/results/export/csv', {
+      params,
+      responseType: 'text',
+      transformResponse: [(data) => data],
+    });
+    return res.data;
   },
 };
