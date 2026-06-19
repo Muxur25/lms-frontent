@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Filter, Clock, Users, Star, BookOpen, Play } from 'lucide-react';
+import { Search, Plus, Filter, Clock, Users, Star, BookOpen, Play, Edit3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/axios';
@@ -29,6 +29,7 @@ export default function Courses() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [languageFilter, setLanguageFilter] = useState<'uz' | 'ru'>('uz');
 
   const isRu = i18n.language === 'ru';
@@ -58,6 +59,22 @@ export default function Courses() {
 
   const isActiveStatus = (status: string) =>
     status === 'active' || status === 'published';
+
+  const openCreateModal = () => {
+    setSelectedCourse(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (course: any) => {
+    setSelectedCourse(course);
+    setIsModalOpen(true);
+  };
+
+  const normalizeCourse = (course: any) => ({
+    ...course,
+    id: course._id || course.id,
+    status: course.status === 'published' ? 'active' : course.status,
+  });
 
   const filtered = courses.filter(c => {
     // Extra client-side safety: non-creators never see drafts
@@ -129,7 +146,7 @@ export default function Courses() {
           </div>
         </div>
         {canCreate && (
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+          <button className="btn btn-primary" onClick={openCreateModal}>
             <Plus size={15} /> {t('courses.newCourse')}
           </button>
         )}
@@ -229,9 +246,21 @@ export default function Courses() {
                   <div className="avatar" style={{ width: 26, height: 26, fontSize: 10, background: `${course.color}30`, color: course.color }}>{course.instructor ? course.instructor.split(' ').map((n: string) => n[0]).join('') : 'T'}</div>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{course.instructor}</span>
                 </div>
-                <Link to={`/courses/${course.id}`} className="btn btn-primary btn-sm" style={{ padding: '6px 12px' }}>
-                  <Play size={12} /> {t('courses_page.watch')}
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '6px 10px' }}
+                      onClick={() => openEditModal(course)}
+                    >
+                      <Edit3 size={12} /> {t('common.edit', 'Tahrirlash')}
+                    </button>
+                  )}
+                  <Link to={`/courses/${course.id}`} className="btn btn-primary btn-sm" style={{ padding: '6px 12px' }}>
+                    <Play size={12} /> {t('courses_page.watch')}
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -241,15 +270,22 @@ export default function Courses() {
 
       {isModalOpen && (
         <AddCourseModal
-          onClose={() => setIsModalOpen(false)}
-          onSuccess={(newCourse) => {
-            const normalizedCourse = {
-              ...newCourse,
-              id: newCourse._id || newCourse.id,
-              status: newCourse.status === 'published' ? 'active' : newCourse.status
-            };
-            setCourses(prev => [normalizedCourse, ...prev]);
+          onClose={() => {
             setIsModalOpen(false);
+            setSelectedCourse(null);
+          }}
+          courseToEdit={selectedCourse}
+          onSuccess={(savedCourse) => {
+            const normalizedCourse = normalizeCourse(savedCourse);
+            setCourses(prev => {
+              if (!selectedCourse) return [normalizedCourse, ...prev];
+              return prev.map(course => {
+                const courseId = course._id || course.id;
+                return courseId === normalizedCourse.id ? normalizedCourse : course;
+              });
+            });
+            setIsModalOpen(false);
+            setSelectedCourse(null);
           }}
         />
       )}

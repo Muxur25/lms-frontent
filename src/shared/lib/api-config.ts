@@ -21,3 +21,5 @@ export const getRealtimeUrl = () => {
   if (configured) return configured;
   return `${getApiOrigin()}/realtime`;
 };
+
+export const SOCKET_IO_PATH = '/realtime/socket.io';

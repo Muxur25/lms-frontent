@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationStore } from '@/store/notification.store';
-import { getRealtimeUrl } from '@/shared/lib/api-config';
+import { SOCKET_IO_PATH, getRealtimeUrl } from '@/shared/lib/api-config';
 import toast from 'react-hot-toast';
 
 export function useSocket() {
@@ -22,6 +22,7 @@ export function useSocket() {
 
         socketInstance = io(socketUrl, {
           auth: { token },
+          path: SOCKET_IO_PATH,
           transports: ['websocket'],
         });
 

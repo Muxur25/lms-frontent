@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Star, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { io } from 'socket.io-client';
-import { getApiBaseUrl } from '@/shared/lib/api-config';
+import { SOCKET_IO_PATH, getRealtimeUrl } from '@/shared/lib/api-config';
 import { useAuthStore } from '@/store/auth.store';
 
 export const LevelUpModal: React.FC = () => {
@@ -16,9 +16,9 @@ export const LevelUpModal: React.FC = () => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
 
-    const socketUrl = getApiBaseUrl().replace('/api/v1', '') + '/realtime';
-    const socket = io(socketUrl, {
+    const socket = io(getRealtimeUrl(), {
       auth: { token },
+      path: SOCKET_IO_PATH,
       withCredentials: true,
       transports: ['websocket', 'polling']
     });

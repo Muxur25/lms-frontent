@@ -30,17 +30,22 @@ const COLOR_PRESETS = [
   { name: 'Green', value: '#22c55e' },
 ];
 
+type CourseLanguage = 'uz' | 'ru';
+
 interface AddCourseModalProps {
   onClose: () => void;
   onSuccess: (course: any) => void;
   courseToEdit?: any;
 }
 
+const getCourseLanguage = (course?: any): CourseLanguage => (
+  course?.language === 'ru' ? 'ru' : 'uz'
+);
+
 export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: AddCourseModalProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
 
-  const isRu = i18n.language === 'ru';
   const isEdit = !!courseToEdit;
 
   const [formData, setFormData] = useState({
@@ -60,12 +65,13 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const selectedIsRu = formData.language === 'ru';
 
   useEffect(() => {
     if (isEdit && courseToEdit) {
       setFormData({
-        title: courseToEdit.title || '',
-        description: courseToEdit.description || '',
+        title: getCourseLanguage(courseToEdit) === 'ru' ? (courseToEdit.titleRu || courseToEdit.title || '') : (courseToEdit.title || ''),
+        description: getCourseLanguage(courseToEdit) === 'ru' ? (courseToEdit.descriptionRu || courseToEdit.description || '') : (courseToEdit.description || ''),
         cat: courseToEdit.cat || 'IT',
         catRu: courseToEdit.catRu || courseToEdit.cat || 'IT',
         level: courseToEdit.level || "Boshlang'ich",
@@ -74,8 +80,8 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
         duration: courseToEdit.duration || '',
         color: courseToEdit.color || '#3b82f6',
         instructor: courseToEdit.instructor || '',
-        status: courseToEdit.status || 'draft',
-        language: 'uz',
+        status: courseToEdit.status === 'active' ? 'published' : (courseToEdit.status || 'draft'),
+        language: getCourseLanguage(courseToEdit),
       });
     } else if (user) {
       const name = user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'O\'qituvchi';
@@ -125,11 +131,21 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
     setSubmitting(true);
 
     try {
+      const selectedLanguage = formData.language as CourseLanguage;
+      const payload = {
+        ...formData,
+        title: formData.title.trim(),
+        titleRu: selectedLanguage === 'ru' ? formData.title.trim() : '',
+        description: formData.description.trim(),
+        descriptionRu: selectedLanguage === 'ru' ? formData.description.trim() : '',
+        status: formData.status === 'active' ? 'published' : formData.status,
+      };
+
       let res;
       if (isEdit) {
-        res = await apiClient.patch(`/courses/${courseToEdit.id || courseToEdit._id}`, formData);
+        res = await apiClient.patch(`/courses/${courseToEdit.id || courseToEdit._id}`, payload);
       } else {
-        res = await apiClient.post('/courses', formData);
+        res = await apiClient.post('/courses', payload);
       }
 
       const savedCourse = res.data?.data || res.data;
@@ -215,10 +231,10 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="input-group">
-            <label className="input-label">{t('courses_page.createTitleLabel', formData.language === 'ru' ? 'Название курса *' : 'Kurs nomi *')}</label>
+            <label className="input-label">{selectedIsRu ? 'Название курса *' : 'Kurs nomi *'}</label>
             <input
               className="input"
-              placeholder={t('courses_page.createTitlePlaceholder', formData.language === 'ru' ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari')}
+              placeholder={selectedIsRu ? 'Например: Основы промышленной безопасности' : 'Masalan: Sanoat Xavfsizligi Asoslari'}
               value={formData.title}
               onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
             />
@@ -226,11 +242,11 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
           </div>
 
           <div className="input-group">
-            <label className="input-label">{t('courses_page.createDescLabel', formData.language === 'ru' ? 'Описание курса *' : 'Kurs tavsifi *')}</label>
+            <label className="input-label">{selectedIsRu ? 'Описание курса *' : 'Kurs tavsifi *'}</label>
             <textarea
               className="input"
               rows={3}
-              placeholder={t('courses_page.createDescPlaceholder', formData.language === 'ru' ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...')}
+              placeholder={selectedIsRu ? 'Подробное описание курса...' : 'Kurs haqida batafsil ma\'lumot...'}
               value={formData.description}
               style={{ resize: 'none' }}
               onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -247,7 +263,7 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
                 onChange={e => handleCategoryChange(e.target.value)}
               >
                 {CATEGORIES.map(c => (
-                  <option key={c.id} value={c.id}>{isRu ? c.ru : c.uz}</option>
+                  <option key={c.id} value={c.id}>{selectedIsRu ? c.ru : c.uz}</option>
                 ))}
               </select>
             </div>
@@ -260,7 +276,7 @@ export default function AddCourseModal({ onClose, onSuccess, courseToEdit }: Add
                 onChange={e => handleLevelChange(e.target.value)}
               >
                 {LEVELS.map(l => (
-                  <option key={l.id} value={l.id}>{isRu ? l.ru : l.uz}</option>
+                  <option key={l.id} value={l.id}>{selectedIsRu ? l.ru : l.uz}</option>
                 ))}
               </select>
             </div>

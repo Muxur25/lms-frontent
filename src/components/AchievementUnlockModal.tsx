@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { Trophy, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getRealtimeUrl } from '@/shared/lib/api-config';
+import { SOCKET_IO_PATH, getRealtimeUrl } from '@/shared/lib/api-config';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function AchievementUnlockModal() {
@@ -17,6 +17,7 @@ export default function AchievementUnlockModal() {
 
     const socket = io(getRealtimeUrl(), {
       auth: { token },
+      path: SOCKET_IO_PATH,
       transports: ['websocket', 'polling'],
     });
 

@@ -440,10 +440,12 @@ export function PDFViewer({ data, downloadable, scale }: PDFViewerProps) {
         
         // Set worker path dynamically
         if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          const workerUrl = new URL(
             'pdfjs-dist/build/pdf.worker.min.mjs',
             import.meta.url
-          ).toString();
+          );
+          workerUrl.searchParams.set('v', '20260618-2');
+          pdfjs.GlobalWorkerOptions.workerSrc = workerUrl.toString();
         }
 
         const task = pdfjs.getDocument({ data: data.slice(0) });

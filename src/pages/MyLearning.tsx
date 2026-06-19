@@ -300,7 +300,7 @@ export default function MyLearning() {
                   </div>
 
                   <Link
-                    to={`/courses/${course.id}`}
+                    to={`/courses/${course.id}?resume=1`}
                     className="btn btn-primary btn-sm"
                     style={{
                       width: '100%',

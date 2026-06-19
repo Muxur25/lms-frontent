@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   Play,
@@ -18,6 +18,16 @@ import { QuizBuilderModal, QuizPlayer } from '../components/Quiz';
 import { PDFViewer } from '@/components/BookReader';
 import toast from 'react-hot-toast';
 import { getApiOrigin } from '@/shared/lib/api-config';
+import {
+  getLessonSequence,
+  getModuleProgressStats,
+  getResumeLesson,
+  hasLessonContent,
+  hasQuizQuestions,
+  isLessonUnlockedInSequence,
+  type CourseLessonFlowItem,
+  type CourseModuleFlowItem,
+} from '@/shared/lib/course-learning-flow';
 
 export interface QuizQuestion {
   id: string;
@@ -32,7 +42,7 @@ export interface QuizData {
   questions: QuizQuestion[];
 }
 
-interface LessonItem {
+interface LessonItem extends CourseLessonFlowItem {
   id: string | number;
   title: string;
   titleRu?: string; // Kept for interface backward compatibility if needed
@@ -44,7 +54,7 @@ interface LessonItem {
   current?: boolean;
 }
 
-interface Module {
+interface Module extends CourseModuleFlowItem {
   id: string | number;
   title: string;
   titleRu?: string; // Kept for interface backward compatibility if needed
@@ -54,6 +64,17 @@ interface Module {
 }
 
 const EDITOR_ROLES = ['super_admin', 'hr_manager', 'trainer'];
+
+const sortCourseModules = (modules: Module[]) => modules
+  .slice()
+  .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+  .map((module) => ({
+    ...module,
+    lessons: module.items?.length || module.lessons || 0,
+    items: (module.items || [])
+      .slice()
+      .sort((a: any, b: any) => (a.order || 0) - (b.order || 0)),
+  }));
 
 /* ── Helpers ─────────────────────────────────── */
 function nextId() {
@@ -69,9 +90,35 @@ function nextId() {
 function normalizeMediaUrl(url?: string) {
   const value = url?.trim();
   if (!value) return '';
-  if (/^https?:\/\//i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.pathname.startsWith('/api/v1/uploads/download/')) {
+        return `${getApiOrigin()}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  }
   if (value.startsWith('/')) return `${getApiOrigin()}${value}`;
   return `${getApiOrigin()}/${value}`;
+}
+
+function getPersistedMediaUrl(url: string) {
+  const value = url.trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.pathname.startsWith('/api/v1/uploads/download/')) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      return value;
+    }
+  }
+  return value;
 }
 
 const hasPositiveNumber = (value: unknown) => {
@@ -345,6 +392,21 @@ function isPdfUrl(url?: string) {
   return /\.pdf($|[?#])/i.test(url || '');
 }
 
+function isPdfBytes(data: Uint8Array) {
+  return data.length >= 4 &&
+    data[0] === 0x25 &&
+    data[1] === 0x50 &&
+    data[2] === 0x44 &&
+    data[3] === 0x46;
+}
+
+function isPdfResponse(contentType?: string | null, data?: Uint8Array) {
+  return Boolean(
+    contentType?.toLowerCase().includes('application/pdf') ||
+    (data && isPdfBytes(data)),
+  );
+}
+
 function getRequestUrl(url: string) {
   let clean = url;
   try {
@@ -372,10 +434,10 @@ function CourseAssignmentViewer({
   const [pdfError, setPdfError] = useState('');
   const [scale, setScale] = useState(1.2);
   const normalizedUrl = normalizeMediaUrl(url);
-  const isPdf = isPdfUrl(normalizedUrl);
+  const looksLikePdfUrl = isPdfUrl(normalizedUrl);
 
   useEffect(() => {
-    if (!normalizedUrl || !isPdf) {
+    if (!normalizedUrl) {
       setPdfData(null);
       setLoadingPdf(false);
       return;
@@ -391,15 +453,23 @@ function CourseAssignmentViewer({
         const isLocal = normalizedUrl.startsWith(getApiOrigin()) || normalizedUrl.startsWith('/');
         if (isLocal) {
           const res = await apiClient.get(getRequestUrl(normalizedUrl), { responseType: 'arraybuffer' });
-          if (!cancelled) setPdfData(new Uint8Array(res.data));
+          const data = new Uint8Array(res.data);
+          const contentType = res.headers?.['content-type'];
+          if (!isPdfResponse(typeof contentType === 'string' ? contentType : undefined, data)) {
+            throw new Error('Assignment file is not a PDF');
+          }
+          if (!cancelled) setPdfData(data);
         } else {
           const res = await fetch(normalizedUrl);
-          const buffer = await res.arrayBuffer();
-          if (!cancelled) setPdfData(new Uint8Array(buffer));
+          const data = new Uint8Array(await res.arrayBuffer());
+          if (!isPdfResponse(res.headers.get('content-type'), data) && !looksLikePdfUrl) {
+            throw new Error('Assignment file is not a PDF');
+          }
+          if (!cancelled) setPdfData(data);
         }
       } catch (err) {
         console.error('Assignment PDF failed to load', err);
-        if (!cancelled) setPdfError(isRu ? 'PDF faylni ochib bo‘lmadi.' : 'PDF faylni ochib bo‘lmadi.');
+        if (!cancelled) setPdfError(isRu ? 'PDF faylni ochib bo‘lmadi yoki fayl PDF emas.' : 'PDF faylni ochib bo‘lmadi yoki fayl PDF emas.');
       } finally {
         if (!cancelled) setLoadingPdf(false);
       }
@@ -407,7 +477,7 @@ function CourseAssignmentViewer({
 
     loadPdf();
     return () => { cancelled = true; };
-  }, [normalizedUrl, isPdf, isRu]);
+  }, [normalizedUrl, looksLikePdfUrl, isRu]);
 
   if (!normalizedUrl) {
     return (
@@ -415,16 +485,6 @@ function CourseAssignmentViewer({
         <Award size={46} color="#f59e0b" />
         <h2>{title}</h2>
         <p>{isRu ? 'Файл задания не прикреплен' : 'Topshiriq fayli biriktirilmagan'}</p>
-      </div>
-    );
-  }
-
-  if (!isPdf) {
-    return (
-      <div className="assignment-empty-state">
-        <FileText size={46} color="#f87171" />
-        <h2>{title}</h2>
-        <p>{isRu ? 'Задание должно быть только в формате PDF.' : 'Topshiriq faqat PDF formatda ko‘rsatiladi.'}</p>
       </div>
     );
   }
@@ -475,6 +535,7 @@ function CourseAssignmentViewer({
 export default function CoursePage() {
   const { i18n } = useTranslation();
   const { courseId } = useParams<{ courseId: string }>();
+  const [searchParams] = useSearchParams();
   const user = useAuthStore(s => s.user);
   const isRu = i18n.language === 'ru';
   const aiEndRef = useRef<HTMLDivElement | null>(null);
@@ -487,6 +548,7 @@ export default function CoursePage() {
   const [aiInput, setAiInput] = useState('');
   const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
   const [videoError, setVideoError] = useState(false);
+  const [savedForLater, setSavedForLater] = useState(false);
 
   // AI & Discussion State
   const [aiMessages, setAiMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
@@ -515,6 +577,8 @@ export default function CoursePage() {
   const [uploadingLessons, setUploadingLessons] = useState<Record<string, boolean>>({});
 
   const canEdit = user && EDITOR_ROLES.includes(user.role as string);
+  const courseLanguage = course?.language === 'ru' ? 'ru' : 'uz';
+  const shouldAutoResume = searchParams.get('resume') === '1';
 
   useEffect(() => {
     setAiMessages((messages) => {
@@ -556,6 +620,7 @@ export default function CoursePage() {
                 items: m.items || [],
               }))
             : [];
+          mods = sortCourseModules(mods);
 
           // Map completed lessons if enrolled
           if (fetched.enrollment?.completedLessons) {
@@ -569,9 +634,11 @@ export default function CoursePage() {
             }));
           }
           setCourseModules(mods);
-          if (!currentLessonId) {
-            const firstLesson = mods.flatMap((m) => m.items).find((i: any) => i.current) || mods.flatMap((m) => m.items)[0];
-            if (firstLesson) setCurrentLessonId(firstLesson.id);
+          const initialLesson = getResumeLesson(mods);
+          setCurrentLessonId(initialLesson?.id ?? null);
+          setVideoError(false);
+          if (shouldAutoResume && fetched.enrollment && initialLesson) {
+            setView('player');
           }
         } else if (isMounted) {
           setCourse(null);
@@ -590,19 +657,37 @@ export default function CoursePage() {
 
     fetchCourse();
     return () => { isMounted = false; };
-  }, [courseId]);
+  }, [courseId, shouldAutoResume]);
 
   /* ── Edit mode actions ─────────────────────── */
+  const normalizeModulesForSave = useCallback((modules: Module[]) => modules.map((module) => {
+    const moduleTitle = courseLanguage === 'ru' ? (module.titleRu || module.title) : module.title;
+    return {
+      ...module,
+      title: moduleTitle,
+      titleRu: courseLanguage === 'ru' ? moduleTitle : '',
+      items: module.items.map((item) => {
+        const lessonTitle = courseLanguage === 'ru' ? (item.titleRu || item.title) : item.title;
+        return {
+          ...item,
+          title: lessonTitle,
+          titleRu: courseLanguage === 'ru' ? lessonTitle : '',
+        };
+      }),
+    };
+  }), [courseLanguage]);
+
   const handleSave = useCallback(async () => {
     if (!course?.id) return;
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await apiClient.patch(`/courses/${course.id}`, { modules: courseModules });
+      const modulesPayload = normalizeModulesForSave(courseModules);
+      const res = await apiClient.patch(`/courses/${course.id}`, { modules: modulesPayload });
       // Refresh modules from backend response to get proper DB UUIDs
       const saved = res.data?.data || res.data;
       if (saved?.modules && Array.isArray(saved.modules)) {
-        setCourseModules(saved.modules);
+        setCourseModules(sortCourseModules(saved.modules));
       }
       setEditMode(false);
     } catch (e) {
@@ -610,7 +695,7 @@ export default function CoursePage() {
     } finally {
       setSaving(false);
     }
-  }, [course, courseModules]);
+  }, [course, courseModules, normalizeModulesForSave]);
 
   const addModule = () => {
     const title = newModuleTitle.trim();
@@ -618,6 +703,7 @@ export default function CoursePage() {
     const newMod: Module = {
       id: nextId(),
       title,
+      titleRu: courseLanguage === 'ru' ? title : '',
       lessons: 0,
       done: 0,
       items: [],
@@ -634,7 +720,13 @@ export default function CoursePage() {
 
   const updateModuleTitle = (modId: string | number, title: string) => {
     setCourseModules(prev => prev.map(m =>
-      m.id === modId ? { ...m, title } : m
+      m.id === modId
+        ? {
+            ...m,
+            title,
+            titleRu: courseLanguage === 'ru' ? title : '',
+          }
+        : m
     ));
   };
 
@@ -644,7 +736,8 @@ export default function CoursePage() {
 
       const newItem: LessonItem = {
         id: nextId(),
-        title: 'Yangi dars',
+        title: courseLanguage === 'ru' ? 'Новый урок' : 'Yangi dars',
+        titleRu: courseLanguage === 'ru' ? 'Новый урок' : '',
         dur: '0:00',
         done: false,
         type: 'video',
@@ -695,7 +788,7 @@ export default function CoursePage() {
 
   const handleLessonUpload = async (modId: string | number, lessonId: string | number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !course?.id) return;
 
     const key = `${modId}-${lessonId}`;
     setUploadingLessons(prev => ({ ...prev, [key]: true }));
@@ -713,11 +806,32 @@ export default function CoursePage() {
       // Build absolute URL so video player can use it
       const relativeUrl = res.data?.url || res.data?.data?.url;
       if (relativeUrl) {
-        const oldLesson = (courseModules.find(m => m.id === modId)?.items || []).find(i => i.id === lessonId);
-        if (oldLesson?.videoUrl) {
-          void deleteFileOnServer(oldLesson.videoUrl);
+        const uploadedUrl = getPersistedMediaUrl(relativeUrl);
+        let oldVideoUrl = '';
+        const nextModules = courseModules.map(m => {
+          if (m.id !== modId) return m;
+          return {
+            ...m,
+            items: m.items.map(item => {
+              if (item.id !== lessonId) return item;
+              oldVideoUrl = item.videoUrl || '';
+              return { ...item, videoUrl: uploadedUrl };
+            }),
+          };
+        });
+
+        const modulesPayload = normalizeModulesForSave(nextModules);
+        const saveRes = await apiClient.patch(`/courses/${course.id}`, { modules: modulesPayload });
+        const saved = saveRes.data?.data || saveRes.data;
+        if (saved?.modules && Array.isArray(saved.modules)) {
+          setCourseModules(sortCourseModules(saved.modules));
+        } else {
+          setCourseModules(sortCourseModules(nextModules));
         }
-        updateLesson(modId, lessonId, 'videoUrl', normalizeMediaUrl(relativeUrl));
+        if (oldVideoUrl && oldVideoUrl !== uploadedUrl) {
+          void deleteFileOnServer(oldVideoUrl);
+        }
+        toast.success('Fayl yuklandi va saqlandi');
       }
     } catch (err) {
       console.error('Error uploading lesson file:', err);
@@ -737,6 +851,15 @@ export default function CoursePage() {
       console.error(err);
       setLoading(false);
     }
+  };
+
+  const handleStartLearning = () => {
+    const lesson = getResumeLesson(courseModules);
+    if (lesson) {
+      setCurrentLessonId(lesson.id);
+    }
+    setVideoError(false);
+    setView('player');
   };
 
   const handleLessonComplete = async (lessonId: string | number, score?: number) => {
@@ -767,6 +890,28 @@ export default function CoursePage() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (!course?.id) {
+      setSavedForLater(false);
+      return;
+    }
+    setSavedForLater(localStorage.getItem(`saved_course:${course.id}`) === '1');
+  }, [course?.id]);
+
+  const handleToggleSaveCourse = () => {
+    if (!course?.id) return;
+    const key = `saved_course:${course.id}`;
+    const next = !savedForLater;
+    setSavedForLater(next);
+    if (next) {
+      localStorage.setItem(key, '1');
+      toast.success(isRu ? 'Курс сохранён' : 'Kurs saqlandi');
+    } else {
+      localStorage.removeItem(key);
+      toast.success(isRu ? 'Курс удалён из сохранённых' : 'Kurs saqlanganlardan olib tashlandi');
     }
   };
 
@@ -1034,20 +1179,13 @@ export default function CoursePage() {
   }
 
   const title = course?.title || '';
-  const allLessons = courseModules.flatMap(m => m.items);
-  const currentLesson = currentLessonId
-    ? allLessons.find(i => i.id === currentLessonId)
-    : allLessons.find(i => (i as any).current) || allLessons[0];
-  const isLessonUnlocked = (lessonId: string | number) => {
-    const targetIndex = allLessons.findIndex(item => item.id === lessonId);
-    if (targetIndex <= 0) return true;
-    const target = allLessons[targetIndex];
-    if (target?.type === 'assignment') return true;
-    return allLessons
-      .slice(0, targetIndex)
-      .filter(item => item.type !== 'assignment')
-      .every(item => item.done);
-  };
+  const allLessons = getLessonSequence(courseModules);
+  const currentLesson = (
+    currentLessonId
+      ? allLessons.find(i => i.id === currentLessonId)
+      : allLessons.find(i => (i as any).current)
+  ) || allLessons[0];
+  const isLessonUnlocked = (lessonId: string | number) => isLessonUnlockedInSequence(allLessons, lessonId);
   const selectLesson = (lesson: LessonItem) => {
     if (!isLessonUnlocked(lesson.id)) return;
     setCurrentLessonId(lesson.id);
@@ -1122,7 +1260,7 @@ export default function CoursePage() {
         course={course}
         title={title}
         isRu={isRu}
-        onStart={() => setView('player')}
+        onStart={handleStartLearning}
         onEnroll={handleEnroll}
         isEnrolled={!!course?.enrollment}
         courseModules={courseModules}
@@ -1144,6 +1282,8 @@ export default function CoursePage() {
         setAddingModule={setAddingModule}
         setNewModuleTitle={setNewModuleTitle}
         uploadingLessons={uploadingLessons}
+        savedForLater={savedForLater}
+        onToggleSaveCourse={handleToggleSaveCourse}
       />
     );
   }
@@ -1166,7 +1306,7 @@ export default function CoursePage() {
                </button>
                <div className="learning-title-block">
                  <span className="learning-kicker">{title}</span>
-                 <span className="learning-title">{currentLesson?.title || playerText.lessonFallback}</span>
+                 <span className="learning-title">{courseLanguage === 'ru' ? (currentLesson?.titleRu || currentLesson?.title) : currentLesson?.title || playerText.lessonFallback}</span>
                </div>
                <span className="badge badge-blue learning-type-badge">{currentLesson?.type}</span>
              </div>
@@ -1183,7 +1323,7 @@ export default function CoursePage() {
 
             {currentLesson?.type === 'video' ? (
               <div className="video-container" style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {currentMediaUrl && !videoError ? (
+                {hasLessonContent(currentLesson) && currentMediaUrl && !videoError ? (
                   <>
                     {youtubeEmbedUrl ? (
                       <iframe
@@ -1233,13 +1373,18 @@ export default function CoursePage() {
                       <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
                         {playerText.videoMissing}
                       </div>
+                      {currentLesson && !hasLessonContent(currentLesson) && (
+                        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--amber-400)' }}>
+                          {isRu ? 'Этот урок не блокирует следующий урок.' : 'Bu dars keyingi darsni bloklamaydi.'}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             ) : currentLesson?.type === 'quiz' ? (
               <div className="learning-quiz-shell">
-                {currentLesson.quizData ? (
+                {currentLesson?.quizData && hasQuizQuestions(currentLesson) ? (
                   <QuizPlayer
                     key={currentLesson.id}
                     quizData={{
@@ -1544,7 +1689,7 @@ export default function CoursePage() {
               <div key={mod.id} style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 24, height: 1, background: 'var(--border-2)' }} />
-                  {isRu ? mod.titleRu || mod.title : mod.title}
+                  {courseLanguage === 'ru' ? (mod.titleRu || mod.title) : mod.title}
                 </div>
 
                 <div style={{ position: 'relative' }}>
@@ -1555,7 +1700,7 @@ export default function CoursePage() {
                     return (
                       <div
                         key={item.id}
-                        title={!unlocked ? 'Oldingi darsni tugating' : undefined}
+                        title={!unlocked ? (isRu ? 'Сначала завершите предыдущий урок' : 'Oldingi darsni tugating') : undefined}
                         style={{
                           display: 'flex',
                           gap: 16,
@@ -1582,10 +1727,10 @@ export default function CoursePage() {
 
                         <div style={{ flex: 1, paddingTop: 6 }}>
                           <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                            {item.title}
+                            {courseLanguage === 'ru' ? (item.titleRu || item.title) : item.title}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                            {!unlocked ? 'Oldingi darsni tugating' : item.dur}
+                            {!unlocked ? (isRu ? 'Сначала завершите предыдущий урок' : 'Oldingi darsni tugating') : item.dur}
                           </div>
                         </div>
                       </div>
@@ -1609,7 +1754,9 @@ function CourseOverview({
   onToggleEdit, onSave, onAddModule, onDeleteModule, onUpdateModuleTitle,
   onAddLesson, onDeleteLesson, onUpdateLesson, handleLessonUpload,
   setAddingModule, setNewModuleTitle,
-  uploadingLessons = {}, setCourseModules,
+  uploadingLessons = {},
+  savedForLater,
+  onToggleSaveCourse,
 }: any) {
   const [activeTab, setActiveTab] = useState<'overview' | 'modules' | 'reviews'>('overview');
   const [editingModId, setEditingModId] = useState<string | number | null>(null);
@@ -1655,6 +1802,7 @@ function CourseOverview({
   const cat = course.cat || '';
   const ratingVisible = hasPositiveNumber(course.rating);
   const courseMaterials = Array.isArray(course.materials) ? course.materials : [];
+  const courseLanguage = course?.language === 'ru' ? 'ru' : 'uz';
 
   return (
     <div>
@@ -1708,8 +1856,12 @@ function CourseOverview({
                 <Play size={16} /> {isRu ? 'Начать курс' : 'Kursni boshlash'}
               </button>
             )}
-            <button className="btn btn-secondary" style={{ height: 44, padding: '0 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
-              <Bookmark size={15} /> {isRu ? 'Сохранить' : 'Saqlash'}
+            <button
+              className="btn btn-secondary"
+              onClick={onToggleSaveCourse}
+              style={{ height: 44, padding: '0 20px', background: savedForLater ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.1)', border: savedForLater ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(255,255,255,0.15)', color: '#fff' }}
+            >
+              <Bookmark size={15} fill={savedForLater ? 'currentColor' : 'none'} /> {savedForLater ? (isRu ? 'Сохранено' : 'Saqlandi') : (isRu ? 'Сохранить' : 'Saqlash')}
             </button>
             {canEdit && (
               <button
@@ -1782,40 +1934,37 @@ function CourseOverview({
 
           {activeTab === 'modules' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(courseModules as Module[]).map((mod: Module) => (
+              {(courseModules as Module[]).map((mod: Module) => {
+                const moduleProgress = getModuleProgressStats(mod);
+                return (
                 <div key={mod.id} className="card" style={editMode ? { border: '1px solid rgba(139,92,246,0.3)' } : {}}>
                   {/* Module header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editMode && mod.items.length > 0 ? 12 : 0 }}>
                     {editMode && editingModId === mod.id ? (
-                      <div style={{ flex: 1, marginRight: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ flex: 1, marginRight: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input
                           className="input"
                           style={{ fontSize: 14, fontWeight: 700, padding: '6px 10px' }}
-                          value={mod.title}
-                          placeholder="Modul nomi (O'zbek)"
+                          value={courseLanguage === 'ru' ? (mod.titleRu || mod.title) : mod.title}
+                          placeholder={courseLanguage === 'ru' ? 'Название модуля' : 'Modul nomi'}
                           autoFocus
                           onChange={e => onUpdateModuleTitle(mod.id, e.target.value)}
-                        />
-                        <input
-                          className="input"
-                          style={{ fontSize: 13, fontWeight: 500, padding: '6px 10px' }}
-                          value={mod.titleRu || ''}
-                          placeholder="Название модуля (Русский)"
-                          onChange={e => setCourseModules((prev: any[]) => prev.map((m: any) => m.id === mod.id ? { ...m, titleRu: e.target.value } : m))}
                           onKeyDown={e => e.key === 'Enter' && setEditingModId(null)}
                         />
-                        <button className="btn btn-sm btn-primary" style={{ alignSelf: 'flex-start' }} onClick={() => setEditingModId(null)}>Saqlash</button>
+                        <button className="btn btn-sm btn-primary" onClick={() => setEditingModId(null)}>Saqlash</button>
                       </div>
                     ) : (
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{isRu ? mod.titleRu : mod.title}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{mod.lessons} dars • {mod.done || 0} bajarildi</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{courseLanguage === 'ru' ? (mod.titleRu || mod.title) : mod.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {mod.lessons} {isRu ? 'уроков' : 'dars'} • {moduleProgress.done}/{moduleProgress.total} {isRu ? 'завершено' : 'bajarildi'}
+                        </div>
                       </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {!editMode && (
                         <div className="progress-bar" style={{ width: 80, height: 6 }}>
-                          <div className="progress-fill" style={{ width: `${mod.lessons > 0 ? ((mod.done || 0) / mod.lessons) * 100 : 0}%` }} />
+                          <div className="progress-fill" style={{ width: `${moduleProgress.total > 0 ? (moduleProgress.done / moduleProgress.total) * 100 : 0}%` }} />
                         </div>
                       )}
                       {editMode && (
@@ -1851,16 +2000,14 @@ function CourseOverview({
                               <input
                                 className="input"
                                 style={{ fontSize: 13, padding: '5px 10px', height: 32 }}
-                                value={item.title}
-                                placeholder="Dars nomi (O'zbek)..."
-                                onChange={e => onUpdateLesson(mod.id, item.id, 'title', e.target.value)}
-                              />
-                              <input
-                                className="input"
-                                style={{ fontSize: 12, padding: '4px 10px', height: 28 }}
-                                value={item.titleRu || ''}
-                                placeholder="Название урока (Русский)..."
-                                onChange={e => onUpdateLesson(mod.id, item.id, 'titleRu', e.target.value)}
+                                value={courseLanguage === 'ru' ? (item.titleRu || item.title) : item.title}
+                                placeholder={courseLanguage === 'ru' ? 'Название урока...' : 'Dars nomi...'}
+                                onChange={e => {
+                                  onUpdateLesson(mod.id, item.id, 'title', e.target.value);
+                                  if (courseLanguage === 'ru') {
+                                    onUpdateLesson(mod.id, item.id, 'titleRu', e.target.value);
+                                  }
+                                }}
                               />
                             </div>
                             {/* Type selector */}
@@ -1959,7 +2106,7 @@ function CourseOverview({
                                   <input
                                     type="file"
                                     style={{ display: 'none' }}
-                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.png,.jpg,.jpeg"
+                                    accept=".pdf,application/pdf"
                                     onChange={e => handleLessonUpload(mod.id, item.id, e)}
                                     disabled={uploadingLessons[`${mod.id}-${item.id}`]}
                                   />
@@ -2014,7 +2161,7 @@ function CourseOverview({
                         style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12, color: '#3b82f6', border: '1px dashed rgba(59,130,246,0.4)', borderRadius: 8, padding: '6px 14px' }}
                         onClick={() => onAddLesson(mod.id)}
                       >
-                        <Plus size={12} /> {isRu ? '+ Yangi dars' : '+ Yangi dars'}
+                        <Plus size={12} /> {courseLanguage === 'ru' ? '+ Новый урок' : '+ Yangi dars'}
                       </button>
                     </div>
                   )}
@@ -2040,7 +2187,7 @@ function CourseOverview({
                             {item.type === 'quiz' ? <FileText size={12} color="#3b82f6" /> : item.type === 'assignment' ? <Award size={12} color="#f59e0b" /> : <Play size={12} color="#22c55e" />}
                           </div>
                           <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
-                            {item.title}
+                            {courseLanguage === 'ru' ? (item.titleRu || item.title) : item.title}
                           </div>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             {item.type === 'quiz' ? (item.quizData?.questions?.length ? `${item.quizData.questions.length} ta savol` : 'Test') : item.dur}
@@ -2050,7 +2197,7 @@ function CourseOverview({
                     </div>
                   )}
                 </div>
-              ))}
+              );})}
 
               {/* Add new module */}
               {editMode && (
@@ -2060,7 +2207,7 @@ function CourseOverview({
                       <input
                         className="input"
                         style={{ flex: 1, fontSize: 14, padding: '8px 12px' }}
-                        placeholder={isRu ? "Название нового модуля" : "Yangi bo'lim nomi"}
+                        placeholder={courseLanguage === 'ru' ? 'Название нового модуля' : "Yangi bo'lim nomi"}
                         value={newModuleTitle}
                         autoFocus
                         onChange={e => setNewModuleTitle(e.target.value)}

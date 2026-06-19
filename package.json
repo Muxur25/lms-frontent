@@ -14,7 +14,8 @@
     "test:e2e:course-status": "node test-dashboard-course-status.mjs",
     "test:e2e:department-ranking": "node test-dashboard-department-ranking.mjs",
     "test:e2e:leaderboard": "node test-leaderboard.mjs",
-    "test:e2e:certifications": "node test-certifications-kpi.mjs"
+    "test:e2e:certifications": "node test-certifications-kpi.mjs",
+    "test:learning-flow": "node test-course-learning-flow.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
